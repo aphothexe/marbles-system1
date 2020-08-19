@@ -72,4 +72,16 @@ namespace pimoroni {
         int read_bytes(uint8_t address, uint8_t reg, uint8_t *buf, int len);
         uint8_t get_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask=0b1);
         void set_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask=0b1);
-        void clear_bits(uint8_t address, uint8_t reg, ui
+        void clear_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask=0b1);
+
+        int write_blocking(uint8_t addr, const uint8_t *src, size_t len, bool nostop);
+        int read_blocking(uint8_t addr, uint8_t *dst, size_t len, bool nostop);
+
+        i2c_inst_t* get_i2c() {return i2c;}
+        uint get_scl() {return scl;}
+        uint get_sda() {return sda;}
+        uint32_t get_baudrate() {return baudrate;}
+      private:
+        void init();
+    };
+}
