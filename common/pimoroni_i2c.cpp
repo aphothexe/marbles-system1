@@ -58,3 +58,48 @@ namespace pimoroni {
         uint32_t value;
         i2c_write_blocking(i2c, address, &reg, 1, true);
         i2c_read_blocking(i2c, address, (uint8_t *)&value, sizeof(uint32_t), false);
+        return value;
+    }
+
+    int16_t I2C::reg_read_int16(uint8_t address, uint8_t reg) {
+        int16_t value;
+        i2c_write_blocking(i2c, address, &reg, 1, true);
+        i2c_read_blocking(i2c, address, (uint8_t *)&value, sizeof(int16_t), false);
+        return value;
+    }
+
+    int I2C::write_bytes(uint8_t address, uint8_t reg, const uint8_t *buf, int len) {
+        uint8_t buffer[len + 1];
+        buffer[0] = reg;
+        for(int x = 0; x < len; x++) {
+            buffer[x + 1] = buf[x];
+        }
+        return i2c_write_blocking(i2c, address, buffer, len + 1, false);
+    };
+
+    int I2C::read_bytes(uint8_t address, uint8_t reg, uint8_t *buf, int len) {
+        i2c_write_blocking(i2c, address, &reg, 1, true);
+        i2c_read_blocking(i2c, address, buf, len, false);
+        return len;
+    };
+
+    uint8_t I2C::get_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask) {
+        uint8_t value;
+        read_bytes(address, reg, &value, 1);
+        return value & (mask << shift);
+    }
+
+    void I2C::set_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask) {
+        uint8_t value;
+        read_bytes(address, reg, &value, 1);
+        value |= mask << shift;
+        write_bytes(address, reg, &value, 1);
+    }
+
+    void I2C::clear_bits(uint8_t address, uint8_t reg, uint8_t shift, uint8_t mask) {
+        uint8_t value;
+        read_bytes(address, reg, &value, 1);
+        value &= ~(mask << shift);
+        write_bytes(address, reg, &value, 1);
+    }
+}
