@@ -1,0 +1,5 @@
+set(DRIVER_NAME bme68x)
+add_library(${DRIVER_NAME} INTERFACE)
+
+target_sources(${DRIVER_NAME} INTERFACE
+  ${CMAKE_CURRENT

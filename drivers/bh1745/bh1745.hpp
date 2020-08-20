@@ -30,4 +30,37 @@ namespace pimoroni {
     class BH1745 {
         public:
             static const uint8_t DEFAULT_I2C_ADDRESS      = 0x38;
-            static const uint
+            static const uint8_t I2C_ADDRESS_ALTERNATE    = 0x39;
+
+            BH1745(I2C *i2c, uint8_t address = DEFAULT_I2C_ADDRESS) :
+                i2c(i2c), address(address) {}
+
+            BH1745(i2c_inst_t *i2c, uint8_t addr, uint8_t sda, uint8_t scl, uint interrupt) :
+                BH1745(new I2C(sda, scl), address) {};
+
+            bool init();
+
+            I2C* get_i2c() const;
+            int get_address() const;
+
+            uint8_t get_chip_id();
+            uint8_t get_manufacturer();
+            void set_threshold_high(uint16_t value);
+            void set_threshold_low(uint16_t value);
+            void set_measurement_time_ms(uint16_t value);
+            rgbc_t get_rgbc_raw();
+            rgbc_t get_rgb_clamped();
+            rgbc_t get_rgb_scaled();
+            void reset();
+            void set_leds(bool state=true);
+
+        private:
+            I2C *i2c;
+
+            // interface pins with our standard defaults where appropriate
+            int8_t address = DEFAULT_I2C_ADDRESS;
+            uint interrupt = 22;
+
+            float channel_compensation[4] = {2.2f, 1.0f, 1.8f, 10.0f};
+    };
+}
