@@ -200,4 +200,159 @@ bool Encoder::init() {
 
       //Keep a record of this encoder for the interrupt callback
       encoders[pio_idx][sm] = this;
-      claimed_sms[pio_idx] 
+      claimed_sms[pio_idx] |= 1u << sm;
+
+      enc_state_a = gpio_get(enc_pins.a);
+      enc_state_b = gpio_get(enc_pins.b);
+      pio_sm_exec(pio, sm, pio_encode_set(pio_x, (uint)enc_state_a << 1 | (uint)enc_state_b));
+      pio_sm_set_enabled(pio, sm, true);
+
+      initialised = true;
+    }
+  }
+
+  return initialised;
+}
+
+pin_pair Encoder::pins() const {
+  return enc_pins;
+}
+
+uint Encoder::common_pin() const {
+  return enc_common_pin;
+}
+
+bool_pair Encoder::state() const {
+  return bool_pair(enc_state_a, enc_state_b);
+}
+
+int32_t Encoder::count() const {
+  return enc_count;
+}
+
+int32_t Encoder::delta() {
+  int32_t count = enc_count;  // Store a local copy of enc_count to avoid two reads
+
+  // Determine the change in counts since the last time this function was performed
+  int32_t change = count - last_count;
+  last_count = count;
+
+  return change;
+}
+
+void Encoder::zero() {
+  enc_count = 0;
+  enc_cumulative_time = 0;
+  enc_step = 0;
+  enc_turn = 0;
+
+  microstep_time = 0;
+  step_dir = NO_DIR; // may not be wanted?
+
+  last_count = 0;
+  last_capture_count = 0;
+}
+
+int16_t Encoder::step() const {
+  return enc_step;
+}
+
+int16_t Encoder::turn() const {
+  return enc_turn;
+}
+
+float Encoder::revolutions() const {
+  return (float)count() / enc_counts_per_rev;
+}
+
+float Encoder::degrees() const {
+  return revolutions() * 360.0f;
+}
+
+float Encoder::radians() const {
+  return revolutions() * M_TWOPI;
+}
+
+Direction Encoder::direction() const {
+  return enc_direction;
+}
+
+void Encoder::direction(Direction direction) {
+  enc_direction = direction;
+}
+
+float Encoder::counts_per_rev() const {
+  return enc_counts_per_rev;
+}
+
+void Encoder::counts_per_rev(float counts_per_rev) {
+  enc_counts_per_rev = MAX(counts_per_rev, FLT_EPSILON);
+}
+
+Encoder::Capture Encoder::capture() {
+  // Take a capture of the current values
+  int32_t count = enc_count;
+  int32_t cumulative_time = enc_cumulative_time;
+  enc_cumulative_time = 0;
+
+  // Determine the change in counts since the last capture was taken
+  int32_t change = count - last_capture_count;
+  last_capture_count = count;
+
+  // Calculate the average frequency of steps
+  float frequency = 0.0f;
+  if(change != 0 && cumulative_time != INT32_MAX) {
+    frequency = (clocks_per_time * (float)change) / (float)cumulative_time;
+  }
+
+  return Capture(count, change, frequency, enc_counts_per_rev);
+}
+
+void Encoder::process_steps() {
+  while(pio->ints1 & (PIO_IRQ1_INTS_SM0_RXNEMPTY_BITS << sm)) {
+    uint32_t received = pio_sm_get(pio, sm);
+
+    // Extract the current and last encoder states from the received value
+    enc_state_a = (bool)(received & STATE_A_MASK);
+    enc_state_b = (bool)(received & STATE_B_MASK);
+    uint8_t states = (received & STATES_MASK) >> 28;
+
+    // Extract the time (in cycles) it has been since the last received
+    int32_t time_received = (received & TIME_MASK) + ENC_DEBOUNCE_TIME;
+
+    // For rotary encoders, only every fourth step is cared about, causing an inaccurate time value
+    // To address this we accumulate the times received and zero it when a step is counted
+    if(!count_microsteps) {
+      if(time_received + microstep_time < time_received)  // Check to avoid integer overflow
+        time_received = INT32_MAX;
+      else
+        time_received += microstep_time;
+      microstep_time = time_received;
+    }
+
+    bool up = (enc_direction == NORMAL_DIR);
+
+    // Determine what step occurred
+    switch(LAST_STATE(states)) {
+      //--------------------------------------------------
+      case MICROSTEP_0:
+        switch(CURR_STATE(states)) {
+          // A ____|‾‾‾‾
+          // B _________
+          case MICROSTEP_1:
+            if(count_microsteps)
+              microstep(time_received, up);
+            break;
+
+          // A _________
+          // B ____|‾‾‾‾
+          case MICROSTEP_3:
+            if(count_microsteps)
+              microstep(time_received, !up);
+            break;
+        }
+        break;
+
+      //--------------------------------------------------
+      case MICROSTEP_1:
+        switch(CURR_S
