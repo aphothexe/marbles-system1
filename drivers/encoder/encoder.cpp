@@ -355,4 +355,92 @@ void Encoder::process_steps() {
 
       //--------------------------------------------------
       case MICROSTEP_1:
-        switch(CURR_S
+        switch(CURR_STATE(states)) {
+          // A ‾‾‾‾‾‾‾‾‾
+          // B ____|‾‾‾‾
+          case MICROSTEP_2:
+            if(count_microsteps || step_dir == INCREASING)
+              microstep(time_received, up);
+
+            step_dir = NO_DIR;  // Finished increasing
+            break;
+
+          // A ‾‾‾‾|____
+          // B _________
+          case MICROSTEP_0:
+            if(count_microsteps)
+              microstep(time_received, !up);
+            break;
+        }
+        break;
+
+      //--------------------------------------------------
+      case MICROSTEP_2:
+        switch(CURR_STATE(states)) {
+          // A ‾‾‾‾|____
+          // B ‾‾‾‾‾‾‾‾‾
+          case MICROSTEP_3:
+            if(count_microsteps)
+              microstep(time_received, up);
+
+            step_dir = INCREASING;  // Started increasing
+            break;
+
+          // A ‾‾‾‾‾‾‾‾‾
+          // B ‾‾‾‾|____
+          case MICROSTEP_1:
+            if(count_microsteps)
+              microstep(time_received, !up);
+
+            step_dir = DECREASING;  // Started decreasing
+            break;
+        }
+        break;
+
+      //--------------------------------------------------
+      case MICROSTEP_3:
+        switch(CURR_STATE(states)) {
+          // A _________
+          // B ‾‾‾‾|____
+          case MICROSTEP_0:
+            if(count_microsteps)
+              microstep(time_received, up);
+            break;
+
+          // A ____|‾‾‾‾
+          // B ‾‾‾‾‾‾‾‾‾
+          case MICROSTEP_2:
+            if(count_microsteps || step_dir == DECREASING)
+              microstep(time_received, !up);
+
+            step_dir = NO_DIR;  // Finished decreasing
+            break;
+        }
+        break;
+    }
+  }
+}
+
+void Encoder::microstep(int32_t time, bool up) {
+  if(up) {
+    enc_count++;
+    if(++enc_step >= (int16_t)enc_counts_per_rev) {
+      enc_step -= (int16_t)enc_counts_per_rev;
+      enc_turn++;
+    }
+  }
+  else {
+    enc_count--;
+    if(--enc_step < 0) {
+      enc_step += (int16_t)enc_counts_per_rev;
+      enc_turn--;
+    }
+  }
+  microstep_time = 0;
+
+  if(time + enc_cumulative_time < time)  // Check to avoid integer overflow
+    enc_cumulative_time = INT32_MAX;
+  else
+    enc_cumulative_time += time;
+}
+}
