@@ -1,0 +1,12 @@
+; --------------------------------------------------
+;        Quadrature Encoder reader using PIO
+;      by Christopher (@ZodiusInfuser) Parrott
+; --------------------------------------------------
+;
+; Watches any two pins (i.e. do not need to be
+; consecutive) for when their state changes, and
+; pushes that new state along with the old state,
+; and time since the last change.
+;
+; - X is used for storing the last state
+; - Y is used as a g
