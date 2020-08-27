@@ -169,4 +169,146 @@ namespace pimoroni {
     };
 
     uint8_t data = 0;
-    uint16_t data_l
+    uint16_t data_len = 0;
+    if (!driver.send_command(SET_DNS_CONFIG, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_DNS_CONFIG\n");
+    }
+  }
+
+  void Esp32Spi::set_hostname(const std::string hostname) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&hostname)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(SET_HOSTNAME, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_HOSTNAME\n");
+    }
+  }
+
+  int8_t Esp32Spi::disconnect() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(DISCONNECT, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:DISCONNECT\n");
+    }
+    return data;
+  }
+
+  uint8_t Esp32Spi::get_connection_status() {
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(GET_CONN_STATUS, nullptr, 0, &data, &data_len)) {
+      WARN("Error:GET_CONN_STATUS\n");
+    }
+    return data;
+  }
+
+  uint8_t* Esp32Spi::get_mac_address() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint16_t data_len = 0;
+    driver.send_command(GET_MAC_ADDR, params, PARAM_COUNT(params), (uint8_t *)&mac, &data_len);
+    return mac;
+  }
+
+  bool Esp32Spi::get_ip_address(IPAddress &ip_out) {
+    if (get_network_data(local_ip, subnet_mask, gateway_ip)) {
+      ip_out = local_ip;
+      return true;
+    }
+    return false;
+  }
+
+  bool Esp32Spi::get_subnet_mask(IPAddress &mask_out) {
+    if (get_network_data(local_ip, subnet_mask, gateway_ip)) {
+      mask_out = subnet_mask;
+      return true;
+    }
+    return false;
+  }
+
+  bool Esp32Spi::get_gateway_ip(IPAddress &ip_out) {
+    if (get_network_data(local_ip, subnet_mask, gateway_ip)) {
+      ip_out = gateway_ip;
+      return true;
+    }
+    return false;
+  }
+
+  std::string Esp32Spi::get_current_ssid() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint16_t data_len = 0;
+    memset(ssid, 0x00, sizeof(ssid));
+    driver.send_command(GET_CURR_SSID, params, PARAM_COUNT(params), (uint8_t *)&ssid, &data_len);
+    return ssid;
+  }
+
+  uint8_t* Esp32Spi::get_current_bssid() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint16_t data_len = 0;
+    memset(bssid, 0x00, sizeof(bssid));
+    driver.send_command(GET_CURR_BSSID, params, PARAM_COUNT(params), (uint8_t *)&bssid, &data_len);
+    return bssid;
+  }
+
+  int32_t Esp32Spi::get_current_rssi() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint16_t data_len = 0;
+    int32_t rssi = 0;
+    driver.send_command(GET_CURR_RSSI, params, PARAM_COUNT(params), (uint8_t *)&rssi, &data_len);
+    return rssi;
+  }
+
+  uint8_t Esp32Spi::get_current_encryption_type() {
+    SpiDrv::inParam params[] = {
+      {.type = SpiDrv::PARAM_DUMMY}
+    };
+
+    uint16_t data_len = 0;
+    uint8_t enc_type = 0;
+    driver.send_command(GET_CURR_ENCT, params, PARAM_COUNT(params), &enc_type, &data_len);
+    return enc_type;
+  }
+
+  int8_t Esp32Spi::start_scan_networks() {
+    /*uint8_t data = 0;
+    uint16_t data_len = 0;
+    driver.send_command(START_SCAN_NETWORKS, &data, &data_len, false);
+    return ((int8_t)data == WL_FAILURE) ? data : (int8_t)WL_SUCCESS;*/
+    // This command is a very misleading no-op, see: https://github.com/adafruit/nina-fw/blob/d73fe315cc7f9148a0918490d3b75430c8444bf7/main/CommandHandler.cpp#L336-L345
+    return WL_SUCCESS;
+  }
+
+  uint8_t Esp32Spi::get_scan_networks() {
+    uint16_t ssid_list_num = 0;
+    driver.send_command(SCAN_NETWORKS, nullptr, 0, (uint8_t *)network_ssid, &ssid_list_num, SpiDrv::RESPONSE_TYPE_NORMAL);
+    return (uint8_t)ssid_list_num;
+  }
+
+  const char* Esp32Spi::get_ssid_networks(uint8_t network_item) {
+    if(network_item >= WL_NETWORKS_LIST_MAXNUM) {
+      return nullptr;
+    }
+
+    return network_ssid[network_item];
+  }
+
+  wl_enc_type Esp32Spi::get_enc_type_networks(uint8_t network_item) {
+    if(n
