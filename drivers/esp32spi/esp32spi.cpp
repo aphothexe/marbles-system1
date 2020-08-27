@@ -460,4 +460,121 @@ namespace pimoroni {
     int8_t data = WL_FAILURE;
     uint16_t data_len = 0;
     if(!driver.send_command(SET_AP_PASSPHRASE, params, PARAM_COUNT(params), (uint8_t*)&data, &data_len)) {
-      WARN("Error:SET_AP_
+      WARN("Error:SET_AP_PASSPHRASE\n");
+    }
+    return data;
+  }
+
+  int16_t Esp32Spi::ping(uint32_t ip_address, uint8_t ttl) {
+    // Ping a remote address.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L919-L935
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&ip_address),
+      SpiDrv::build_param(&ttl)
+    };
+
+    int16_t data = WL_FAILURE;
+    uint16_t data_len = 0;
+    if(!driver.send_command(PING, params, PARAM_COUNT(params), (uint8_t*)&data, &data_len)) {
+      WARN("Error:PING\n");
+    }
+    // Returns response time (presumably in milliseconds?)
+    return data; 
+  }
+
+  void Esp32Spi::debug(uint8_t on) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&on)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_DEBUG, params, PARAM_COUNT(params), (uint8_t*)&data, &data_len)) {
+      WARN("Error:SET_DEBUG\n");
+    }
+  }
+
+  float Esp32Spi::get_temperature() {
+    // Get the ESP32 die temperature?
+    // This will *not* be ambient.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L239-L249
+    float data = WL_FAILURE;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_TEMPERATURE, nullptr, 0, (uint8_t *)&data, &data_len)) {
+      WARN("Error:GET_TEMPERATURE\n");
+    }
+    return data;
+  }
+
+  void Esp32Spi::pin_mode(uint8_t pin, uint8_t mode) {
+    // Set the mode of an ESP32 GPIO pin.
+    // Uses the Arduino HAL "pinModes" internally.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L955-L967
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&pin),
+      SpiDrv::build_param(&mode)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_PIN_MODE, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_PIN_MODE\n");
+      data = WL_FAILURE;
+    }
+  }
+
+  void Esp32Spi::digital_write(uint8_t pin, uint8_t value) {
+    // Write a 0 or 1 to an ESP32 GPIO pin.
+    // Uses the Arduino HAL "digitalWrite" internally.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L969-L981
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&pin),
+      SpiDrv::build_param(&value),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_DIGITAL_WRITE, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_DIGITAL_WRITE\n");
+      data = WL_FAILURE; // ???
+    }
+  }
+
+  void Esp32Spi::analog_write(uint8_t pin, uint8_t value) {
+    // Write a 0 to 255 "analog" value to an ESP32 GPIO pin.
+    // Uses the Arduino HAL "analogWrite" internally.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L983-L995
+    SpiDrv::inParam params[] {
+      SpiDrv::build_param(&pin),
+      SpiDrv::build_param(&value)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_ANALOG_WRITE, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_ANALOG_WRITE\n");
+      data = WL_FAILURE;
+    }
+  }
+
+  bool Esp32Spi::digital_read(uint8_t pin) {
+    // Read a 0 (LOW) or 1 (HIGH) from an ESP32 GPIO pin.
+    // Uses the Arduino HAL "digitalRead" internally.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L997-L1008
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&pin)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_DIGITAL_READ, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_DIGITAL_READ\n");
+    }
+
+    return data == WL_SUCCESS;
+  }
+
+  uint16_t Esp32Spi::analog_read(uint8_t pin, uint8_t atten) {
+    // Read an analog value from an ESP32 GPIO pin.
+    // Uses the Arduino HAL "analogRead" internally.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/Com
