@@ -311,4 +311,153 @@ namespace pimoroni {
   }
 
   wl_enc_type Esp32Spi::get_enc_type_networks(uint8_t network_item) {
-    if(n
+    if(network_item >= WL_NETWORKS_LIST_MAXNUM) {
+      return ENC_TYPE_UNKNOWN;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&network_item)
+    };
+
+    uint8_t enc_type = 255;
+    uint16_t data_len = 0;
+    driver.send_command(GET_IDX_ENCT, params, PARAM_COUNT(params), &enc_type, &data_len);
+
+    return (wl_enc_type)enc_type;
+  }
+
+  uint8_t* Esp32Spi::get_bssid_networks(uint8_t network_item, uint8_t* bssid_out) {
+    if(network_item >= WL_NETWORKS_LIST_MAXNUM) {
+      return nullptr;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&network_item)
+    };
+
+    uint16_t data_len = 0;   
+    driver.send_command(GET_IDX_BSSID, params, 1, bssid_out, &data_len);
+
+    return bssid_out;  
+  }
+
+  uint8_t Esp32Spi::get_channel_networks(uint8_t network_item) {
+    if(network_item >= WL_NETWORKS_LIST_MAXNUM) {
+      return 0;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&network_item)
+    };
+
+    uint8_t channel = 0;
+    uint16_t data_len = 0;   
+    driver.send_command(GET_IDX_CHANNEL, params, 1, &channel, &data_len);
+
+    return channel;  
+  }
+
+  int32_t Esp32Spi::get_rssi_networks(uint8_t network_item) {
+    if(network_item >= WL_NETWORKS_LIST_MAXNUM) {
+      return 0;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&network_item)
+    };
+
+    int32_t  network_rssi = 0;
+    uint16_t data_len = 0; 
+    driver.send_command(GET_IDX_CHANNEL, params, 1, (uint8_t*)&network_rssi, &data_len);
+
+    return network_rssi;
+  }
+
+  bool Esp32Spi::req_host_by_name(const std::string hostname) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&hostname)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    bool result = driver.send_command(REQ_HOST_BY_NAME, params, 1, &data, &data_len);  
+
+    return result && data == WL_SUCCESS;
+  }
+
+  bool Esp32Spi::get_host_by_name(IPAddress& ip_out) {
+    IPAddress dummy(0xFF,0xFF,0xFF,0xFF);
+    uint8_t ip_addr[WL_IPV4_LENGTH];
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_HOST_BY_NAME, nullptr, 0, (uint8_t *)&ip_addr, &data_len)) {
+      WARN("Error:GET_HOST_BY_NAME\n");
+      return false;
+    } else {
+      ip_out = ip_addr;
+      return (ip_out != dummy);
+    }
+  }
+
+  bool Esp32Spi::get_host_by_name(const std::string hostname, IPAddress& ip_out) {
+    if(req_host_by_name(hostname)) {
+      return get_host_by_name(ip_out);
+    }
+    else {
+      return false;
+    }
+  }
+
+  const char* Esp32Spi::get_fw_version() {
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_FW_VERSION, nullptr, 0, (uint8_t*)fw_version, &data_len)){
+      WARN("Error:GET_FW_VERSION\n");
+    }
+    return fw_version;
+  }
+
+  uint32_t Esp32Spi::get_time() {
+    uint32_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_TIME, nullptr, 0, (uint8_t*)&data, &data_len)) {
+      WARN("Error:GET_TIME\n");
+    }
+    return data;
+  }
+
+  void Esp32Spi::set_power_mode(uint8_t mode) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&mode),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    driver.send_command(SET_POWER_MODE, params, 1, &data, &data_len);
+  }
+
+  int8_t Esp32Spi::wifi_set_ap_network(const std::string ssid, uint8_t channel) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&ssid),
+      SpiDrv::build_param(&channel),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_AP_NET, params, 2, &data, &data_len)) {
+      WARN("Error:SET_AP_NET\n");
+      data = WL_FAILURE;
+    }
+
+    return (data == WIFI_SPI_ACK) ? WL_SUCCESS : WL_FAILURE;
+  }
+
+  int8_t Esp32Spi::wifi_set_ap_passphrase(const std::string ssid, const std::string passphrase, uint8_t channel) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&ssid),
+      SpiDrv::build_param(&passphrase),
+      SpiDrv::build_param(&channel)
+    };
+
+    int8_t data = WL_FAILURE;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_AP_PASSPHRASE, params, PARAM_COUNT(params), (uint8_t*)&data, &data_len)) {
+      WARN("Error:SET_AP_
