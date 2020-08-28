@@ -717,4 +717,123 @@ namespace pimoroni {
   }
 
   uint8_t Esp32Spi::avail_server(uint8_t sock) {
-    // This function has a delib
+    // This function has a deliberate narrowing conversion from uint8_t to uint16_t
+    // see: https://github.com/adafruit/nina-fw/blob/d73fe315cc7f9148a0918490d3b75430c8444bf7/main/CommandHandler.cpp#L437-L498
+    if(!driver.available()) {
+      return 255;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock),
+    };
+
+    uint16_t socket = 0;
+    uint16_t data_len = 0;
+    driver.send_command(AVAIL_DATA_TCP, params, PARAM_COUNT(params), (uint8_t *)&socket, &data_len);
+
+    return socket;
+  }
+
+  bool Esp32Spi::get_data(uint8_t sock, uint8_t *data_out, bool peek) {
+    // Peek or get a single byte of data
+    // see: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L500-L529
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock),
+      SpiDrv::build_param((uint8_t *)&peek),
+    };
+  
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_DATA_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:GET_DATA_TCP\n");
+    }
+    
+    if(data_len != 0) {
+      *data_out = data;
+      return true;
+    }
+    return false;
+  }
+
+  bool Esp32Spi::get_data_buf(uint8_t sock, uint8_t *data_out, uint16_t *data_len_out) {
+    // Get the data buffer for TCP/UDP/TLS clients.
+    // see: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L870-L896
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param_buffer(&sock, 1),
+      SpiDrv::build_param_buffer((uint8_t *)&data_len_out, 2),
+    };
+  
+    if(!driver.send_command(GET_DATABUF_TCP, params, PARAM_COUNT(params), data_out, data_len_out, SpiDrv::RESPONSE_TYPE_DATA16)) {
+      WARN("Error:GET_DATABUF_TCP\n");
+    }
+
+    if(*data_len_out != 0) {
+      return true;
+    }
+    return false;
+  }
+
+  bool Esp32Spi::insert_data_buf(uint8_t sock, const uint8_t *data_in, uint16_t len) {
+    // UDP only. Writes to the socket output buffer.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L898-L917
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param_buffer(&sock, 1),
+      SpiDrv::build_param_buffer(data_in, len),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(INSERT_DATABUF, params, PARAM_COUNT(params), &data, &data_len, SpiDrv::RESPONSE_TYPE_DATA8)) {
+      WARN("Error:INSERT_DATABUF\n");
+    }
+
+    if(data_len != 0) {
+      return (data == 1);
+    }
+    return false;
+  }
+
+  bool Esp32Spi::send_udp_data(uint8_t sock) {
+    // UDP only. Writes the socket UDP end packet.
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L763-L777
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SEND_DATA_UDP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SEND_DATA_UDP\n");
+    }
+
+    // Returns 1 if udps[socket].endPacket() returns true
+    return data_len && data == WL_SUCCESS;
+  }
+
+  uint16_t Esp32Spi::send_data(uint8_t sock, const uint8_t *data_in, uint16_t len) {
+    // Send a data buffer over TCP (server/client) or TLS type sockets
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L845-L868
+    SpiDrv::inParam params[] = {
+        SpiDrv::build_param_buffer(&sock, 1),
+        SpiDrv::build_param_buffer(data_in, len),
+    };
+
+    uint16_t bytes_written = 0;
+    uint16_t data_out_len = 0;
+    if(!driver.send_command(SEND_DATA_TCP, params, PARAM_COUNT(params), (uint8_t *)&bytes_written, &data_out_len, SpiDrv::RESPONSE_TYPE_DATA8)) {
+      WARN("Error:SEND_DATA_TCP\n");
+    }
+
+    // Returns the number of bytes written
+    return bytes_written;
+  }
+
+  uint8_t Esp32Spi::check_data_sent(uint8_t sock) {
+    const uint16_t TIMEOUT_DATA_SENT = 25;
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock)
+    };
+
+    uint16_t timeout = 0;
+   
