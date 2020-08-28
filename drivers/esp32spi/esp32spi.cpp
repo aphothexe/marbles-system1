@@ -836,4 +836,116 @@ namespace pimoroni {
     };
 
     uint16_t timeout = 0;
-   
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    do {
+      if(!driver.send_command(DATA_SENT_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+        WARN("Error:DATA_SENT_TCP/n");
+      }
+
+      if(data)
+        timeout = 0;
+      else {
+        ++timeout;
+        sleep_ms(100);
+      }
+
+    } while((data == 0) && (timeout < TIMEOUT_DATA_SENT));
+
+    return (timeout == TIMEOUT_DATA_SENT) ? 0 : 1;
+  }
+
+  uint8_t Esp32Spi::get_socket() {
+    uint8_t socket = -1;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_SOCKET, nullptr, 0, &socket, &data_len)) {
+        WARN("Error:GET_SOCKET/n");
+    }
+    return socket;
+  }
+
+  void Esp32Spi::wifi_set_ent_identity(const std::string identity) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&identity)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(WPA2_ENT_SET_IDENTITY, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:WPA2_ENT_SET_IDENTITY\n");
+    }
+  }
+
+  void Esp32Spi::wifi_set_ent_username(const std::string username) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&username)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(WPA2_ENT_SET_USERNAME, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:WPA2_ENT_SET_USERNAME\n");
+    }
+  }
+
+  void Esp32Spi::wifi_set_ent_password(const std::string password) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&password)
+    };
+
+    uint8_t data;
+    uint16_t data_len = 0;
+    if (!driver.send_command(WPA2_ENT_SET_PASSWORD, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:WPA2_ENT_SET_PASSWORD\n");
+    }
+  }
+
+  void Esp32Spi::wifi_set_ent_enable() {
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(WPA2_ENT_ENABLE, nullptr, 0, &data, &data_len)) {
+      WARN("Error:WPA2_ENT_ENABLE\n");
+    }
+  }
+
+  void Esp32Spi::sleep_set_wake_pin(uint8_t wake_pin) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&wake_pin)
+    };
+
+    uint8_t data;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_WAKE_PIN, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_WAKE_PIN\n");
+    }
+  }
+
+  void Esp32Spi::sleep_light() {
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if (!driver.send_command(SET_LIGHT_SLEEP, nullptr, 0, &data, &data_len)) {
+      WARN("Error:SET_LIGHT_SLEEP_CMD\n");
+    } else {
+      // Because we still have a very murky separation of concerns between esp32spi and spi_drv
+      // we'll force the sleep state here, rather than have spi_drv understand this commmand
+      driver.sleep_state = SpiDrv::LIGHT_SLEEP;
+    }
+  }
+  
+  void Esp32Spi::sleep_deep(uint8_t time) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&time)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_DEEP_SLEEP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:SET_DEEP_SLEEP\n");
+    } else {
+      // Because we still have a very murky separation of concerns between esp32spi and spi_drv
+      // we'll force the sleep state here, rather than have spi_drv understand this commmand
+      driver.sleep_state = SpiDrv::DEEP_SLEEP;
+    }
+  }
+  
+}
