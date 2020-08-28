@@ -577,4 +577,144 @@ namespace pimoroni {
   uint16_t Esp32Spi::analog_read(uint8_t pin, uint8_t atten) {
     // Read an analog value from an ESP32 GPIO pin.
     // Uses the Arduino HAL "analogRead" internally.
-    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/Com
+    // See: https://github.com/adafruit/nina-fw/blob/104c48cb48e2a04c8a8009ef2db1b551414628a5/main/CommandHandler.cpp#L1010-L1023
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&pin),
+      SpiDrv::build_param(&atten)
+    };
+
+    uint32_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(SET_ANALOG_READ, params, PARAM_COUNT(params), (uint8_t*)&data, &data_len)) {
+      WARN("Error:SET_ANALOG_READ\n");
+    }
+
+    return (uint16_t)data; // ESP only has a 12-bit ADC but returns a uint32
+  }
+
+  void Esp32Spi::start_server(uint16_t port, uint8_t sock, uint8_t protocol_mode) {
+    port =__builtin_bswap16(port);
+
+    SpiDrv::inParam params[] = {
+        SpiDrv::build_param(&port),
+        SpiDrv::build_param(&sock),
+        SpiDrv::build_param(&protocol_mode),
+    };
+  
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(START_SERVER_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:START_SERVER_TCP\n");
+    }
+  }
+
+  void Esp32Spi::start_server(uint32_t ip_address, uint16_t port, uint8_t sock, uint8_t protocol_mode) {
+    port =__builtin_bswap16(port);
+
+    SpiDrv::inParam params[] = {
+        SpiDrv::build_param(&ip_address),
+        SpiDrv::build_param(&port),
+        SpiDrv::build_param(&sock),
+        SpiDrv::build_param(&protocol_mode),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(START_SERVER_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:START_SERVER_TCP\n");
+    }
+  }
+
+  void Esp32Spi::start_client(uint32_t ip_address, uint16_t port, uint8_t sock, uint8_t protocol_mode) {
+    port = __builtin_bswap16(port); // Don't ask, I'll cry
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&ip_address),
+      SpiDrv::build_param(&port),
+      SpiDrv::build_param(&sock),
+      SpiDrv::build_param(&protocol_mode)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(START_CLIENT_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:START_CLIENT_TCP\n");
+    }
+  }
+
+  void Esp32Spi::start_client(const std::string host, uint32_t ip_address, uint16_t port, uint8_t sock, uint8_t protocol_mode) {
+    port = __builtin_bswap16(port); // Don't ask, I'll cry
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&host),
+      SpiDrv::build_param(&ip_address),
+      SpiDrv::build_param(&port),
+      SpiDrv::build_param(&sock),
+      SpiDrv::build_param(&protocol_mode)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(START_CLIENT_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:START_CLIENT_TCP\n");
+    } 
+  }
+
+  void Esp32Spi::stop_client(uint8_t sock) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock),
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(STOP_CLIENT_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:STOP_CLIENT_TCP\n");
+    }
+  }
+
+  uint8_t Esp32Spi::get_server_state(uint8_t sock) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_STATE_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:GET_STATE_TCP\n");
+    }
+
+    return data;
+  }
+
+  uint8_t Esp32Spi::get_client_state(uint8_t sock) {
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock)
+    };
+
+    uint8_t data = 0;
+    uint16_t data_len = 0;
+    if(!driver.send_command(GET_CLIENT_STATE_TCP, params, PARAM_COUNT(params), &data, &data_len)) {
+      WARN("Error:GET_CLIENT_STATE_TCP\n");
+    }
+
+    return data;
+  }
+
+  uint16_t Esp32Spi::avail_data(uint8_t sock) {
+    if(!driver.available()) {
+      return 0;
+    }
+
+    SpiDrv::inParam params[] = {
+      SpiDrv::build_param(&sock),
+    };
+
+    uint16_t bytes_available = 0;
+    uint16_t data_len = 0;
+    driver.send_command(AVAIL_DATA_TCP, params, PARAM_COUNT(params), (uint8_t *)&bytes_available, &data_len);
+
+    return bytes_available;
+  }
+
+  uint8_t Esp32Spi::avail_server(uint8_t sock) {
+    // This function has a delib
