@@ -121,4 +121,168 @@ namespace pimoroni {
           spi_read_blocking(spi, DUMMY_DATA, params_out[i].param, params_out[i].param_len);
         }
       }
-  
+      else {
+        WARN("Error num_param == 0\n");
+        return false;
+      }
+
+      if(num_param != num_param_read) {
+        WARN("Mismatch num_param\n");
+        return false;
+      }
+
+      read_and_check_byte(END_CMD, &data);
+    }         
+    return true;
+  }
+    
+  bool SpiDrv::wait_response_cmd(uint8_t cmd, uint8_t num_param, uint8_t *param_out, uint16_t *param_len_out) {
+    uint8_t data = 0;
+    int ii = 0;
+
+    IF_CHECK_START_CMD() {
+      CHECK_DATA(cmd | REPLY_FLAG, data){};
+
+      CHECK_DATA(num_param, data) {
+        read_param_len8(param_len_out);
+        for(ii = 0; ii < (*param_len_out); ++ii) {
+          get_param(&param_out[ii]);
+        } 
+      }
+
+      read_and_check_byte(END_CMD, &data);
+    }
+    
+    return true;
+  }
+
+  bool SpiDrv::wait_response_data8(uint8_t cmd, uint8_t *param_out, uint16_t *param_len_out) {
+    uint8_t data = 0;
+
+    IF_CHECK_START_CMD() {
+      CHECK_DATA(cmd | REPLY_FLAG, data){};
+
+      uint8_t num_param_read = read_byte();
+      if(num_param_read != 0) {        
+        read_param_len8(param_len_out);
+        spi_read_blocking(spi, DUMMY_DATA, param_out, *param_len_out);
+      }
+
+      read_and_check_byte(END_CMD, &data);
+    }     
+    
+    return true;    
+  }
+     
+  bool SpiDrv::wait_response_data16(uint8_t cmd, uint8_t* param_out, uint16_t *param_len_out) {
+    uint8_t data = 0;
+
+    IF_CHECK_START_CMD() {
+      CHECK_DATA(cmd | REPLY_FLAG, data){};
+
+      uint8_t num_param_read = read_byte();
+      if(num_param_read != 0) {
+        read_param_len16(param_len_out);
+        spi_read_blocking(spi, DUMMY_DATA, param_out, *param_len_out);
+      }
+
+      read_and_check_byte(END_CMD, &data);
+    }     
+    
+    return false;
+  }
+
+  bool SpiDrv::wait_response(uint8_t cmd, uint16_t *num_param_out, uint8_t **params_out, uint8_t max_num_params) {
+    uint8_t data = 0;
+    int i = 0;
+
+    uint8_t* index[WL_SSID_MAX_LENGTH];
+
+    for(i = 0 ; i < WL_NETWORKS_LIST_MAXNUM; i++)
+      index[i] = (uint8_t*)params_out + (WL_SSID_MAX_LENGTH * i);
+
+    IF_CHECK_START_CMD() {
+      CHECK_DATA(cmd | REPLY_FLAG, data){};
+
+      uint8_t num_param_read = read_byte();
+
+      if(num_param_read > max_num_params) {
+        num_param_read = max_num_params;
+      }
+      *num_param_out = num_param_read;
+      if(num_param_read != 0) {
+        for(i = 0; i < num_param_read; ++i) {
+          uint8_t param_len = read_param_len8();
+          spi_read_blocking(spi, DUMMY_DATA, index[i], param_len);
+          index[i][param_len] = 0;
+        }
+      }
+      else {
+        WARN("Error numParams == 0\n");
+        read_and_check_byte(END_CMD, &data);
+        return false;
+      }
+      read_and_check_byte(END_CMD, &data);
+    }
+    return true;
+  }
+
+  void SpiDrv::send_param(const uint8_t *param, uint8_t param_len) {
+    send_param_len8(param_len);
+
+    spi_write_blocking(spi, param, param_len);
+    command_length += param_len;
+  }
+
+  void SpiDrv::send_param_len8(uint8_t param_len) {
+    spi_write_blocking(spi, &param_len, 1);
+    command_length += 1;
+  }
+
+  void SpiDrv::send_param_len16(uint16_t param_len) {
+    uint8_t buf[2];
+    buf[0] = (uint8_t)((param_len & 0xff00) >> 8);
+    buf[1] = (uint8_t)(param_len & 0xff);
+    spi_write_blocking(spi, buf, 2);
+    command_length += 2;
+  }
+
+  uint8_t SpiDrv::read_param_len8(uint16_t *param_len_out) {
+    uint8_t param_len;
+    get_param(&param_len);
+    if(param_len_out != nullptr) {
+      *param_len_out = param_len;
+    }
+    return param_len;
+  }
+
+  uint16_t SpiDrv::read_param_len16(uint16_t *param_len_out) {
+    uint8_t buf[2];
+    spi_read_blocking(spi, DUMMY_DATA, buf, 2);
+    uint16_t param_len = (buf[0] << 8) | (buf[1] & 0xff);
+    if(param_len_out != nullptr) {
+      *param_len_out = param_len;
+    }
+    return param_len;
+  }
+
+  void SpiDrv::send_buffer(const uint8_t* param, uint16_t param_len) {
+    send_param_len16(param_len);
+
+    spi_write_blocking(spi, param, param_len);
+    command_length += param_len;
+  }
+    
+  void SpiDrv::start_cmd(uint8_t cmd, uint8_t num_param) {
+    uint8_t buf[3];
+    buf[0] = START_CMD;
+    buf[1] = cmd & ~(REPLY_FLAG);
+    buf[2] = num_param;
+    spi_write_blocking(spi, buf, 3);
+
+    command_length = 3;
+  }
+
+  void SpiDrv::end_cmd() {
+    uint8_t buf = END_CMD;
+    spi_writ
