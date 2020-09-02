@@ -285,4 +285,113 @@ namespace pimoroni {
 
   void SpiDrv::end_cmd() {
     uint8_t buf = END_CMD;
-    spi_writ
+    spi_write_blocking(spi, &buf, 1);
+    command_length += 1;
+    WARN("Command len: %ld\n", command_length);
+    pad_to_multiple_of_4(command_length);
+    command_length = 0;
+  }
+
+  void SpiDrv::pad_to_multiple_of_4(int command_size) {
+    while(command_size % 4) {
+      read_byte();
+      command_size++;
+    }
+  }
+
+  void SpiDrv::get_param(uint8_t* param_out) {
+    spi_read_blocking(spi, DUMMY_DATA, param_out, 1);
+  }
+
+  bool SpiDrv::send_command(uint8_t command, const SpiDrv::inParam *params_in, uint8_t num_in, uint8_t *data, uint16_t *data_len, cmd_response_type response_type) {
+    if (!wait_for_esp_select()) {
+      // Timeout waiting for ESP select
+      // This could be a transport error, or a sleeping EPS32
+      return false;
+    }
+
+    WARN("\n%s %d\n", commands[command], num_in);
+
+    // Send Command
+    start_cmd(command, num_in);
+
+    // Send params
+    for(uint8_t i = 0; i < num_in; i++) {
+      SpiDrv::inParam param = params_in[i];
+      switch(param.type) {
+        case PARAM_NORMAL:
+          WARN("param %d\n", param.len);
+          send_param(param.addr, param.len);   // uint8_t length
+          break;
+        case PARAM_BUFFER:
+          WARN("buffer %d\n", param.len);
+          send_buffer(param.addr, param.len);  // uint16_t length
+          break;
+        case PARAM_DUMMY:
+          WARN("dummy\n");
+          uint8_t dummy = DUMMY_DATA;
+          send_param(&dummy, 1);
+          break;
+      }
+    }
+    end_cmd();
+    esp_deselect();
+  
+    // Wait for reply
+    // START_SCAN_NETWORKS is a no-op, and SCAN_NETWORKS will block while the scan is performed
+    wait_for_esp_select(command == 0x27 ? 30000 : 10000);
+    *data = -1;
+    bool status = false;
+    switch(response_type) {
+      case RESPONSE_TYPE_NORMAL:
+        WARN("wait_response\n");
+        // Currently SCAN_NETWORKS is the only command using "wait_response" so its max_num_params value is hard-coded
+        status = wait_response(command, data_len, (uint8_t**)data, WL_NETWORKS_LIST_MAXNUM);
+        break;
+      case RESPONSE_TYPE_CMD:
+        WARN("wait_response_cmd\n");
+        status = wait_response_cmd(command, SpiDrv::PARAM_NUMS_1, data, data_len);
+        break;
+      case RESPONSE_TYPE_DATA8:
+        WARN("wait_response_data8\n");
+        status = wait_response_data8(command, data, data_len);
+        break;
+      case RESPONSE_TYPE_DATA16:
+        WARN("wait_response_data16\n");
+        status = wait_response_data16(command, data, data_len);
+        break;
+    }
+    esp_deselect();
+
+    if(status) {
+      // Any successful command should reset sleep status to AWAKE
+      // a sleeping ESP32 wont respond to commands!
+      sleep_state = AWAKE;
+    }
+    return status;
+  }
+
+  bool SpiDrv::send_command(uint8_t command, SpiDrv::outParam *params_out, SpiDrv::numParams num_out) {
+    if (!wait_for_esp_select()) {
+      // Timeout waiting for ESP select!
+      return false;
+    }
+
+    start_cmd(command, SpiDrv::PARAM_NUMS_1);
+    uint8_t dummy = DUMMY_DATA;
+    send_param(&dummy, 1);
+    end_cmd();
+    esp_deselect();
+
+    wait_for_esp_select();
+    bool status = wait_response_params(command, num_out, params_out);
+    esp_deselect();
+
+    if(status) {
+      // Any successful command should reset sleep status to AWAKE
+      // a sleeping ESP32 wont respond to commands!
+      sleep_state = AWAKE;
+    }
+    return status;
+  }
+}
