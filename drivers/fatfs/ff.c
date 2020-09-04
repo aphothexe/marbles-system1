@@ -170,4 +170,84 @@
 #define XDIR_NumSec			1		/* exFAT: Number of secondary entries (BYTE) */
 #define XDIR_SetSum			2		/* exFAT: Sum of the set of directory entries (WORD) */
 #define XDIR_Attr			4		/* exFAT: File attribute (WORD) */
-#def
+#define XDIR_CrtTime		8		/* exFAT: Created time (DWORD) */
+#define XDIR_ModTime		12		/* exFAT: Modified time (DWORD) */
+#define XDIR_AccTime		16		/* exFAT: Last accessed time (DWORD) */
+#define XDIR_CrtTime10		20		/* exFAT: Created time subsecond (BYTE) */
+#define XDIR_ModTime10		21		/* exFAT: Modified time subsecond (BYTE) */
+#define XDIR_CrtTZ			22		/* exFAT: Created timezone (BYTE) */
+#define XDIR_ModTZ			23		/* exFAT: Modified timezone (BYTE) */
+#define XDIR_AccTZ			24		/* exFAT: Last accessed timezone (BYTE) */
+#define XDIR_GenFlags		33		/* exFAT: General secondary flags (BYTE) */
+#define XDIR_NumName		35		/* exFAT: Number of file name characters (BYTE) */
+#define XDIR_NameHash		36		/* exFAT: Hash of file name (WORD) */
+#define XDIR_ValidFileSize	40		/* exFAT: Valid file size (QWORD) */
+#define XDIR_FstClus		52		/* exFAT: First cluster of the file data (DWORD) */
+#define XDIR_FileSize		56		/* exFAT: File/Directory size (QWORD) */
+
+#define SZDIRE				32		/* Size of a directory entry */
+#define DDEM				0xE5	/* Deleted directory entry mark set to DIR_Name[0] */
+#define RDDEM				0x05	/* Replacement of the character collides with DDEM */
+#define LLEF				0x40	/* Last long entry flag in LDIR_Ord */
+
+#define FSI_LeadSig			0		/* FAT32 FSI: Leading signature (DWORD) */
+#define FSI_StrucSig		484		/* FAT32 FSI: Structure signature (DWORD) */
+#define FSI_Free_Count		488		/* FAT32 FSI: Number of free clusters (DWORD) */
+#define FSI_Nxt_Free		492		/* FAT32 FSI: Last allocated cluster (DWORD) */
+
+#define MBR_Table			446		/* MBR: Offset of partition table in the MBR */
+#define SZ_PTE				16		/* MBR: Size of a partition table entry */
+#define PTE_Boot			0		/* MBR PTE: Boot indicator */
+#define PTE_StHead			1		/* MBR PTE: Start head */
+#define PTE_StSec			2		/* MBR PTE: Start sector */
+#define PTE_StCyl			3		/* MBR PTE: Start cylinder */
+#define PTE_System			4		/* MBR PTE: System ID */
+#define PTE_EdHead			5		/* MBR PTE: End head */
+#define PTE_EdSec			6		/* MBR PTE: End sector */
+#define PTE_EdCyl			7		/* MBR PTE: End cylinder */
+#define PTE_StLba			8		/* MBR PTE: Start in LBA */
+#define PTE_SizLba			12		/* MBR PTE: Size in LBA */
+
+#define GPTH_Sign			0		/* GPT: Header signature (8-byte) */
+#define GPTH_Rev			8		/* GPT: Revision (DWORD) */
+#define GPTH_Size			12		/* GPT: Header size (DWORD) */
+#define GPTH_Bcc			16		/* GPT: Header BCC (DWORD) */
+#define GPTH_CurLba			24		/* GPT: Main header LBA (QWORD) */
+#define GPTH_BakLba			32		/* GPT: Backup header LBA (QWORD) */
+#define GPTH_FstLba			40		/* GPT: First LBA for partitions (QWORD) */
+#define GPTH_LstLba			48		/* GPT: Last LBA for partitions (QWORD) */
+#define GPTH_DskGuid		56		/* GPT: Disk GUID (16-byte) */
+#define GPTH_PtOfs			72		/* GPT: Partation table LBA (QWORD) */
+#define GPTH_PtNum			80		/* GPT: Number of table entries (DWORD) */
+#define GPTH_PteSize		84		/* GPT: Size of table entry (DWORD) */
+#define GPTH_PtBcc			88		/* GPT: Partation table BCC (DWORD) */
+#define SZ_GPTE				128		/* GPT: Size of partition table entry */
+#define GPTE_PtGuid			0		/* GPT PTE: Partition type GUID (16-byte) */
+#define GPTE_UpGuid			16		/* GPT PTE: Partition unique GUID (16-byte) */
+#define GPTE_FstLba			32		/* GPT PTE: First LBA (QWORD) */
+#define GPTE_LstLba			40		/* GPT PTE: Last LBA inclusive (QWORD) */
+#define GPTE_Flags			48		/* GPT PTE: Flags (QWORD) */
+#define GPTE_Name			56		/* GPT PTE: Name */
+
+
+/* Post process on fatal error in the file operations */
+#define ABORT(fs, res)		{ fp->err = (BYTE)(res); LEAVE_FF(fs, res); }
+
+
+/* Re-entrancy related */
+#if FF_FS_REENTRANT
+#if FF_USE_LFN == 1
+#error Static LFN work area cannot be used in thread-safe configuration
+#endif
+#define LEAVE_FF(fs, res)	{ unlock_fs(fs, res); return res; }
+#else
+#define LEAVE_FF(fs, res)	return res
+#endif
+
+
+/* Definitions of logical drive - physical location conversion */
+#if FF_MULTI_PARTITION
+#define LD2PD(vol) VolToPart[vol].pd	/* Get physical drive number */
+#define LD2PT(vol) VolToPart[vol].pt	/* Get partition number (0:auto search, 1..:forced partition number) */
+#else
+#define LD2PD(vol) (BYTE)(vol)	/* Each logical drive is associ
