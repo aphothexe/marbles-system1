@@ -608,4 +608,154 @@ static const BYTE DbcTbl[] = MKCVTBL(TBL_DC, FF_CODE_PAGE);
 
 
 /*-----------------------------------------------------------------------*/
-/* Load/Store multi-byte word in the FAT s
+/* Load/Store multi-byte word in the FAT structure                       */
+/*-----------------------------------------------------------------------*/
+
+static WORD ld_word (const BYTE* ptr)	/*	 Load a 2-byte little-endian word */
+{
+	WORD rv;
+
+	rv = ptr[1];
+	rv = rv << 8 | ptr[0];
+	return rv;
+}
+
+static DWORD ld_dword (const BYTE* ptr)	/* Load a 4-byte little-endian word */
+{
+	DWORD rv;
+
+	rv = ptr[3];
+	rv = rv << 8 | ptr[2];
+	rv = rv << 8 | ptr[1];
+	rv = rv << 8 | ptr[0];
+	return rv;
+}
+
+#if FF_FS_EXFAT
+static QWORD ld_qword (const BYTE* ptr)	/* Load an 8-byte little-endian word */
+{
+	QWORD rv;
+
+	rv = ptr[7];
+	rv = rv << 8 | ptr[6];
+	rv = rv << 8 | ptr[5];
+	rv = rv << 8 | ptr[4];
+	rv = rv << 8 | ptr[3];
+	rv = rv << 8 | ptr[2];
+	rv = rv << 8 | ptr[1];
+	rv = rv << 8 | ptr[0];
+	return rv;
+}
+#endif
+
+#if !FF_FS_READONLY
+static void st_word (BYTE* ptr, WORD val)	/* Store a 2-byte word in little-endian */
+{
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val;
+}
+
+static void st_dword (BYTE* ptr, DWORD val)	/* Store a 4-byte word in little-endian */
+{
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val;
+}
+
+#if FF_FS_EXFAT
+static void st_qword (BYTE* ptr, QWORD val)	/* Store an 8-byte word in little-endian */
+{
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val; val >>= 8;
+	*ptr++ = (BYTE)val;
+}
+#endif
+#endif	/* !FF_FS_READONLY */
+
+
+
+/*-----------------------------------------------------------------------*/
+/* String functions                                                      */
+/*-----------------------------------------------------------------------*/
+
+/* Test if the byte is DBC 1st byte */
+static int dbc_1st (BYTE c)
+{
+#if FF_CODE_PAGE == 0		/* Variable code page */
+	if (DbcTbl && c >= DbcTbl[0]) {
+		if (c <= DbcTbl[1]) return 1;					/* 1st byte range 1 */
+		if (c >= DbcTbl[2] && c <= DbcTbl[3]) return 1;	/* 1st byte range 2 */
+	}
+#elif FF_CODE_PAGE >= 900	/* DBCS fixed code page */
+	if (c >= DbcTbl[0]) {
+		if (c <= DbcTbl[1]) return 1;
+		if (c >= DbcTbl[2] && c <= DbcTbl[3]) return 1;
+	}
+#else						/* SBCS fixed code page */
+	if (c != 0) return 0;	/* Always false */
+#endif
+	return 0;
+}
+
+
+/* Test if the byte is DBC 2nd byte */
+static int dbc_2nd (BYTE c)
+{
+#if FF_CODE_PAGE == 0		/* Variable code page */
+	if (DbcTbl && c >= DbcTbl[4]) {
+		if (c <= DbcTbl[5]) return 1;					/* 2nd byte range 1 */
+		if (c >= DbcTbl[6] && c <= DbcTbl[7]) return 1;	/* 2nd byte range 2 */
+		if (c >= DbcTbl[8] && c <= DbcTbl[9]) return 1;	/* 2nd byte range 3 */
+	}
+#elif FF_CODE_PAGE >= 900	/* DBCS fixed code page */
+	if (c >= DbcTbl[4]) {
+		if (c <= DbcTbl[5]) return 1;
+		if (c >= DbcTbl[6] && c <= DbcTbl[7]) return 1;
+		if (c >= DbcTbl[8] && c <= DbcTbl[9]) return 1;
+	}
+#else						/* SBCS fixed code page */
+	if (c != 0) return 0;	/* Always false */
+#endif
+	return 0;
+}
+
+
+#if FF_USE_LFN
+
+/* Get a Unicode code point from the TCHAR string in defined API encodeing */
+static DWORD tchar2uni (	/* Returns a character in UTF-16 encoding (>=0x10000 on surrogate pair, 0xFFFFFFFF on decode error) */
+	const TCHAR** str		/* Pointer to pointer to TCHAR string in configured encoding */
+)
+{
+	DWORD uc;
+	const TCHAR *p = *str;
+
+#if FF_LFN_UNICODE == 1		/* UTF-16 input */
+	WCHAR wc;
+
+	uc = *p++;	/* Get a unit */
+	if (IsSurrogate(uc)) {	/* Surrogate? */
+		wc = *p++;		/* Get low surrogate */
+		if (!IsSurrogateH(uc) || !IsSurrogateL(wc)) return 0xFFFFFFFF;	/* Wrong surrogate? */
+		uc = uc << 16 | wc;
+	}
+
+#elif FF_LFN_UNICODE == 2	/* UTF-8 input */
+	BYTE b;
+	int nf;
+
+	uc = (BYTE)*p++;	/* Get an encoding unit */
+	if (uc & 0x80) {	/* Multiple byte code? */
+		if        ((uc & 0xE0) == 0xC0) {	/* 2-byte sequence? */
+			uc &= 0x1F; nf = 1;
+		} else if ((uc & 0xF0) == 0xE0) {	/* 3-byte sequence? */
+			uc &= 0x0F; nf = 2;
+		} else if ((uc & 0xF8) == 0xF0) {	/* 4-byte sequence? */
+			uc &= 0x07; nf = 3;
+		} else {							
