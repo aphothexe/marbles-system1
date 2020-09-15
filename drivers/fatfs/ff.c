@@ -1151,4 +1151,135 @@ static DWORD get_fat (		/* 0xFFFFFFFF:Disk error, 1:Internal error, 2..0x7FFFFFF
 			wc = fs->win[bc++ % SS(fs)];		/* Get 1st byte of the entry */
 			if (move_window(fs, fs->fatbase + (bc / SS(fs))) != FR_OK) break;
 			wc |= fs->win[bc % SS(fs)] << 8;	/* Merge 2nd byte of the entry */
-			val = (clst & 1) ? (wc >> 4) : (wc & 0xFFF);	/* Adjust bit 
+			val = (clst & 1) ? (wc >> 4) : (wc & 0xFFF);	/* Adjust bit position */
+			break;
+
+		case FS_FAT16 :
+			if (move_window(fs, fs->fatbase + (clst / (SS(fs) / 2))) != FR_OK) break;
+			val = ld_word(fs->win + clst * 2 % SS(fs));		/* Simple WORD array */
+			break;
+
+		case FS_FAT32 :
+			if (move_window(fs, fs->fatbase + (clst / (SS(fs) / 4))) != FR_OK) break;
+			val = ld_dword(fs->win + clst * 4 % SS(fs)) & 0x0FFFFFFF;	/* Simple DWORD array but mask out upper 4 bits */
+			break;
+#if FF_FS_EXFAT
+		case FS_EXFAT :
+			if ((obj->objsize != 0 && obj->sclust != 0) || obj->stat == 0) {	/* Object except root dir must have valid data length */
+				DWORD cofs = clst - obj->sclust;	/* Offset from start cluster */
+				DWORD clen = (DWORD)((LBA_t)((obj->objsize - 1) / SS(fs)) / fs->csize);	/* Number of clusters - 1 */
+
+				if (obj->stat == 2 && cofs <= clen) {	/* Is it a contiguous chain? */
+					val = (cofs == clen) ? 0x7FFFFFFF : clst + 1;	/* No data on the FAT, generate the value */
+					break;
+				}
+				if (obj->stat == 3 && cofs < obj->n_cont) {	/* Is it in the 1st fragment? */
+					val = clst + 1; 	/* Generate the value */
+					break;
+				}
+				if (obj->stat != 2) {	/* Get value from FAT if FAT chain is valid */
+					if (obj->n_frag != 0) {	/* Is it on the growing edge? */
+						val = 0x7FFFFFFF;	/* Generate EOC */
+					} else {
+						if (move_window(fs, fs->fatbase + (clst / (SS(fs) / 4))) != FR_OK) break;
+						val = ld_dword(fs->win + clst * 4 % SS(fs)) & 0x7FFFFFFF;
+					}
+					break;
+				}
+			}
+			val = 1;	/* Internal error */
+			break;
+#endif
+		default:
+			val = 1;	/* Internal error */
+		}
+	}
+
+	return val;
+}
+
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* FAT access - Change value of an FAT entry                             */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT put_fat (	/* FR_OK(0):succeeded, !=0:error */
+	FATFS* fs,		/* Corresponding filesystem object */
+	DWORD clst,		/* FAT index number (cluster number) to be changed */
+	DWORD val		/* New value to be set to the entry */
+)
+{
+	UINT bc;
+	BYTE *p;
+	FRESULT res = FR_INT_ERR;
+
+
+	if (clst >= 2 && clst < fs->n_fatent) {	/* Check if in valid range */
+		switch (fs->fs_type) {
+		case FS_FAT12:
+			bc = (UINT)clst; bc += bc / 2;	/* bc: byte offset of the entry */
+			res = move_window(fs, fs->fatbase + (bc / SS(fs)));
+			if (res != FR_OK) break;
+			p = fs->win + bc++ % SS(fs);
+			*p = (clst & 1) ? ((*p & 0x0F) | ((BYTE)val << 4)) : (BYTE)val;	/* Update 1st byte */
+			fs->wflag = 1;
+			res = move_window(fs, fs->fatbase + (bc / SS(fs)));
+			if (res != FR_OK) break;
+			p = fs->win + bc % SS(fs);
+			*p = (clst & 1) ? (BYTE)(val >> 4) : ((*p & 0xF0) | ((BYTE)(val >> 8) & 0x0F));	/* Update 2nd byte */
+			fs->wflag = 1;
+			break;
+
+		case FS_FAT16:
+			res = move_window(fs, fs->fatbase + (clst / (SS(fs) / 2)));
+			if (res != FR_OK) break;
+			st_word(fs->win + clst * 2 % SS(fs), (WORD)val);	/* Simple WORD array */
+			fs->wflag = 1;
+			break;
+
+		case FS_FAT32:
+#if FF_FS_EXFAT
+		case FS_EXFAT:
+#endif
+			res = move_window(fs, fs->fatbase + (clst / (SS(fs) / 4)));
+			if (res != FR_OK) break;
+			if (!FF_FS_EXFAT || fs->fs_type != FS_EXFAT) {
+				val = (val & 0x0FFFFFFF) | (ld_dword(fs->win + clst * 4 % SS(fs)) & 0xF0000000);
+			}
+			st_dword(fs->win + clst * 4 % SS(fs), val);
+			fs->wflag = 1;
+			break;
+		}
+	}
+	return res;
+}
+
+#endif /* !FF_FS_READONLY */
+
+
+
+
+#if FF_FS_EXFAT && !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* exFAT: Accessing FAT and Allocation Bitmap                            */
+/*-----------------------------------------------------------------------*/
+
+/*--------------------------------------*/
+/* Find a contiguous free cluster block */
+/*--------------------------------------*/
+
+static DWORD find_bitmap (	/* 0:Not found, 2..:Cluster block found, 0xFFFFFFFF:Disk error */
+	FATFS* fs,	/* Filesystem object */
+	DWORD clst,	/* Cluster number to scan from */
+	DWORD ncl	/* Number of contiguous clusters to find (1..) */
+)
+{
+	BYTE bm, bv;
+	UINT i;
+	DWORD val, scl, ctr;
+
+
+	clst -= 2;
