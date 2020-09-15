@@ -884,4 +884,148 @@ static UINT put_utf (	/* Returns number of encoding units written (0:buffer over
 
 
 #if FF_FS_REENTRANT
-/*----------------------
+/*-----------------------------------------------------------------------*/
+/* Request/Release grant to access the volume                            */
+/*-----------------------------------------------------------------------*/
+static int lock_fs (		/* 1:Ok, 0:timeout */
+	FATFS* fs		/* Filesystem object */
+)
+{
+	return ff_req_grant(fs->sobj);
+}
+
+
+static void unlock_fs (
+	FATFS* fs,		/* Filesystem object */
+	FRESULT res		/* Result code to be returned */
+)
+{
+	if (fs && res != FR_NOT_ENABLED && res != FR_INVALID_DRIVE && res != FR_TIMEOUT) {
+		ff_rel_grant(fs->sobj);
+	}
+}
+
+#endif
+
+
+
+#if FF_FS_LOCK != 0
+/*-----------------------------------------------------------------------*/
+/* File lock control functions                                           */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT chk_lock (	/* Check if the file can be accessed */
+	DIR* dp,		/* Directory object pointing the file to be checked */
+	int acc			/* Desired access type (0:Read mode open, 1:Write mode open, 2:Delete or rename) */
+)
+{
+	UINT i, be;
+
+	/* Search open object table for the object */
+	be = 0;
+	for (i = 0; i < FF_FS_LOCK; i++) {
+		if (Files[i].fs) {	/* Existing entry */
+			if (Files[i].fs == dp->obj.fs &&	 	/* Check if the object matches with an open object */
+				Files[i].clu == dp->obj.sclust &&
+				Files[i].ofs == dp->dptr) break;
+		} else {			/* Blank entry */
+			be = 1;
+		}
+	}
+	if (i == FF_FS_LOCK) {	/* The object has not been opened */
+		return (!be && acc != 2) ? FR_TOO_MANY_OPEN_FILES : FR_OK;	/* Is there a blank entry for new object? */
+	}
+
+	/* The object was opened. Reject any open against writing file and all write mode open */
+	return (acc != 0 || Files[i].ctr == 0x100) ? FR_LOCKED : FR_OK;
+}
+
+
+static int enq_lock (void)	/* Check if an entry is available for a new object */
+{
+	UINT i;
+
+	for (i = 0; i < FF_FS_LOCK && Files[i].fs; i++) ;
+	return (i == FF_FS_LOCK) ? 0 : 1;
+}
+
+
+static UINT inc_lock (	/* Increment object open counter and returns its index (0:Internal error) */
+	DIR* dp,	/* Directory object pointing the file to register or increment */
+	int acc		/* Desired access (0:Read, 1:Write, 2:Delete/Rename) */
+)
+{
+	UINT i;
+
+
+	for (i = 0; i < FF_FS_LOCK; i++) {	/* Find the object */
+		if (Files[i].fs == dp->obj.fs
+		 && Files[i].clu == dp->obj.sclust
+		 && Files[i].ofs == dp->dptr) break;
+	}
+
+	if (i == FF_FS_LOCK) {			/* Not opened. Register it as new. */
+		for (i = 0; i < FF_FS_LOCK && Files[i].fs; i++) ;
+		if (i == FF_FS_LOCK) return 0;	/* No free entry to register (int err) */
+		Files[i].fs = dp->obj.fs;
+		Files[i].clu = dp->obj.sclust;
+		Files[i].ofs = dp->dptr;
+		Files[i].ctr = 0;
+	}
+
+	if (acc >= 1 && Files[i].ctr) return 0;	/* Access violation (int err) */
+
+	Files[i].ctr = acc ? 0x100 : Files[i].ctr + 1;	/* Set semaphore value */
+
+	return i + 1;	/* Index number origin from 1 */
+}
+
+
+static FRESULT dec_lock (	/* Decrement object open counter */
+	UINT i			/* Semaphore index (1..) */
+)
+{
+	WORD n;
+	FRESULT res;
+
+
+	if (--i < FF_FS_LOCK) {	/* Index number origin from 0 */
+		n = Files[i].ctr;
+		if (n == 0x100) n = 0;	/* If write mode open, delete the entry */
+		if (n > 0) n--;			/* Decrement read mode open count */
+		Files[i].ctr = n;
+		if (n == 0) Files[i].fs = 0;	/* Delete the entry if open count gets zero */
+		res = FR_OK;
+	} else {
+		res = FR_INT_ERR;		/* Invalid index nunber */
+	}
+	return res;
+}
+
+
+static void clear_lock (	/* Clear lock entries of the volume */
+	FATFS *fs
+)
+{
+	UINT i;
+
+	for (i = 0; i < FF_FS_LOCK; i++) {
+		if (Files[i].fs == fs) Files[i].fs = 0;
+	}
+}
+
+#endif	/* FF_FS_LOCK != 0 */
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Move/Flush disk access window in the filesystem object                */
+/*-----------------------------------------------------------------------*/
+#if !FF_FS_READONLY
+static FRESULT sync_window (	/* Returns FR_OK or FR_DISK_ERR */
+	FATFS* fs			/* Filesystem object */
+)
+{
+	FRESULT res = FR_OK;
+
+
