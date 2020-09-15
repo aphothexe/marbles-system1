@@ -1029,3 +1029,126 @@ static FRESULT sync_window (	/* Returns FR_OK or FR_DISK_ERR */
 	FRESULT res = FR_OK;
 
 
+	if (fs->wflag) {	/* Is the disk access window dirty? */
+		if (disk_write(fs->pdrv, fs->win, fs->winsect, 1) == RES_OK) {	/* Write it back into the volume */
+			fs->wflag = 0;	/* Clear window dirty flag */
+			if (fs->winsect - fs->fatbase < fs->fsize) {	/* Is it in the 1st FAT? */
+				if (fs->n_fats == 2) disk_write(fs->pdrv, fs->win, fs->winsect + fs->fsize, 1);	/* Reflect it to 2nd FAT if needed */
+			}
+		} else {
+			res = FR_DISK_ERR;
+		}
+	}
+	return res;
+}
+#endif
+
+
+static FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERR */
+	FATFS* fs,		/* Filesystem object */
+	LBA_t sect		/* Sector LBA to make appearance in the fs->win[] */
+)
+{
+	FRESULT res = FR_OK;
+
+
+	if (sect != fs->winsect) {	/* Window offset changed? */
+#if !FF_FS_READONLY
+		res = sync_window(fs);		/* Flush the window */
+#endif
+		if (res == FR_OK) {			/* Fill sector window with new data */
+			if (disk_read(fs->pdrv, fs->win, sect, 1) != RES_OK) {
+				sect = (LBA_t)0 - 1;	/* Invalidate window if read data is not valid */
+				res = FR_DISK_ERR;
+			}
+			fs->winsect = sect;
+		}
+	}
+	return res;
+}
+
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Synchronize filesystem and data on the storage                        */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT sync_fs (	/* Returns FR_OK or FR_DISK_ERR */
+	FATFS* fs		/* Filesystem object */
+)
+{
+	FRESULT res;
+
+
+	res = sync_window(fs);
+	if (res == FR_OK) {
+		if (fs->fs_type == FS_FAT32 && fs->fsi_flag == 1) {	/* FAT32: Update FSInfo sector if needed */
+			/* Create FSInfo structure */
+			memset(fs->win, 0, sizeof fs->win);
+			st_word(fs->win + BS_55AA, 0xAA55);					/* Boot signature */
+			st_dword(fs->win + FSI_LeadSig, 0x41615252);		/* Leading signature */
+			st_dword(fs->win + FSI_StrucSig, 0x61417272);		/* Structure signature */
+			st_dword(fs->win + FSI_Free_Count, fs->free_clst);	/* Number of free clusters */
+			st_dword(fs->win + FSI_Nxt_Free, fs->last_clst);	/* Last allocated culuster */
+			fs->winsect = fs->volbase + 1;						/* Write it into the FSInfo sector (Next to VBR) */
+			disk_write(fs->pdrv, fs->win, fs->winsect, 1);
+			fs->fsi_flag = 0;
+		}
+		/* Make sure that no pending write process in the lower layer */
+		if (disk_ioctl(fs->pdrv, CTRL_SYNC, 0) != RES_OK) res = FR_DISK_ERR;
+	}
+
+	return res;
+}
+
+#endif
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Get physical sector number from cluster number                        */
+/*-----------------------------------------------------------------------*/
+
+static LBA_t clst2sect (	/* !=0:Sector number, 0:Failed (invalid cluster#) */
+	FATFS* fs,		/* Filesystem object */
+	DWORD clst		/* Cluster# to be converted */
+)
+{
+	clst -= 2;		/* Cluster number is origin from 2 */
+	if (clst >= fs->n_fatent - 2) return 0;		/* Is it invalid cluster number? */
+	return fs->database + (LBA_t)fs->csize * clst;	/* Start sector number of the cluster */
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* FAT access - Read value of an FAT entry                               */
+/*-----------------------------------------------------------------------*/
+
+static DWORD get_fat (		/* 0xFFFFFFFF:Disk error, 1:Internal error, 2..0x7FFFFFFF:Cluster status */
+	FFOBJID* obj,	/* Corresponding object */
+	DWORD clst		/* Cluster number to get the value */
+)
+{
+	UINT wc, bc;
+	DWORD val;
+	FATFS *fs = obj->fs;
+
+
+	if (clst < 2 || clst >= fs->n_fatent) {	/* Check if in valid range */
+		val = 1;	/* Internal error */
+
+	} else {
+		val = 0xFFFFFFFF;	/* Default value falls on disk error */
+
+		switch (fs->fs_type) {
+		case FS_FAT12 :
+			bc = (UINT)clst; bc += bc / 2;
+			if (move_window(fs, fs->fatbase + (bc / SS(fs))) != FR_OK) break;
+			wc = fs->win[bc++ % SS(fs)];		/* Get 1st byte of the entry */
+			if (move_window(fs, fs->fatbase + (bc / SS(fs))) != FR_OK) break;
+			wc |= fs->win[bc % SS(fs)] << 8;	/* Merge 2nd byte of the entry */
+			val = (clst & 1) ? (wc >> 4) : (wc & 0xFFF);	/* Adjust bit 
