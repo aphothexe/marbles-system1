@@ -1282,4 +1282,138 @@ static DWORD find_bitmap (	/* 0:Not found, 2..:Cluster block found, 0xFFFFFFFF:D
 	DWORD val, scl, ctr;
 
 
-	clst -= 2;
+	clst -= 2;	/* The first bit in the bitmap corresponds to cluster #2 */
+	if (clst >= fs->n_fatent - 2) clst = 0;
+	scl = val = clst; ctr = 0;
+	for (;;) {
+		if (move_window(fs, fs->bitbase + val / 8 / SS(fs)) != FR_OK) return 0xFFFFFFFF;
+		i = val / 8 % SS(fs); bm = 1 << (val % 8);
+		do {
+			do {
+				bv = fs->win[i] & bm; bm <<= 1;		/* Get bit value */
+				if (++val >= fs->n_fatent - 2) {	/* Next cluster (with wrap-around) */
+					val = 0; bm = 0; i = SS(fs);
+				}
+				if (bv == 0) {	/* Is it a free cluster? */
+					if (++ctr == ncl) return scl + 2;	/* Check if run length is sufficient for required */
+				} else {
+					scl = val; ctr = 0;		/* Encountered a cluster in-use, restart to scan */
+				}
+				if (val == clst) return 0;	/* All cluster scanned? */
+			} while (bm != 0);
+			bm = 1;
+		} while (++i < SS(fs));
+	}
+}
+
+
+/*----------------------------------------*/
+/* Set/Clear a block of allocation bitmap */
+/*----------------------------------------*/
+
+static FRESULT change_bitmap (
+	FATFS* fs,	/* Filesystem object */
+	DWORD clst,	/* Cluster number to change from */
+	DWORD ncl,	/* Number of clusters to be changed */
+	int bv		/* bit value to be set (0 or 1) */
+)
+{
+	BYTE bm;
+	UINT i;
+	LBA_t sect;
+
+
+	clst -= 2;	/* The first bit corresponds to cluster #2 */
+	sect = fs->bitbase + clst / 8 / SS(fs);	/* Sector address */
+	i = clst / 8 % SS(fs);					/* Byte offset in the sector */
+	bm = 1 << (clst % 8);					/* Bit mask in the byte */
+	for (;;) {
+		if (move_window(fs, sect++) != FR_OK) return FR_DISK_ERR;
+		do {
+			do {
+				if (bv == (int)((fs->win[i] & bm) != 0)) return FR_INT_ERR;	/* Is the bit expected value? */
+				fs->win[i] ^= bm;	/* Flip the bit */
+				fs->wflag = 1;
+				if (--ncl == 0) return FR_OK;	/* All bits processed? */
+			} while (bm <<= 1);		/* Next bit */
+			bm = 1;
+		} while (++i < SS(fs));		/* Next byte */
+		i = 0;
+	}
+}
+
+
+/*---------------------------------------------*/
+/* Fill the first fragment of the FAT chain    */
+/*---------------------------------------------*/
+
+static FRESULT fill_first_frag (
+	FFOBJID* obj	/* Pointer to the corresponding object */
+)
+{
+	FRESULT res;
+	DWORD cl, n;
+
+
+	if (obj->stat == 3) {	/* Has the object been changed 'fragmented' in this session? */
+		for (cl = obj->sclust, n = obj->n_cont; n; cl++, n--) {	/* Create cluster chain on the FAT */
+			res = put_fat(obj->fs, cl, cl + 1);
+			if (res != FR_OK) return res;
+		}
+		obj->stat = 0;	/* Change status 'FAT chain is valid' */
+	}
+	return FR_OK;
+}
+
+
+/*---------------------------------------------*/
+/* Fill the last fragment of the FAT chain     */
+/*---------------------------------------------*/
+
+static FRESULT fill_last_frag (
+	FFOBJID* obj,	/* Pointer to the corresponding object */
+	DWORD lcl,		/* Last cluster of the fragment */
+	DWORD term		/* Value to set the last FAT entry */
+)
+{
+	FRESULT res;
+
+
+	while (obj->n_frag > 0) {	/* Create the chain of last fragment */
+		res = put_fat(obj->fs, lcl - obj->n_frag + 1, (obj->n_frag > 1) ? lcl - obj->n_frag + 2 : term);
+		if (res != FR_OK) return res;
+		obj->n_frag--;
+	}
+	return FR_OK;
+}
+
+#endif	/* FF_FS_EXFAT && !FF_FS_READONLY */
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* FAT handling - Remove a cluster chain                                 */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT remove_chain (	/* FR_OK(0):succeeded, !=0:error */
+	FFOBJID* obj,		/* Corresponding object */
+	DWORD clst,			/* Cluster to remove a chain from */
+	DWORD pclst			/* Previous cluster of clst (0 if entire chain) */
+)
+{
+	FRESULT res = FR_OK;
+	DWORD nxt;
+	FATFS *fs = obj->fs;
+#if FF_FS_EXFAT || FF_USE_TRIM
+	DWORD scl = clst, ecl = clst;
+#endif
+#if FF_USE_TRIM
+	LBA_t rt[2];
+#endif
+
+	if (clst < 2 || clst >= fs->n_fatent) return FR_INT_ERR;	/* Check if in valid range */
+
+	/* Mark the previous cluster 'EOC' on the FAT if it exists */
+	if (pclst != 0 && (!FF_FS_EXFAT || fs->fs_type != FS_EXFAT || obj->stat != 2)) {
+		res = put_fat(fs, pclst, 0xFFFFFFFF);
