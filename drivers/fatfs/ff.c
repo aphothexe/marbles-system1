@@ -1524,4 +1524,120 @@ static DWORD create_chain (	/* 0:No free cluster, 1:Internal error, 0xFFFFFFFF:D
 		if (clst == 0) {							/* Is it a new chain? */
 			obj->stat = 2;							/* Set status 'contiguous' */
 		} else {									/* It is a stretched chain */
-			if (obj->stat == 2 && ncl
+			if (obj->stat == 2 && ncl != scl + 1) {	/* Is the chain got fragmented? */
+				obj->n_cont = scl - obj->sclust;	/* Set size of the contiguous part */
+				obj->stat = 3;						/* Change status 'just fragmented' */
+			}
+		}
+		if (obj->stat != 2) {	/* Is the file non-contiguous? */
+			if (ncl == clst + 1) {	/* Is the cluster next to previous one? */
+				obj->n_frag = obj->n_frag ? obj->n_frag + 1 : 2;	/* Increment size of last framgent */
+			} else {				/* New fragment */
+				if (obj->n_frag == 0) obj->n_frag = 1;
+				res = fill_last_frag(obj, clst, ncl);	/* Fill last fragment on the FAT and link it to new one */
+				if (res == FR_OK) obj->n_frag = 1;
+			}
+		}
+	} else
+#endif
+	{	/* On the FAT/FAT32 volume */
+		ncl = 0;
+		if (scl == clst) {						/* Stretching an existing chain? */
+			ncl = scl + 1;						/* Test if next cluster is free */
+			if (ncl >= fs->n_fatent) ncl = 2;
+			cs = get_fat(obj, ncl);				/* Get next cluster status */
+			if (cs == 1 || cs == 0xFFFFFFFF) return cs;	/* Test for error */
+			if (cs != 0) {						/* Not free? */
+				cs = fs->last_clst;				/* Start at suggested cluster if it is valid */
+				if (cs >= 2 && cs < fs->n_fatent) scl = cs;
+				ncl = 0;
+			}
+		}
+		if (ncl == 0) {	/* The new cluster cannot be contiguous and find another fragment */
+			ncl = scl;	/* Start cluster */
+			for (;;) {
+				ncl++;							/* Next cluster */
+				if (ncl >= fs->n_fatent) {		/* Check wrap-around */
+					ncl = 2;
+					if (ncl > scl) return 0;	/* No free cluster found? */
+				}
+				cs = get_fat(obj, ncl);			/* Get the cluster status */
+				if (cs == 0) break;				/* Found a free cluster? */
+				if (cs == 1 || cs == 0xFFFFFFFF) return cs;	/* Test for error */
+				if (ncl == scl) return 0;		/* No free cluster found? */
+			}
+		}
+		res = put_fat(fs, ncl, 0xFFFFFFFF);		/* Mark the new cluster 'EOC' */
+		if (res == FR_OK && clst != 0) {
+			res = put_fat(fs, clst, ncl);		/* Link it from the previous one if needed */
+		}
+	}
+
+	if (res == FR_OK) {			/* Update FSINFO if function succeeded. */
+		fs->last_clst = ncl;
+		if (fs->free_clst <= fs->n_fatent - 2) fs->free_clst--;
+		fs->fsi_flag |= 1;
+	} else {
+		ncl = (res == FR_DISK_ERR) ? 0xFFFFFFFF : 1;	/* Failed. Generate error status */
+	}
+
+	return ncl;		/* Return new cluster number or error status */
+}
+
+#endif /* !FF_FS_READONLY */
+
+
+
+
+#if FF_USE_FASTSEEK
+/*-----------------------------------------------------------------------*/
+/* FAT handling - Convert offset into cluster with link map table        */
+/*-----------------------------------------------------------------------*/
+
+static DWORD clmt_clust (	/* <2:Error, >=2:Cluster number */
+	FIL* fp,		/* Pointer to the file object */
+	FSIZE_t ofs		/* File offset to be converted to cluster# */
+)
+{
+	DWORD cl, ncl, *tbl;
+	FATFS *fs = fp->obj.fs;
+
+
+	tbl = fp->cltbl + 1;	/* Top of CLMT */
+	cl = (DWORD)(ofs / SS(fs) / fs->csize);	/* Cluster order from top of the file */
+	for (;;) {
+		ncl = *tbl++;			/* Number of cluters in the fragment */
+		if (ncl == 0) return 0;	/* End of table? (error) */
+		if (cl < ncl) break;	/* In this fragment? */
+		cl -= ncl; tbl++;		/* Next fragment */
+	}
+	return cl + *tbl;	/* Return the cluster number */
+}
+
+#endif	/* FF_USE_FASTSEEK */
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Directory handling - Fill a cluster with zeros                        */
+/*-----------------------------------------------------------------------*/
+
+#if !FF_FS_READONLY
+static FRESULT dir_clear (	/* Returns FR_OK or FR_DISK_ERR */
+	FATFS *fs,		/* Filesystem object */
+	DWORD clst		/* Directory table to clear */
+)
+{
+	LBA_t sect;
+	UINT n, szb;
+	BYTE *ibuf;
+
+
+	if (sync_window(fs) != FR_OK) return FR_DISK_ERR;	/* Flush disk access window */
+	sect = clst2sect(fs, clst);		/* Top of the cluster */
+	fs->winsect = sect;				/* Set window to top of the cluster */
+	memset(fs->win, 0, sizeof fs->win);	/* Clear window buffer */
+#if FF_USE_LFN == 3		/* Quick table clear by using multi-secter write */
+	/* Allocate a temporary buffer */
+	for (szb = ((DWORD)fs->csize * SS(fs) >= MAX_MALLOC) ? MAX_MALLOC : fs->csize * SS(fs)
