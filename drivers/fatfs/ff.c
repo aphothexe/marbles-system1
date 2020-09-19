@@ -1640,4 +1640,106 @@ static FRESULT dir_clear (	/* Returns FR_OK or FR_DISK_ERR */
 	memset(fs->win, 0, sizeof fs->win);	/* Clear window buffer */
 #if FF_USE_LFN == 3		/* Quick table clear by using multi-secter write */
 	/* Allocate a temporary buffer */
-	for (szb = ((DWORD)fs->csize * SS(fs) >= MAX_MALLOC) ? MAX_MALLOC : fs->csize * SS(fs)
+	for (szb = ((DWORD)fs->csize * SS(fs) >= MAX_MALLOC) ? MAX_MALLOC : fs->csize * SS(fs), ibuf = 0; szb > SS(fs) && (ibuf = ff_memalloc(szb)) == 0; szb /= 2) ;
+	if (szb > SS(fs)) {		/* Buffer allocated? */
+		memset(ibuf, 0, szb);
+		szb /= SS(fs);		/* Bytes -> Sectors */
+		for (n = 0; n < fs->csize && disk_write(fs->pdrv, ibuf, sect + n, szb) == RES_OK; n += szb) ;	/* Fill the cluster with 0 */
+		ff_memfree(ibuf);
+	} else
+#endif
+	{
+		ibuf = fs->win; szb = 1;	/* Use window buffer (many single-sector writes may take a time) */
+		for (n = 0; n < fs->csize && disk_write(fs->pdrv, ibuf, sect + n, szb) == RES_OK; n += szb) ;	/* Fill the cluster with 0 */
+	}
+	return (n == fs->csize) ? FR_OK : FR_DISK_ERR;
+}
+#endif	/* !FF_FS_READONLY */
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Directory handling - Set directory index                              */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_sdi (	/* FR_OK(0):succeeded, !=0:error */
+	DIR* dp,		/* Pointer to directory object */
+	DWORD ofs		/* Offset of directory table */
+)
+{
+	DWORD csz, clst;
+	FATFS *fs = dp->obj.fs;
+
+
+	if (ofs >= (DWORD)((FF_FS_EXFAT && fs->fs_type == FS_EXFAT) ? MAX_DIR_EX : MAX_DIR) || ofs % SZDIRE) {	/* Check range of offset and alignment */
+		return FR_INT_ERR;
+	}
+	dp->dptr = ofs;				/* Set current offset */
+	clst = dp->obj.sclust;		/* Table start cluster (0:root) */
+	if (clst == 0 && fs->fs_type >= FS_FAT32) {	/* Replace cluster# 0 with root cluster# */
+		clst = (DWORD)fs->dirbase;
+		if (FF_FS_EXFAT) dp->obj.stat = 0;	/* exFAT: Root dir has an FAT chain */
+	}
+
+	if (clst == 0) {	/* Static table (root-directory on the FAT volume) */
+		if (ofs / SZDIRE >= fs->n_rootdir) return FR_INT_ERR;	/* Is index out of range? */
+		dp->sect = fs->dirbase;
+
+	} else {			/* Dynamic table (sub-directory or root-directory on the FAT32/exFAT volume) */
+		csz = (DWORD)fs->csize * SS(fs);	/* Bytes per cluster */
+		while (ofs >= csz) {				/* Follow cluster chain */
+			clst = get_fat(&dp->obj, clst);				/* Get next cluster */
+			if (clst == 0xFFFFFFFF) return FR_DISK_ERR;	/* Disk error */
+			if (clst < 2 || clst >= fs->n_fatent) return FR_INT_ERR;	/* Reached to end of table or internal error */
+			ofs -= csz;
+		}
+		dp->sect = clst2sect(fs, clst);
+	}
+	dp->clust = clst;					/* Current cluster# */
+	if (dp->sect == 0) return FR_INT_ERR;
+	dp->sect += ofs / SS(fs);			/* Sector# of the directory entry */
+	dp->dir = fs->win + (ofs % SS(fs));	/* Pointer to the entry in the win[] */
+
+	return FR_OK;
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Directory handling - Move directory table index next                  */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_next (	/* FR_OK(0):succeeded, FR_NO_FILE:End of table, FR_DENIED:Could not stretch */
+	DIR* dp,				/* Pointer to the directory object */
+	int stretch				/* 0: Do not stretch table, 1: Stretch table if needed */
+)
+{
+	DWORD ofs, clst;
+	FATFS *fs = dp->obj.fs;
+
+
+	ofs = dp->dptr + SZDIRE;	/* Next entry */
+	if (ofs >= (DWORD)((FF_FS_EXFAT && fs->fs_type == FS_EXFAT) ? MAX_DIR_EX : MAX_DIR)) dp->sect = 0;	/* Disable it if the offset reached the max value */
+	if (dp->sect == 0) return FR_NO_FILE;	/* Report EOT if it has been disabled */
+
+	if (ofs % SS(fs) == 0) {	/* Sector changed? */
+		dp->sect++;				/* Next sector */
+
+		if (dp->clust == 0) {	/* Static table */
+			if (ofs / SZDIRE >= fs->n_rootdir) {	/* Report EOT if it reached end of static table */
+				dp->sect = 0; return FR_NO_FILE;
+			}
+		}
+		else {					/* Dynamic table */
+			if ((ofs / SS(fs) & (fs->csize - 1)) == 0) {	/* Cluster changed? */
+				clst = get_fat(&dp->obj, dp->clust);		/* Get next cluster */
+				if (clst <= 1) return FR_INT_ERR;			/* Internal error */
+				if (clst == 0xFFFFFFFF) return FR_DISK_ERR;	/* Disk error */
+				if (clst >= fs->n_fatent) {					/* It reached end of dynamic table */
+#if !FF_FS_READONLY
+					if (!stretch) {								/* If no stretch, report EOT */
+						dp->sect = 0; return FR_NO_FILE;
+					}
+					cl
