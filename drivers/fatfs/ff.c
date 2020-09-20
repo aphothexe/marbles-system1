@@ -2017,4 +2017,140 @@ static void gen_numname (
 #if FF_USE_LFN
 /*-----------------------------------------------------------------------*/
 /* FAT-LFN: Calculate checksum of an SFN entry                           */
-/*-----------
+/*-----------------------------------------------------------------------*/
+
+static BYTE sum_sfn (
+	const BYTE* dir		/* Pointer to the SFN entry */
+)
+{
+	BYTE sum = 0;
+	UINT n = 11;
+
+	do {
+		sum = (sum >> 1) + (sum << 7) + *dir++;
+	} while (--n);
+	return sum;
+}
+
+#endif	/* FF_USE_LFN */
+
+
+
+#if FF_FS_EXFAT
+/*-----------------------------------------------------------------------*/
+/* exFAT: Checksum                                                       */
+/*-----------------------------------------------------------------------*/
+
+static WORD xdir_sum (	/* Get checksum of the directoly entry block */
+	const BYTE* dir		/* Directory entry block to be calculated */
+)
+{
+	UINT i, szblk;
+	WORD sum;
+
+
+	szblk = (dir[XDIR_NumSec] + 1) * SZDIRE;	/* Number of bytes of the entry block */
+	for (i = sum = 0; i < szblk; i++) {
+		if (i == XDIR_SetSum) {	/* Skip 2-byte sum field */
+			i++;
+		} else {
+			sum = ((sum & 1) ? 0x8000 : 0) + (sum >> 1) + dir[i];
+		}
+	}
+	return sum;
+}
+
+
+
+static WORD xname_sum (	/* Get check sum (to be used as hash) of the file name */
+	const WCHAR* name	/* File name to be calculated */
+)
+{
+	WCHAR chr;
+	WORD sum = 0;
+
+
+	while ((chr = *name++) != 0) {
+		chr = (WCHAR)ff_wtoupper(chr);		/* File name needs to be up-case converted */
+		sum = ((sum & 1) ? 0x8000 : 0) + (sum >> 1) + (chr & 0xFF);
+		sum = ((sum & 1) ? 0x8000 : 0) + (sum >> 1) + (chr >> 8);
+	}
+	return sum;
+}
+
+
+#if !FF_FS_READONLY && FF_USE_MKFS
+static DWORD xsum32 (	/* Returns 32-bit checksum */
+	BYTE  dat,			/* Byte to be calculated (byte-by-byte processing) */
+	DWORD sum			/* Previous sum value */
+)
+{
+	sum = ((sum & 1) ? 0x80000000 : 0) + (sum >> 1) + dat;
+	return sum;
+}
+#endif
+
+
+
+/*-----------------------------------*/
+/* exFAT: Get a directry entry block */
+/*-----------------------------------*/
+
+static FRESULT load_xdir (	/* FR_INT_ERR: invalid entry block */
+	DIR* dp					/* Reading direcotry object pointing top of the entry block to load */
+)
+{
+	FRESULT res;
+	UINT i, sz_ent;
+	BYTE *dirb = dp->obj.fs->dirbuf;	/* Pointer to the on-memory direcotry entry block 85+C0+C1s */
+
+
+	/* Load file directory entry */
+	res = move_window(dp->obj.fs, dp->sect);
+	if (res != FR_OK) return res;
+	if (dp->dir[XDIR_Type] != ET_FILEDIR) return FR_INT_ERR;	/* Invalid order */
+	memcpy(dirb + 0 * SZDIRE, dp->dir, SZDIRE);
+	sz_ent = (dirb[XDIR_NumSec] + 1) * SZDIRE;
+	if (sz_ent < 3 * SZDIRE || sz_ent > 19 * SZDIRE) return FR_INT_ERR;
+
+	/* Load stream extension entry */
+	res = dir_next(dp, 0);
+	if (res == FR_NO_FILE) res = FR_INT_ERR;	/* It cannot be */
+	if (res != FR_OK) return res;
+	res = move_window(dp->obj.fs, dp->sect);
+	if (res != FR_OK) return res;
+	if (dp->dir[XDIR_Type] != ET_STREAM) return FR_INT_ERR;	/* Invalid order */
+	memcpy(dirb + 1 * SZDIRE, dp->dir, SZDIRE);
+	if (MAXDIRB(dirb[XDIR_NumName]) > sz_ent) return FR_INT_ERR;
+
+	/* Load file name entries */
+	i = 2 * SZDIRE;	/* Name offset to load */
+	do {
+		res = dir_next(dp, 0);
+		if (res == FR_NO_FILE) res = FR_INT_ERR;	/* It cannot be */
+		if (res != FR_OK) return res;
+		res = move_window(dp->obj.fs, dp->sect);
+		if (res != FR_OK) return res;
+		if (dp->dir[XDIR_Type] != ET_FILENAME) return FR_INT_ERR;	/* Invalid order */
+		if (i < MAXDIRB(FF_MAX_LFN)) memcpy(dirb + i, dp->dir, SZDIRE);
+	} while ((i += SZDIRE) < sz_ent);
+
+	/* Sanity check (do it for only accessible object) */
+	if (i <= MAXDIRB(FF_MAX_LFN)) {
+		if (xdir_sum(dirb) != ld_word(dirb + XDIR_SetSum)) return FR_INT_ERR;
+	}
+	return FR_OK;
+}
+
+
+/*------------------------------------------------------------------*/
+/* exFAT: Initialize object allocation info with loaded entry block */
+/*------------------------------------------------------------------*/
+
+static void init_alloc_info (
+	FATFS* fs,		/* Filesystem object */
+	FFOBJID* obj	/* Object allocation information to be initialized */
+)
+{
+	obj->sclust = ld_dword(fs->dirbuf + XDIR_FstClus);		/* Start cluster */
+	obj->objsize = ld_qword(fs->dirbuf + XDIR_Fil
