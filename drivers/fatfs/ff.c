@@ -2153,4 +2153,147 @@ static void init_alloc_info (
 )
 {
 	obj->sclust = ld_dword(fs->dirbuf + XDIR_FstClus);		/* Start cluster */
-	obj->objsize = ld_qword(fs->dirbuf + XDIR_Fil
+	obj->objsize = ld_qword(fs->dirbuf + XDIR_FileSize);	/* Size */
+	obj->stat = fs->dirbuf[XDIR_GenFlags] & 2;				/* Allocation status */
+	obj->n_frag = 0;										/* No last fragment info */
+}
+
+
+
+#if !FF_FS_READONLY || FF_FS_RPATH != 0
+/*------------------------------------------------*/
+/* exFAT: Load the object's directory entry block */
+/*------------------------------------------------*/
+
+static FRESULT load_obj_xdir (
+	DIR* dp,			/* Blank directory object to be used to access containing direcotry */
+	const FFOBJID* obj	/* Object with its containing directory information */
+)
+{
+	FRESULT res;
+
+	/* Open object containing directory */
+	dp->obj.fs = obj->fs;
+	dp->obj.sclust = obj->c_scl;
+	dp->obj.stat = (BYTE)obj->c_size;
+	dp->obj.objsize = obj->c_size & 0xFFFFFF00;
+	dp->obj.n_frag = 0;
+	dp->blk_ofs = obj->c_ofs;
+
+	res = dir_sdi(dp, dp->blk_ofs);	/* Goto object's entry block */
+	if (res == FR_OK) {
+		res = load_xdir(dp);		/* Load the object's entry block */
+	}
+	return res;
+}
+#endif
+
+
+#if !FF_FS_READONLY
+/*----------------------------------------*/
+/* exFAT: Store the directory entry block */
+/*----------------------------------------*/
+
+static FRESULT store_xdir (
+	DIR* dp				/* Pointer to the direcotry object */
+)
+{
+	FRESULT res;
+	UINT nent;
+	BYTE *dirb = dp->obj.fs->dirbuf;	/* Pointer to the direcotry entry block 85+C0+C1s */
+
+	/* Create set sum */
+	st_word(dirb + XDIR_SetSum, xdir_sum(dirb));
+	nent = dirb[XDIR_NumSec] + 1;
+
+	/* Store the direcotry entry block to the directory */
+	res = dir_sdi(dp, dp->blk_ofs);
+	while (res == FR_OK) {
+		res = move_window(dp->obj.fs, dp->sect);
+		if (res != FR_OK) break;
+		memcpy(dp->dir, dirb, SZDIRE);
+		dp->obj.fs->wflag = 1;
+		if (--nent == 0) break;
+		dirb += SZDIRE;
+		res = dir_next(dp, 0);
+	}
+	return (res == FR_OK || res == FR_DISK_ERR) ? res : FR_INT_ERR;
+}
+
+
+
+/*-------------------------------------------*/
+/* exFAT: Create a new directory enrty block */
+/*-------------------------------------------*/
+
+static void create_xdir (
+	BYTE* dirb,			/* Pointer to the direcotry entry block buffer */
+	const WCHAR* lfn	/* Pointer to the object name */
+)
+{
+	UINT i;
+	BYTE nc1, nlen;
+	WCHAR wc;
+
+
+	/* Create file-directory and stream-extension entry */
+	memset(dirb, 0, 2 * SZDIRE);
+	dirb[0 * SZDIRE + XDIR_Type] = ET_FILEDIR;
+	dirb[1 * SZDIRE + XDIR_Type] = ET_STREAM;
+
+	/* Create file-name entries */
+	i = SZDIRE * 2;	/* Top of file_name entries */
+	nlen = nc1 = 0; wc = 1;
+	do {
+		dirb[i++] = ET_FILENAME; dirb[i++] = 0;
+		do {	/* Fill name field */
+			if (wc != 0 && (wc = lfn[nlen]) != 0) nlen++;	/* Get a character if exist */
+			st_word(dirb + i, wc); 	/* Store it */
+			i += 2;
+		} while (i % SZDIRE != 0);
+		nc1++;
+	} while (lfn[nlen]);	/* Fill next entry if any char follows */
+
+	dirb[XDIR_NumName] = nlen;		/* Set name length */
+	dirb[XDIR_NumSec] = 1 + nc1;	/* Set secondary count (C0 + C1s) */
+	st_word(dirb + XDIR_NameHash, xname_sum(lfn));	/* Set name hash */
+}
+
+#endif	/* !FF_FS_READONLY */
+#endif	/* FF_FS_EXFAT */
+
+
+
+#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 || FF_USE_LABEL || FF_FS_EXFAT
+/*-----------------------------------------------------------------------*/
+/* Read an object from the directory                                     */
+/*-----------------------------------------------------------------------*/
+
+#define DIR_READ_FILE(dp) dir_read(dp, 0)
+#define DIR_READ_LABEL(dp) dir_read(dp, 1)
+
+static FRESULT dir_read (
+	DIR* dp,		/* Pointer to the directory object */
+	int vol			/* Filtered by 0:file/directory or 1:volume label */
+)
+{
+	FRESULT res = FR_NO_FILE;
+	FATFS *fs = dp->obj.fs;
+	BYTE attr, b;
+#if FF_USE_LFN
+	BYTE ord = 0xFF, sum = 0xFF;
+#endif
+
+	while (dp->sect) {
+		res = move_window(fs, dp->sect);
+		if (res != FR_OK) break;
+		b = dp->dir[DIR_Name];	/* Test for the entry type */
+		if (b == 0) {
+			res = FR_NO_FILE; break; /* Reached to end of the directory */
+		}
+#if FF_FS_EXFAT
+		if (fs->fs_type == FS_EXFAT) {	/* On the exFAT volume */
+			if (FF_USE_LABEL && vol) {
+				if (b == ET_VLABEL) break;	/* Volume label entry? */
+			} else {
+				if (b == ET_FILEDIR) {		/* Start of t
