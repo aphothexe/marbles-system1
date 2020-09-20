@@ -1742,4 +1742,138 @@ static FRESULT dir_next (	/* FR_OK(0):succeeded, FR_NO_FILE:End of table, FR_DEN
 					if (!stretch) {								/* If no stretch, report EOT */
 						dp->sect = 0; return FR_NO_FILE;
 					}
-					cl
+					clst = create_chain(&dp->obj, dp->clust);	/* Allocate a cluster */
+					if (clst == 0) return FR_DENIED;			/* No free cluster */
+					if (clst == 1) return FR_INT_ERR;			/* Internal error */
+					if (clst == 0xFFFFFFFF) return FR_DISK_ERR;	/* Disk error */
+					if (dir_clear(fs, clst) != FR_OK) return FR_DISK_ERR;	/* Clean up the stretched table */
+					if (FF_FS_EXFAT) dp->obj.stat |= 4;			/* exFAT: The directory has been stretched */
+#else
+					if (!stretch) dp->sect = 0;					/* (this line is to suppress compiler warning) */
+					dp->sect = 0; return FR_NO_FILE;			/* Report EOT */
+#endif
+				}
+				dp->clust = clst;		/* Initialize data for new cluster */
+				dp->sect = clst2sect(fs, clst);
+			}
+		}
+	}
+	dp->dptr = ofs;						/* Current entry */
+	dp->dir = fs->win + ofs % SS(fs);	/* Pointer to the entry in the win[] */
+
+	return FR_OK;
+}
+
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Directory handling - Reserve a block of directory entries             */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_alloc (	/* FR_OK(0):succeeded, !=0:error */
+	DIR* dp,				/* Pointer to the directory object */
+	UINT n_ent				/* Number of contiguous entries to allocate */
+)
+{
+	FRESULT res;
+	UINT n;
+	FATFS *fs = dp->obj.fs;
+
+
+	res = dir_sdi(dp, 0);
+	if (res == FR_OK) {
+		n = 0;
+		do {
+			res = move_window(fs, dp->sect);
+			if (res != FR_OK) break;
+#if FF_FS_EXFAT
+			if ((fs->fs_type == FS_EXFAT) ? (int)((dp->dir[XDIR_Type] & 0x80) == 0) : (int)(dp->dir[DIR_Name] == DDEM || dp->dir[DIR_Name] == 0)) {	/* Is the entry free? */
+#else
+			if (dp->dir[DIR_Name] == DDEM || dp->dir[DIR_Name] == 0) {	/* Is the entry free? */
+#endif
+				if (++n == n_ent) break;	/* Is a block of contiguous free entries found? */
+			} else {
+				n = 0;				/* Not a free entry, restart to search */
+			}
+			res = dir_next(dp, 1);	/* Next entry with table stretch enabled */
+		} while (res == FR_OK);
+	}
+
+	if (res == FR_NO_FILE) res = FR_DENIED;	/* No directory entry to allocate */
+	return res;
+}
+
+#endif	/* !FF_FS_READONLY */
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* FAT: Directory handling - Load/Store start cluster number             */
+/*-----------------------------------------------------------------------*/
+
+static DWORD ld_clust (	/* Returns the top cluster value of the SFN entry */
+	FATFS* fs,			/* Pointer to the fs object */
+	const BYTE* dir		/* Pointer to the key entry */
+)
+{
+	DWORD cl;
+
+	cl = ld_word(dir + DIR_FstClusLO);
+	if (fs->fs_type == FS_FAT32) {
+		cl |= (DWORD)ld_word(dir + DIR_FstClusHI) << 16;
+	}
+
+	return cl;
+}
+
+
+#if !FF_FS_READONLY
+static void st_clust (
+	FATFS* fs,	/* Pointer to the fs object */
+	BYTE* dir,	/* Pointer to the key entry */
+	DWORD cl	/* Value to be set */
+)
+{
+	st_word(dir + DIR_FstClusLO, (WORD)cl);
+	if (fs->fs_type == FS_FAT32) {
+		st_word(dir + DIR_FstClusHI, (WORD)(cl >> 16));
+	}
+}
+#endif
+
+
+
+#if FF_USE_LFN
+/*--------------------------------------------------------*/
+/* FAT-LFN: Compare a part of file name with an LFN entry */
+/*--------------------------------------------------------*/
+
+static int cmp_lfn (		/* 1:matched, 0:not matched */
+	const WCHAR* lfnbuf,	/* Pointer to the LFN working buffer to be compared */
+	BYTE* dir				/* Pointer to the directory entry containing the part of LFN */
+)
+{
+	UINT i, s;
+	WCHAR wc, uc;
+
+
+	if (ld_word(dir + LDIR_FstClusLO) != 0) return 0;	/* Check LDIR_FstClusLO */
+
+	i = ((dir[LDIR_Ord] & 0x3F) - 1) * 13;	/* Offset in the LFN buffer */
+
+	for (wc = 1, s = 0; s < 13; s++) {		/* Process all characters in the entry */
+		uc = ld_word(dir + LfnOfs[s]);		/* Pick an LFN character */
+		if (wc != 0) {
+			if (i >= FF_MAX_LFN + 1 || ff_wtoupper(uc) != ff_wtoupper(lfnbuf[i++])) {	/* Compare it */
+				return 0;					/* Not matched */
+			}
+			wc = uc;
+		} else {
+			if (uc != 0xFFFF) return 0;		/* Check filler */
+		}
+	}
+
+	if ((dir[LDIR_Ord] & LLEF) && wc && lfnbuf[i]) return 0;	/* Last segment matched but di
