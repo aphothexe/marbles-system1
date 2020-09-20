@@ -1876,4 +1876,145 @@ static int cmp_lfn (		/* 1:matched, 0:not matched */
 		}
 	}
 
-	if ((dir[LDIR_Ord] & LLEF) && wc && lfnbuf[i]) return 0;	/* Last segment matched but di
+	if ((dir[LDIR_Ord] & LLEF) && wc && lfnbuf[i]) return 0;	/* Last segment matched but different length */
+
+	return 1;		/* The part of LFN matched */
+}
+
+
+#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 || FF_USE_LABEL || FF_FS_EXFAT
+/*-----------------------------------------------------*/
+/* FAT-LFN: Pick a part of file name from an LFN entry */
+/*-----------------------------------------------------*/
+
+static int pick_lfn (	/* 1:succeeded, 0:buffer overflow or invalid LFN entry */
+	WCHAR* lfnbuf,		/* Pointer to the LFN working buffer */
+	BYTE* dir			/* Pointer to the LFN entry */
+)
+{
+	UINT i, s;
+	WCHAR wc, uc;
+
+
+	if (ld_word(dir + LDIR_FstClusLO) != 0) return 0;	/* Check LDIR_FstClusLO is 0 */
+
+	i = ((dir[LDIR_Ord] & ~LLEF) - 1) * 13;	/* Offset in the LFN buffer */
+
+	for (wc = 1, s = 0; s < 13; s++) {		/* Process all characters in the entry */
+		uc = ld_word(dir + LfnOfs[s]);		/* Pick an LFN character */
+		if (wc != 0) {
+			if (i >= FF_MAX_LFN + 1) return 0;	/* Buffer overflow? */
+			lfnbuf[i++] = wc = uc;			/* Store it */
+		} else {
+			if (uc != 0xFFFF) return 0;		/* Check filler */
+		}
+	}
+
+	if (dir[LDIR_Ord] & LLEF && wc != 0) {	/* Put terminator if it is the last LFN part and not terminated */
+		if (i >= FF_MAX_LFN + 1) return 0;	/* Buffer overflow? */
+		lfnbuf[i] = 0;
+	}
+
+	return 1;		/* The part of LFN is valid */
+}
+#endif
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------*/
+/* FAT-LFN: Create an entry of LFN entries */
+/*-----------------------------------------*/
+
+static void put_lfn (
+	const WCHAR* lfn,	/* Pointer to the LFN */
+	BYTE* dir,			/* Pointer to the LFN entry to be created */
+	BYTE ord,			/* LFN order (1-20) */
+	BYTE sum			/* Checksum of the corresponding SFN */
+)
+{
+	UINT i, s;
+	WCHAR wc;
+
+
+	dir[LDIR_Chksum] = sum;			/* Set checksum */
+	dir[LDIR_Attr] = AM_LFN;		/* Set attribute. LFN entry */
+	dir[LDIR_Type] = 0;
+	st_word(dir + LDIR_FstClusLO, 0);
+
+	i = (ord - 1) * 13;				/* Get offset in the LFN working buffer */
+	s = wc = 0;
+	do {
+		if (wc != 0xFFFF) wc = lfn[i++];	/* Get an effective character */
+		st_word(dir + LfnOfs[s], wc);		/* Put it */
+		if (wc == 0) wc = 0xFFFF;			/* Padding characters for following items */
+	} while (++s < 13);
+	if (wc == 0xFFFF || !lfn[i]) ord |= LLEF;	/* Last LFN part is the start of LFN sequence */
+	dir[LDIR_Ord] = ord;			/* Set the LFN order */
+}
+
+#endif	/* !FF_FS_READONLY */
+#endif	/* FF_USE_LFN */
+
+
+
+#if FF_USE_LFN && !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* FAT-LFN: Create a Numbered SFN                                        */
+/*-----------------------------------------------------------------------*/
+
+static void gen_numname (
+	BYTE* dst,			/* Pointer to the buffer to store numbered SFN */
+	const BYTE* src,	/* Pointer to SFN in directory form */
+	const WCHAR* lfn,	/* Pointer to LFN */
+	UINT seq			/* Sequence number */
+)
+{
+	BYTE ns[8], c;
+	UINT i, j;
+	WCHAR wc;
+	DWORD sreg;
+
+
+	memcpy(dst, src, 11);	/* Prepare the SFN to be modified */
+
+	if (seq > 5) {	/* In case of many collisions, generate a hash number instead of sequential number */
+		sreg = seq;
+		while (*lfn) {	/* Create a CRC as hash value */
+			wc = *lfn++;
+			for (i = 0; i < 16; i++) {
+				sreg = (sreg << 1) + (wc & 1);
+				wc >>= 1;
+				if (sreg & 0x10000) sreg ^= 0x11021;
+			}
+		}
+		seq = (UINT)sreg;
+	}
+
+	/* Make suffix (~ + hexdecimal) */
+	i = 7;
+	do {
+		c = (BYTE)((seq % 16) + '0'); seq /= 16;
+		if (c > '9') c += 7;
+		ns[i--] = c;
+	} while (i && seq);
+	ns[i] = '~';
+
+	/* Append the suffix to the SFN body */
+	for (j = 0; j < i && dst[j] != ' '; j++) {	/* Find the offset to append */
+		if (dbc_1st(dst[j])) {	/* To avoid DBC break up */
+			if (j == i - 1) break;
+			j++;
+		}
+	}
+	do {	/* Append the suffix */
+		dst[j++] = (i < 8) ? ns[i++] : ' ';
+	} while (j < 8);
+}
+#endif	/* FF_USE_LFN && !FF_FS_READONLY */
+
+
+
+#if FF_USE_LFN
+/*-----------------------------------------------------------------------*/
+/* FAT-LFN: Calculate checksum of an SFN entry                           */
+/*-----------
