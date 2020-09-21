@@ -2296,4 +2296,115 @@ static FRESULT dir_read (
 			if (FF_USE_LABEL && vol) {
 				if (b == ET_VLABEL) break;	/* Volume label entry? */
 			} else {
-				if (b == ET_FILEDIR) {		/* Start of t
+				if (b == ET_FILEDIR) {		/* Start of the file entry block? */
+					dp->blk_ofs = dp->dptr;	/* Get location of the block */
+					res = load_xdir(dp);	/* Load the entry block */
+					if (res == FR_OK) {
+						dp->obj.attr = fs->dirbuf[XDIR_Attr] & AM_MASK;	/* Get attribute */
+					}
+					break;
+				}
+			}
+		} else
+#endif
+		{	/* On the FAT/FAT32 volume */
+			dp->obj.attr = attr = dp->dir[DIR_Attr] & AM_MASK;	/* Get attribute */
+#if FF_USE_LFN		/* LFN configuration */
+			if (b == DDEM || b == '.' || (int)((attr & ~AM_ARC) == AM_VOL) != vol) {	/* An entry without valid data */
+				ord = 0xFF;
+			} else {
+				if (attr == AM_LFN) {	/* An LFN entry is found */
+					if (b & LLEF) {		/* Is it start of an LFN sequence? */
+						sum = dp->dir[LDIR_Chksum];
+						b &= (BYTE)~LLEF; ord = b;
+						dp->blk_ofs = dp->dptr;
+					}
+					/* Check LFN validity and capture it */
+					ord = (b == ord && sum == dp->dir[LDIR_Chksum] && pick_lfn(fs->lfnbuf, dp->dir)) ? ord - 1 : 0xFF;
+				} else {				/* An SFN entry is found */
+					if (ord != 0 || sum != sum_sfn(dp->dir)) {	/* Is there a valid LFN? */
+						dp->blk_ofs = 0xFFFFFFFF;	/* It has no LFN. */
+					}
+					break;
+				}
+			}
+#else		/* Non LFN configuration */
+			if (b != DDEM && b != '.' && attr != AM_LFN && (int)((attr & ~AM_ARC) == AM_VOL) == vol) {	/* Is it a valid entry? */
+				break;
+			}
+#endif
+		}
+		res = dir_next(dp, 0);		/* Next entry */
+		if (res != FR_OK) break;
+	}
+
+	if (res != FR_OK) dp->sect = 0;		/* Terminate the read operation on error or EOT */
+	return res;
+}
+
+#endif	/* FF_FS_MINIMIZE <= 1 || FF_USE_LABEL || FF_FS_RPATH >= 2 */
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Directory handling - Find an object in the directory                  */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_find (	/* FR_OK(0):succeeded, !=0:error */
+	DIR* dp					/* Pointer to the directory object with the file name */
+)
+{
+	FRESULT res;
+	FATFS *fs = dp->obj.fs;
+	BYTE c;
+#if FF_USE_LFN
+	BYTE a, ord, sum;
+#endif
+
+	res = dir_sdi(dp, 0);			/* Rewind directory object */
+	if (res != FR_OK) return res;
+#if FF_FS_EXFAT
+	if (fs->fs_type == FS_EXFAT) {	/* On the exFAT volume */
+		BYTE nc;
+		UINT di, ni;
+		WORD hash = xname_sum(fs->lfnbuf);		/* Hash value of the name to find */
+
+		while ((res = DIR_READ_FILE(dp)) == FR_OK) {	/* Read an item */
+#if FF_MAX_LFN < 255
+			if (fs->dirbuf[XDIR_NumName] > FF_MAX_LFN) continue;		/* Skip comparison if inaccessible object name */
+#endif
+			if (ld_word(fs->dirbuf + XDIR_NameHash) != hash) continue;	/* Skip comparison if hash mismatched */
+			for (nc = fs->dirbuf[XDIR_NumName], di = SZDIRE * 2, ni = 0; nc; nc--, di += 2, ni++) {	/* Compare the name */
+				if ((di % SZDIRE) == 0) di += 2;
+				if (ff_wtoupper(ld_word(fs->dirbuf + di)) != ff_wtoupper(fs->lfnbuf[ni])) break;
+			}
+			if (nc == 0 && !fs->lfnbuf[ni]) break;	/* Name matched? */
+		}
+		return res;
+	}
+#endif
+	/* On the FAT/FAT32 volume */
+#if FF_USE_LFN
+	ord = sum = 0xFF; dp->blk_ofs = 0xFFFFFFFF;	/* Reset LFN sequence */
+#endif
+	do {
+		res = move_window(fs, dp->sect);
+		if (res != FR_OK) break;
+		c = dp->dir[DIR_Name];
+		if (c == 0) { res = FR_NO_FILE; break; }	/* Reached to end of table */
+#if FF_USE_LFN		/* LFN configuration */
+		dp->obj.attr = a = dp->dir[DIR_Attr] & AM_MASK;
+		if (c == DDEM || ((a & AM_VOL) && a != AM_LFN)) {	/* An entry without valid data */
+			ord = 0xFF; dp->blk_ofs = 0xFFFFFFFF;	/* Reset LFN sequence */
+		} else {
+			if (a == AM_LFN) {			/* An LFN entry is found */
+				if (!(dp->fn[NSFLAG] & NS_NOLFN)) {
+					if (c & LLEF) {		/* Is it start of LFN sequence? */
+						sum = dp->dir[LDIR_Chksum];
+						c &= (BYTE)~LLEF; ord = c;	/* LFN start order */
+						dp->blk_ofs = dp->dptr;	/* Start offset of LFN */
+					}
+					/* Check validity of the LFN entry and compare it with given name */
+					ord = (c == ord && sum == dp->dir[LDIR_Chksum] && cmp_lfn(fs->lfnbuf, dp->dir)) ? ord - 1 : 0xFF;
+				}
+			} else {					/*
