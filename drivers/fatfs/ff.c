@@ -2407,4 +2407,109 @@ static FRESULT dir_find (	/* FR_OK(0):succeeded, !=0:error */
 					/* Check validity of the LFN entry and compare it with given name */
 					ord = (c == ord && sum == dp->dir[LDIR_Chksum] && cmp_lfn(fs->lfnbuf, dp->dir)) ? ord - 1 : 0xFF;
 				}
-			} else {					/*
+			} else {					/* An SFN entry is found */
+				if (ord == 0 && sum == sum_sfn(dp->dir)) break;	/* LFN matched? */
+				if (!(dp->fn[NSFLAG] & NS_LOSS) && !memcmp(dp->dir, dp->fn, 11)) break;	/* SFN matched? */
+				ord = 0xFF; dp->blk_ofs = 0xFFFFFFFF;	/* Reset LFN sequence */
+			}
+		}
+#else		/* Non LFN configuration */
+		dp->obj.attr = dp->dir[DIR_Attr] & AM_MASK;
+		if (!(dp->dir[DIR_Attr] & AM_VOL) && !memcmp(dp->dir, dp->fn, 11)) break;	/* Is it a valid entry? */
+#endif
+		res = dir_next(dp, 0);	/* Next entry */
+	} while (res == FR_OK);
+
+	return res;
+}
+
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Register an object to the directory                                   */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_register (	/* FR_OK:succeeded, FR_DENIED:no free entry or too many SFN collision, FR_DISK_ERR:disk error */
+	DIR* dp						/* Target directory with object name to be created */
+)
+{
+	FRESULT res;
+	FATFS *fs = dp->obj.fs;
+#if FF_USE_LFN		/* LFN configuration */
+	UINT n, len, n_ent;
+	BYTE sn[12], sum;
+
+
+	if (dp->fn[NSFLAG] & (NS_DOT | NS_NONAME)) return FR_INVALID_NAME;	/* Check name validity */
+	for (len = 0; fs->lfnbuf[len]; len++) ;	/* Get lfn length */
+
+#if FF_FS_EXFAT
+	if (fs->fs_type == FS_EXFAT) {	/* On the exFAT volume */
+		n_ent = (len + 14) / 15 + 2;	/* Number of entries to allocate (85+C0+C1s) */
+		res = dir_alloc(dp, n_ent);		/* Allocate directory entries */
+		if (res != FR_OK) return res;
+		dp->blk_ofs = dp->dptr - SZDIRE * (n_ent - 1);	/* Set the allocated entry block offset */
+
+		if (dp->obj.stat & 4) {			/* Has the directory been stretched by new allocation? */
+			dp->obj.stat &= ~4;
+			res = fill_first_frag(&dp->obj);	/* Fill the first fragment on the FAT if needed */
+			if (res != FR_OK) return res;
+			res = fill_last_frag(&dp->obj, dp->clust, 0xFFFFFFFF);	/* Fill the last fragment on the FAT if needed */
+			if (res != FR_OK) return res;
+			if (dp->obj.sclust != 0) {		/* Is it a sub-directory? */
+				DIR dj;
+
+				res = load_obj_xdir(&dj, &dp->obj);	/* Load the object status */
+				if (res != FR_OK) return res;
+				dp->obj.objsize += (DWORD)fs->csize * SS(fs);		/* Increase the directory size by cluster size */
+				st_qword(fs->dirbuf + XDIR_FileSize, dp->obj.objsize);
+				st_qword(fs->dirbuf + XDIR_ValidFileSize, dp->obj.objsize);
+				fs->dirbuf[XDIR_GenFlags] = dp->obj.stat | 1;		/* Update the allocation status */
+				res = store_xdir(&dj);				/* Store the object status */
+				if (res != FR_OK) return res;
+			}
+		}
+
+		create_xdir(fs->dirbuf, fs->lfnbuf);	/* Create on-memory directory block to be written later */
+		return FR_OK;
+	}
+#endif
+	/* On the FAT/FAT32 volume */
+	memcpy(sn, dp->fn, 12);
+	if (sn[NSFLAG] & NS_LOSS) {			/* When LFN is out of 8.3 format, generate a numbered name */
+		dp->fn[NSFLAG] = NS_NOLFN;		/* Find only SFN */
+		for (n = 1; n < 100; n++) {
+			gen_numname(dp->fn, sn, fs->lfnbuf, n);	/* Generate a numbered name */
+			res = dir_find(dp);				/* Check if the name collides with existing SFN */
+			if (res != FR_OK) break;
+		}
+		if (n == 100) return FR_DENIED;		/* Abort if too many collisions */
+		if (res != FR_NO_FILE) return res;	/* Abort if the result is other than 'not collided' */
+		dp->fn[NSFLAG] = sn[NSFLAG];
+	}
+
+	/* Create an SFN with/without LFNs. */
+	n_ent = (sn[NSFLAG] & NS_LFN) ? (len + 12) / 13 + 1 : 1;	/* Number of entries to allocate */
+	res = dir_alloc(dp, n_ent);		/* Allocate entries */
+	if (res == FR_OK && --n_ent) {	/* Set LFN entry if needed */
+		res = dir_sdi(dp, dp->dptr - n_ent * SZDIRE);
+		if (res == FR_OK) {
+			sum = sum_sfn(dp->fn);	/* Checksum value of the SFN tied to the LFN */
+			do {					/* Store LFN entries in bottom first */
+				res = move_window(fs, dp->sect);
+				if (res != FR_OK) break;
+				put_lfn(fs->lfnbuf, dp->dir, (BYTE)n_ent, sum);
+				fs->wflag = 1;
+				res = dir_next(dp, 0);	/* Next entry */
+			} while (res == FR_OK && --n_ent);
+		}
+	}
+
+#else	/* Non LFN configuration */
+	res = dir_alloc(dp, 1);		/* Allocate an entry for SFN */
+
+#endif
+
+	/* Set S
