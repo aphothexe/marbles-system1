@@ -2512,4 +2512,129 @@ static FRESULT dir_register (	/* FR_OK:succeeded, FR_DENIED:no free entry or too
 
 #endif
 
-	/* Set S
+	/* Set SFN entry */
+	if (res == FR_OK) {
+		res = move_window(fs, dp->sect);
+		if (res == FR_OK) {
+			memset(dp->dir, 0, SZDIRE);	/* Clean the entry */
+			memcpy(dp->dir + DIR_Name, dp->fn, 11);	/* Put SFN */
+#if FF_USE_LFN
+			dp->dir[DIR_NTres] = dp->fn[NSFLAG] & (NS_BODY | NS_EXT);	/* Put NT flag */
+#endif
+			fs->wflag = 1;
+		}
+	}
+
+	return res;
+}
+
+#endif /* !FF_FS_READONLY */
+
+
+
+#if !FF_FS_READONLY && FF_FS_MINIMIZE == 0
+/*-----------------------------------------------------------------------*/
+/* Remove an object from the directory                                   */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT dir_remove (	/* FR_OK:Succeeded, FR_DISK_ERR:A disk error */
+	DIR* dp					/* Directory object pointing the entry to be removed */
+)
+{
+	FRESULT res;
+	FATFS *fs = dp->obj.fs;
+#if FF_USE_LFN		/* LFN configuration */
+	DWORD last = dp->dptr;
+
+	res = (dp->blk_ofs == 0xFFFFFFFF) ? FR_OK : dir_sdi(dp, dp->blk_ofs);	/* Goto top of the entry block if LFN is exist */
+	if (res == FR_OK) {
+		do {
+			res = move_window(fs, dp->sect);
+			if (res != FR_OK) break;
+			if (FF_FS_EXFAT && fs->fs_type == FS_EXFAT) {	/* On the exFAT volume */
+				dp->dir[XDIR_Type] &= 0x7F;	/* Clear the entry InUse flag. */
+			} else {										/* On the FAT/FAT32 volume */
+				dp->dir[DIR_Name] = DDEM;	/* Mark the entry 'deleted'. */
+			}
+			fs->wflag = 1;
+			if (dp->dptr >= last) break;	/* If reached last entry then all entries of the object has been deleted. */
+			res = dir_next(dp, 0);	/* Next entry */
+		} while (res == FR_OK);
+		if (res == FR_NO_FILE) res = FR_INT_ERR;
+	}
+#else			/* Non LFN configuration */
+
+	res = move_window(fs, dp->sect);
+	if (res == FR_OK) {
+		dp->dir[DIR_Name] = DDEM;	/* Mark the entry 'deleted'.*/
+		fs->wflag = 1;
+	}
+#endif
+
+	return res;
+}
+
+#endif /* !FF_FS_READONLY && FF_FS_MINIMIZE == 0 */
+
+
+
+#if FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2
+/*-----------------------------------------------------------------------*/
+/* Get file information from directory entry                             */
+/*-----------------------------------------------------------------------*/
+
+static void get_fileinfo (
+	DIR* dp,			/* Pointer to the directory object */
+	FILINFO* fno		/* Pointer to the file information to be filled */
+)
+{
+	UINT si, di;
+#if FF_USE_LFN
+	BYTE lcf;
+	WCHAR wc, hs;
+	FATFS *fs = dp->obj.fs;
+	UINT nw;
+#else
+	TCHAR c;
+#endif
+
+
+	fno->fname[0] = 0;			/* Invaidate file info */
+	if (dp->sect == 0) return;	/* Exit if read pointer has reached end of directory */
+
+#if FF_USE_LFN		/* LFN configuration */
+#if FF_FS_EXFAT
+	if (fs->fs_type == FS_EXFAT) {	/* exFAT volume */
+		UINT nc = 0;
+
+		si = SZDIRE * 2; di = 0;	/* 1st C1 entry in the entry block */
+		hs = 0;
+		while (nc < fs->dirbuf[XDIR_NumName]) {
+			if (si >= MAXDIRB(FF_MAX_LFN)) { di = 0; break; }	/* Truncated directory block? */
+			if ((si % SZDIRE) == 0) si += 2;		/* Skip entry type field */
+			wc = ld_word(fs->dirbuf + si); si += 2; nc++;	/* Get a character */
+			if (hs == 0 && IsSurrogate(wc)) {		/* Is it a surrogate? */
+				hs = wc; continue;					/* Get low surrogate */
+			}
+			nw = put_utf((DWORD)hs << 16 | wc, &fno->fname[di], FF_LFN_BUF - di);	/* Store it in API encoding */
+			if (nw == 0) { di = 0; break; }			/* Buffer overflow or wrong char? */
+			di += nw;
+			hs = 0;
+		}
+		if (hs != 0) di = 0;					/* Broken surrogate pair? */
+		if (di == 0) fno->fname[di++] = '?';	/* Inaccessible object name? */
+		fno->fname[di] = 0;						/* Terminate the name */
+		fno->altname[0] = 0;					/* exFAT does not support SFN */
+
+		fno->fattrib = fs->dirbuf[XDIR_Attr] & AM_MASKX;		/* Attribute */
+		fno->fsize = (fno->fattrib & AM_DIR) ? 0 : ld_qword(fs->dirbuf + XDIR_FileSize);	/* Size */
+		fno->ftime = ld_word(fs->dirbuf + XDIR_ModTime + 0);	/* Time */
+		fno->fdate = ld_word(fs->dirbuf + XDIR_ModTime + 2);	/* Date */
+		return;
+	} else
+#endif
+	{	/* FAT/FAT32 volume */
+		if (dp->blk_ofs != 0xFFFFFFFF) {	/* Get LFN if available */
+			si = di = 0;
+			hs = 0;
+			while (fs->lfnbuf[si] != 0) {
