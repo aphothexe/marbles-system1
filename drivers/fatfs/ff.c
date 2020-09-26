@@ -2638,3 +2638,102 @@ static void get_fileinfo (
 			si = di = 0;
 			hs = 0;
 			while (fs->lfnbuf[si] != 0) {
+				wc = fs->lfnbuf[si++];		/* Get an LFN character (UTF-16) */
+				if (hs == 0 && IsSurrogate(wc)) {	/* Is it a surrogate? */
+					hs = wc; continue;		/* Get low surrogate */
+				}
+				nw = put_utf((DWORD)hs << 16 | wc, &fno->fname[di], FF_LFN_BUF - di);	/* Store it in API encoding */
+				if (nw == 0) { di = 0; break; }	/* Buffer overflow or wrong char? */
+				di += nw;
+				hs = 0;
+			}
+			if (hs != 0) di = 0;	/* Broken surrogate pair? */
+			fno->fname[di] = 0;		/* Terminate the LFN (null string means LFN is invalid) */
+		}
+	}
+
+	si = di = 0;
+	while (si < 11) {		/* Get SFN from SFN entry */
+		wc = dp->dir[si++];			/* Get a char */
+		if (wc == ' ') continue;	/* Skip padding spaces */
+		if (wc == RDDEM) wc = DDEM;	/* Restore replaced DDEM character */
+		if (si == 9 && di < FF_SFN_BUF) fno->altname[di++] = '.';	/* Insert a . if extension is exist */
+#if FF_LFN_UNICODE >= 1	/* Unicode output */
+		if (dbc_1st((BYTE)wc) && si != 8 && si != 11 && dbc_2nd(dp->dir[si])) {	/* Make a DBC if needed */
+			wc = wc << 8 | dp->dir[si++];
+		}
+		wc = ff_oem2uni(wc, CODEPAGE);		/* ANSI/OEM -> Unicode */
+		if (wc == 0) { di = 0; break; }		/* Wrong char in the current code page? */
+		nw = put_utf(wc, &fno->altname[di], FF_SFN_BUF - di);	/* Store it in API encoding */
+		if (nw == 0) { di = 0; break; }		/* Buffer overflow? */
+		di += nw;
+#else					/* ANSI/OEM output */
+		fno->altname[di++] = (TCHAR)wc;	/* Store it without any conversion */
+#endif
+	}
+	fno->altname[di] = 0;	/* Terminate the SFN  (null string means SFN is invalid) */
+
+	if (fno->fname[0] == 0) {	/* If LFN is invalid, altname[] needs to be copied to fname[] */
+		if (di == 0) {	/* If LFN and SFN both are invalid, this object is inaccesible */
+			fno->fname[di++] = '?';
+		} else {
+			for (si = di = 0, lcf = NS_BODY; fno->altname[si]; si++, di++) {	/* Copy altname[] to fname[] with case information */
+				wc = (WCHAR)fno->altname[si];
+				if (wc == '.') lcf = NS_EXT;
+				if (IsUpper(wc) && (dp->dir[DIR_NTres] & lcf)) wc += 0x20;
+				fno->fname[di] = (TCHAR)wc;
+			}
+		}
+		fno->fname[di] = 0;	/* Terminate the LFN */
+		if (!dp->dir[DIR_NTres]) fno->altname[0] = 0;	/* Altname is not needed if neither LFN nor case info is exist. */
+	}
+
+#else	/* Non-LFN configuration */
+	si = di = 0;
+	while (si < 11) {		/* Copy name body and extension */
+		c = (TCHAR)dp->dir[si++];
+		if (c == ' ') continue;		/* Skip padding spaces */
+		if (c == RDDEM) c = DDEM;	/* Restore replaced DDEM character */
+		if (si == 9) fno->fname[di++] = '.';/* Insert a . if extension is exist */
+		fno->fname[di++] = c;
+	}
+	fno->fname[di] = 0;		/* Terminate the SFN */
+#endif
+
+	fno->fattrib = dp->dir[DIR_Attr] & AM_MASK;			/* Attribute */
+	fno->fsize = ld_dword(dp->dir + DIR_FileSize);		/* Size */
+	fno->ftime = ld_word(dp->dir + DIR_ModTime + 0);	/* Time */
+	fno->fdate = ld_word(dp->dir + DIR_ModTime + 2);	/* Date */
+}
+
+#endif /* FF_FS_MINIMIZE <= 1 || FF_FS_RPATH >= 2 */
+
+
+
+#if FF_USE_FIND && FF_FS_MINIMIZE <= 1
+/*-----------------------------------------------------------------------*/
+/* Pattern matching                                                      */
+/*-----------------------------------------------------------------------*/
+
+#define FIND_RECURS	4	/* Maximum number of wildcard terms in the pattern to limit recursion */
+
+
+static DWORD get_achar (	/* Get a character and advance ptr */
+	const TCHAR** ptr		/* Pointer to pointer to the ANSI/OEM or Unicode string */
+)
+{
+	DWORD chr;
+
+
+#if FF_USE_LFN && FF_LFN_UNICODE >= 1	/* Unicode input */
+	chr = tchar2uni(ptr);
+	if (chr == 0xFFFFFFFF) chr = 0;		/* Wrong UTF encoding is recognized as end of the string */
+	chr = ff_wtoupper(chr);
+
+#else									/* ANSI/OEM input */
+	chr = (BYTE)*(*ptr)++;				/* Get a byte */
+	if (IsLower(chr)) chr -= 0x20;		/* To upper ASCII char */
+#if FF_CODE_PAGE == 0
+	if (ExCvt && chr >= 0x80) chr = ExCvt[chr - 0x80];	/* To upper SBCS extended char */
+#elif FF_CODE_PAGE < 900
+	if (chr >= 0x80
