@@ -2736,4 +2736,117 @@ static DWORD get_achar (	/* Get a character and advance ptr */
 #if FF_CODE_PAGE == 0
 	if (ExCvt && chr >= 0x80) chr = ExCvt[chr - 0x80];	/* To upper SBCS extended char */
 #elif FF_CODE_PAGE < 900
-	if (chr >= 0x80
+	if (chr >= 0x80) chr = ExCvt[chr - 0x80];	/* To upper SBCS extended char */
+#endif
+#if FF_CODE_PAGE == 0 || FF_CODE_PAGE >= 900
+	if (dbc_1st((BYTE)chr)) {	/* Get DBC 2nd byte if needed */
+		chr = dbc_2nd((BYTE)**ptr) ? chr << 8 | (BYTE)*(*ptr)++ : 0;
+	}
+#endif
+
+#endif
+	return chr;
+}
+
+
+static int pattern_match (	/* 0:mismatched, 1:matched */
+	const TCHAR* pat,	/* Matching pattern */
+	const TCHAR* nam,	/* String to be tested */
+	UINT skip,			/* Number of pre-skip chars (number of ?s, b8:infinite (* specified)) */
+	UINT recur			/* Recursion count */
+)
+{
+	const TCHAR *pptr, *nptr;
+	DWORD pchr, nchr;
+	UINT sk;
+
+
+	while ((skip & 0xFF) != 0) {		/* Pre-skip name chars */
+		if (!get_achar(&nam)) return 0;	/* Branch mismatched if less name chars */
+		skip--;
+	}
+	if (*pat == 0 && skip) return 1;	/* Matched? (short circuit) */
+
+	do {
+		pptr = pat; nptr = nam;			/* Top of pattern and name to match */
+		for (;;) {
+			if (*pptr == '?' || *pptr == '*') {	/* Wildcard term? */
+				if (recur == 0) return 0;	/* Too many wildcard terms? */
+				sk = 0;
+				do {	/* Analyze the wildcard term */
+					if (*pptr++ == '?') sk++; else sk |= 0x100;
+				} while (*pptr == '?' || *pptr == '*');
+				if (pattern_match(pptr, nptr, sk, recur - 1)) return 1;	/* Test new branch (recursive call) */
+				nchr = *nptr; break;	/* Branch mismatched */
+			}
+			pchr = get_achar(&pptr);	/* Get a pattern char */
+			nchr = get_achar(&nptr);	/* Get a name char */
+			if (pchr != nchr) break;	/* Branch mismatched? */
+			if (pchr == 0) return 1;	/* Branch matched? (matched at end of both strings) */
+		}
+		get_achar(&nam);			/* nam++ */
+	} while (skip && nchr);		/* Retry until end of name if infinite search is specified */
+
+	return 0;
+}
+
+#endif /* FF_USE_FIND && FF_FS_MINIMIZE <= 1 */
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Pick a top segment and create the object name in directory form       */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not create */
+	DIR* dp,					/* Pointer to the directory object */
+	const TCHAR** path			/* Pointer to pointer to the segment in the path string */
+)
+{
+#if FF_USE_LFN		/* LFN configuration */
+	BYTE b, cf;
+	WCHAR wc, *lfn;
+	DWORD uc;
+	UINT i, ni, si, di;
+	const TCHAR *p;
+
+
+	/* Create LFN into LFN working buffer */
+	p = *path; lfn = dp->obj.fs->lfnbuf; di = 0;
+	for (;;) {
+		uc = tchar2uni(&p);			/* Get a character */
+		if (uc == 0xFFFFFFFF) return FR_INVALID_NAME;		/* Invalid code or UTF decode error */
+		if (uc >= 0x10000) lfn[di++] = (WCHAR)(uc >> 16);	/* Store high surrogate if needed */
+		wc = (WCHAR)uc;
+		if (wc < ' ' || IsSeparator(wc)) break;	/* Break if end of the path or a separator is found */
+		if (wc < 0x80 && strchr("*:<>|\"\?\x7F", (int)wc)) return FR_INVALID_NAME;	/* Reject illegal characters for LFN */
+		if (di >= FF_MAX_LFN) return FR_INVALID_NAME;	/* Reject too long name */
+		lfn[di++] = wc;				/* Store the Unicode character */
+	}
+	if (wc < ' ') {				/* Stopped at end of the path? */
+		cf = NS_LAST;			/* Last segment */
+	} else {					/* Stopped at a separator */
+		while (IsSeparator(*p)) p++;	/* Skip duplicated separators if exist */
+		cf = 0;					/* Next segment may follow */
+		if (IsTerminator(*p)) cf = NS_LAST;	/* Ignore terminating separator */
+	}
+	*path = p;					/* Return pointer to the next segment */
+
+#if FF_FS_RPATH != 0
+	if ((di == 1 && lfn[di - 1] == '.') ||
+		(di == 2 && lfn[di - 1] == '.' && lfn[di - 2] == '.')) {	/* Is this segment a dot name? */
+		lfn[di] = 0;
+		for (i = 0; i < 11; i++) {	/* Create dot name for SFN entry */
+			dp->fn[i] = (i < di) ? '.' : ' ';
+		}
+		dp->fn[i] = cf | NS_DOT;	/* This is a dot entry */
+		return FR_OK;
+	}
+#endif
+	while (di) {					/* Snip off trailing spaces and dots if exist */
+		wc = lfn[di - 1];
+		if (wc != ' ' && wc != '.') break;
+		di--;
+	}
+	lfn[di] = 0;							/* LFN is created into the working buffer */
+	if (di =
