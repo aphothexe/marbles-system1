@@ -2849,4 +2849,114 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 		di--;
 	}
 	lfn[di] = 0;							/* LFN is created into the working buffer */
-	if (di =
+	if (di == 0) return FR_INVALID_NAME;	/* Reject null name */
+
+	/* Create SFN in directory form */
+	for (si = 0; lfn[si] == ' '; si++) ;	/* Remove leading spaces */
+	if (si > 0 || lfn[si] == '.') cf |= NS_LOSS | NS_LFN;	/* Is there any leading space or dot? */
+	while (di > 0 && lfn[di - 1] != '.') di--;	/* Find last dot (di<=si: no extension) */
+
+	memset(dp->fn, ' ', 11);
+	i = b = 0; ni = 8;
+	for (;;) {
+		wc = lfn[si++];					/* Get an LFN character */
+		if (wc == 0) break;				/* Break on end of the LFN */
+		if (wc == ' ' || (wc == '.' && si != di)) {	/* Remove embedded spaces and dots */
+			cf |= NS_LOSS | NS_LFN;
+			continue;
+		}
+
+		if (i >= ni || si == di) {		/* End of field? */
+			if (ni == 11) {				/* Name extension overflow? */
+				cf |= NS_LOSS | NS_LFN;
+				break;
+			}
+			if (si != di) cf |= NS_LOSS | NS_LFN;	/* Name body overflow? */
+			if (si > di) break;						/* No name extension? */
+			si = di; i = 8; ni = 11; b <<= 2;		/* Enter name extension */
+			continue;
+		}
+
+		if (wc >= 0x80) {	/* Is this an extended character? */
+			cf |= NS_LFN;	/* LFN entry needs to be created */
+#if FF_CODE_PAGE == 0
+			if (ExCvt) {	/* In SBCS cfg */
+				wc = ff_uni2oem(wc, CODEPAGE);			/* Unicode ==> ANSI/OEM code */
+				if (wc & 0x80) wc = ExCvt[wc & 0x7F];	/* Convert extended character to upper (SBCS) */
+			} else {		/* In DBCS cfg */
+				wc = ff_uni2oem(ff_wtoupper(wc), CODEPAGE);	/* Unicode ==> Up-convert ==> ANSI/OEM code */
+			}
+#elif FF_CODE_PAGE < 900	/* In SBCS cfg */
+			wc = ff_uni2oem(wc, CODEPAGE);			/* Unicode ==> ANSI/OEM code */
+			if (wc & 0x80) wc = ExCvt[wc & 0x7F];	/* Convert extended character to upper (SBCS) */
+#else						/* In DBCS cfg */
+			wc = ff_uni2oem(ff_wtoupper(wc), CODEPAGE);	/* Unicode ==> Up-convert ==> ANSI/OEM code */
+#endif
+		}
+
+		if (wc >= 0x100) {				/* Is this a DBC? */
+			if (i >= ni - 1) {			/* Field overflow? */
+				cf |= NS_LOSS | NS_LFN;
+				i = ni; continue;		/* Next field */
+			}
+			dp->fn[i++] = (BYTE)(wc >> 8);	/* Put 1st byte */
+		} else {						/* SBC */
+			if (wc == 0 || strchr("+,;=[]", (int)wc)) {	/* Replace illegal characters for SFN */
+				wc = '_'; cf |= NS_LOSS | NS_LFN;/* Lossy conversion */
+			} else {
+				if (IsUpper(wc)) {		/* ASCII upper case? */
+					b |= 2;
+				}
+				if (IsLower(wc)) {		/* ASCII lower case? */
+					b |= 1; wc -= 0x20;
+				}
+			}
+		}
+		dp->fn[i++] = (BYTE)wc;
+	}
+
+	if (dp->fn[0] == DDEM) dp->fn[0] = RDDEM;	/* If the first character collides with DDEM, replace it with RDDEM */
+
+	if (ni == 8) b <<= 2;				/* Shift capital flags if no extension */
+	if ((b & 0x0C) == 0x0C || (b & 0x03) == 0x03) cf |= NS_LFN;	/* LFN entry needs to be created if composite capitals */
+	if (!(cf & NS_LFN)) {				/* When LFN is in 8.3 format without extended character, NT flags are created */
+		if (b & 0x01) cf |= NS_EXT;		/* NT flag (Extension has small capital letters only) */
+		if (b & 0x04) cf |= NS_BODY;	/* NT flag (Body has small capital letters only) */
+	}
+
+	dp->fn[NSFLAG] = cf;	/* SFN is created into dp->fn[] */
+
+	return FR_OK;
+
+
+#else	/* FF_USE_LFN : Non-LFN configuration */
+	BYTE c, d, *sfn;
+	UINT ni, si, i;
+	const char *p;
+
+	/* Create file name in directory form */
+	p = *path; sfn = dp->fn;
+	memset(sfn, ' ', 11);
+	si = i = 0; ni = 8;
+#if FF_FS_RPATH != 0
+	if (p[si] == '.') { /* Is this a dot entry? */
+		for (;;) {
+			c = (BYTE)p[si++];
+			if (c != '.' || si >= 3) break;
+			sfn[i++] = c;
+		}
+		if (!IsSeparator(c) && c > ' ') return FR_INVALID_NAME;
+		*path = p + si;					/* Return pointer to the next segment */
+		sfn[NSFLAG] = (c <= ' ') ? NS_LAST | NS_DOT : NS_DOT;	/* Set last segment flag if end of the path */
+		return FR_OK;
+	}
+#endif
+	for (;;) {
+		c = (BYTE)p[si++];				/* Get a byte */
+		if (c <= ' ') break; 			/* Break if end of the path name */
+		if (IsSeparator(c)) {			/* Break if a separator is found */
+			while (IsSeparator(p[si])) si++;	/* Skip duplicated separator if exist */
+			break;
+		}
+		if (c == '.' || i >= ni) {		/* End of body or field overflow? */
+			if (ni == 11 || c != '.') return FR_INVALID_N
