@@ -2959,4 +2959,113 @@ static FRESULT create_name (	/* FR_OK: successful, FR_INVALID_NAME: could not cr
 			break;
 		}
 		if (c == '.' || i >= ni) {		/* End of body or field overflow? */
-			if (ni == 11 || c != '.') return FR_INVALID_N
+			if (ni == 11 || c != '.') return FR_INVALID_NAME;	/* Field overflow or invalid dot? */
+			i = 8; ni = 11;				/* Enter file extension field */
+			continue;
+		}
+#if FF_CODE_PAGE == 0
+		if (ExCvt && c >= 0x80) {		/* Is SBC extended character? */
+			c = ExCvt[c & 0x7F];		/* To upper SBC extended character */
+		}
+#elif FF_CODE_PAGE < 900
+		if (c >= 0x80) {				/* Is SBC extended character? */
+			c = ExCvt[c & 0x7F];		/* To upper SBC extended character */
+		}
+#endif
+		if (dbc_1st(c)) {				/* Check if it is a DBC 1st byte */
+			d = (BYTE)p[si++];			/* Get 2nd byte */
+			if (!dbc_2nd(d) || i >= ni - 1) return FR_INVALID_NAME;	/* Reject invalid DBC */
+			sfn[i++] = c;
+			sfn[i++] = d;
+		} else {						/* SBC */
+			if (strchr("*+,:;<=>[]|\"\?\x7F", (int)c)) return FR_INVALID_NAME;	/* Reject illegal chrs for SFN */
+			if (IsLower(c)) c -= 0x20;	/* To upper */
+			sfn[i++] = c;
+		}
+	}
+	*path = &p[si];						/* Return pointer to the next segment */
+	if (i == 0) return FR_INVALID_NAME;	/* Reject nul string */
+
+	if (sfn[0] == DDEM) sfn[0] = RDDEM;	/* If the first character collides with DDEM, replace it with RDDEM */
+	sfn[NSFLAG] = (c <= ' ' || p[si] <= ' ') ? NS_LAST : 0;	/* Set last segment flag if end of the path */
+
+	return FR_OK;
+#endif /* FF_USE_LFN */
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Follow a file path                                                    */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
+	DIR* dp,					/* Directory object to return last directory and found object */
+	const TCHAR* path			/* Full-path string to find a file or directory */
+)
+{
+	FRESULT res;
+	BYTE ns;
+	FATFS *fs = dp->obj.fs;
+
+
+#if FF_FS_RPATH != 0
+	if (!IsSeparator(*path) && (FF_STR_VOLUME_ID != 2 || !IsTerminator(*path))) {	/* Without heading separator */
+		dp->obj.sclust = fs->cdir;			/* Start at the current directory */
+	} else
+#endif
+	{										/* With heading separator */
+		while (IsSeparator(*path)) path++;	/* Strip separators */
+		dp->obj.sclust = 0;					/* Start from the root directory */
+	}
+#if FF_FS_EXFAT
+	dp->obj.n_frag = 0;	/* Invalidate last fragment counter of the object */
+#if FF_FS_RPATH != 0
+	if (fs->fs_type == FS_EXFAT && dp->obj.sclust) {	/* exFAT: Retrieve the sub-directory's status */
+		DIR dj;
+
+		dp->obj.c_scl = fs->cdc_scl;
+		dp->obj.c_size = fs->cdc_size;
+		dp->obj.c_ofs = fs->cdc_ofs;
+		res = load_obj_xdir(&dj, &dp->obj);
+		if (res != FR_OK) return res;
+		dp->obj.objsize = ld_dword(fs->dirbuf + XDIR_FileSize);
+		dp->obj.stat = fs->dirbuf[XDIR_GenFlags] & 2;
+	}
+#endif
+#endif
+
+	if ((UINT)*path < ' ') {				/* Null path name is the origin directory itself */
+		dp->fn[NSFLAG] = NS_NONAME;
+		res = dir_sdi(dp, 0);
+
+	} else {								/* Follow path */
+		for (;;) {
+			res = create_name(dp, &path);	/* Get a segment name of the path */
+			if (res != FR_OK) break;
+			res = dir_find(dp);				/* Find an object with the segment name */
+			ns = dp->fn[NSFLAG];
+			if (res != FR_OK) {				/* Failed to find the object */
+				if (res == FR_NO_FILE) {	/* Object is not found */
+					if (FF_FS_RPATH && (ns & NS_DOT)) {	/* If dot entry is not exist, stay there */
+						if (!(ns & NS_LAST)) continue;	/* Continue to follow if not last segment */
+						dp->fn[NSFLAG] = NS_NONAME;
+						res = FR_OK;
+					} else {							/* Could not find the object */
+						if (!(ns & NS_LAST)) res = FR_NO_PATH;	/* Adjust error code if not last segment */
+					}
+				}
+				break;
+			}
+			if (ns & NS_LAST) break;		/* Last segment matched. Function completed. */
+			/* Get into the sub-directory */
+			if (!(dp->obj.attr & AM_DIR)) {	/* It is not a sub-directory and cannot follow */
+				res = FR_NO_PATH; break;
+			}
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {	/* Save containing directory information for next dir */
+				dp->obj.c_scl = dp->obj.sclust;
+				dp->obj.c_size = ((DWORD)dp->obj.objsize & 0xFFFFFF00) | dp->obj.stat;
+				dp->obj.c_ofs = dp->blk_ofs;
+				init_alloc_info(fs, &dp->obj);	/* Open next di
