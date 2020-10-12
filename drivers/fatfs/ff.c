@@ -3068,4 +3068,142 @@ static FRESULT follow_path (	/* FR_OK(0): successful, !=0: error code */
 				dp->obj.c_scl = dp->obj.sclust;
 				dp->obj.c_size = ((DWORD)dp->obj.objsize & 0xFFFFFF00) | dp->obj.stat;
 				dp->obj.c_ofs = dp->blk_ofs;
-				init_alloc_info(fs, &dp->obj);	/* Open next di
+				init_alloc_info(fs, &dp->obj);	/* Open next directory */
+			} else
+#endif
+			{
+				dp->obj.sclust = ld_clust(fs, fs->win + dp->dptr % SS(fs));	/* Open next directory */
+			}
+		}
+	}
+
+	return res;
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Get logical drive number from path name                               */
+/*-----------------------------------------------------------------------*/
+
+static int get_ldnumber (	/* Returns logical drive number (-1:invalid drive number or null pointer) */
+	const TCHAR** path		/* Pointer to pointer to the path name */
+)
+{
+	const TCHAR *tp, *tt;
+	TCHAR tc;
+	int i;
+	int vol = -1;
+#if FF_STR_VOLUME_ID		/* Find string volume ID */
+	const char *sp;
+	char c;
+#endif
+
+	tt = tp = *path;
+	if (!tp) return vol;	/* Invalid path name? */
+	do tc = *tt++; while (!IsTerminator(tc) && tc != ':');	/* Find a colon in the path */
+
+	if (tc == ':') {	/* DOS/Windows style volume ID? */
+		i = FF_VOLUMES;
+		if (IsDigit(*tp) && tp + 2 == tt) {	/* Is there a numeric volume ID + colon? */
+			i = (int)*tp - '0';	/* Get the LD number */
+		}
+#if FF_STR_VOLUME_ID == 1	/* Arbitrary string is enabled */
+		else {
+			i = 0;
+			do {
+				sp = VolumeStr[i]; tp = *path;	/* This string volume ID and path name */
+				do {	/* Compare the volume ID with path name */
+					c = *sp++; tc = *tp++;
+					if (IsLower(c)) c -= 0x20;
+					if (IsLower(tc)) tc -= 0x20;
+				} while (c && (TCHAR)c == tc);
+			} while ((c || tp != tt) && ++i < FF_VOLUMES);	/* Repeat for each id until pattern match */
+		}
+#endif
+		if (i < FF_VOLUMES) {	/* If a volume ID is found, get the drive number and strip it */
+			vol = i;		/* Drive number */
+			*path = tt;		/* Snip the drive prefix off */
+		}
+		return vol;
+	}
+#if FF_STR_VOLUME_ID == 2		/* Unix style volume ID is enabled */
+	if (*tp == '/') {			/* Is there a volume ID? */
+		while (*(tp + 1) == '/') tp++;	/* Skip duplicated separator */
+		i = 0;
+		do {
+			tt = tp; sp = VolumeStr[i]; /* Path name and this string volume ID */
+			do {	/* Compare the volume ID with path name */
+				c = *sp++; tc = *(++tt);
+				if (IsLower(c)) c -= 0x20;
+				if (IsLower(tc)) tc -= 0x20;
+			} while (c && (TCHAR)c == tc);
+		} while ((c || (tc != '/' && !IsTerminator(tc))) && ++i < FF_VOLUMES);	/* Repeat for each ID until pattern match */
+		if (i < FF_VOLUMES) {	/* If a volume ID is found, get the drive number and strip it */
+			vol = i;		/* Drive number */
+			*path = tt;		/* Snip the drive prefix off */
+		}
+		return vol;
+	}
+#endif
+	/* No drive prefix is found */
+#if FF_FS_RPATH != 0
+	vol = CurrVol;	/* Default drive is current drive */
+#else
+	vol = 0;		/* Default drive is 0 */
+#endif
+	return vol;		/* Return the default drive */
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* GPT support functions                                                 */
+/*-----------------------------------------------------------------------*/
+
+#if FF_LBA64
+
+/* Calculate CRC32 in byte-by-byte */
+
+static DWORD crc32 (	/* Returns next CRC value */
+	DWORD crc,			/* Current CRC value */
+	BYTE d				/* A byte to be processed */
+)
+{
+	BYTE b;
+
+
+	for (b = 1; b; b <<= 1) {
+		crc ^= (d & b) ? 1 : 0;
+		crc = (crc & 1) ? crc >> 1 ^ 0xEDB88320 : crc >> 1;
+	}
+	return crc;
+}
+
+
+/* Check validity of GPT header */
+
+static int test_gpt_header (	/* 0:Invalid, 1:Valid */
+	const BYTE* gpth			/* Pointer to the GPT header */
+)
+{
+	UINT i;
+	DWORD bcc;
+
+
+	if (memcmp(gpth + GPTH_Sign, "EFI PART" "\0\0\1\0" "\x5C\0\0", 16)) return 0;	/* Check sign, version (1.0) and length (92) */
+	for (i = 0, bcc = 0xFFFFFFFF; i < 92; i++) {		/* Check header BCC */
+		bcc = crc32(bcc, i - GPTH_Bcc < 4 ? 0 : gpth[i]);
+	}
+	if (~bcc != ld_dword(gpth + GPTH_Bcc)) return 0;
+	if (ld_dword(gpth + GPTH_PteSize) != SZ_GPTE) return 0;	/* Table entry size (must be SZ_GPTE bytes) */
+	if (ld_dword(gpth + GPTH_PtNum) > 128) return 0;	/* Table size (must be 128 entries or less) */
+
+	return 1;
+}
+
+#if !FF_FS_READONLY && FF_USE_MKFS
+
+/* Genera
