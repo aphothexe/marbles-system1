@@ -3206,4 +3206,101 @@ static int test_gpt_header (	/* 0:Invalid, 1:Valid */
 
 #if !FF_FS_READONLY && FF_USE_MKFS
 
-/* Genera
+/* Generate random value */
+static DWORD make_rand (
+	DWORD seed,		/* Seed value */
+	BYTE* buff,		/* Output buffer */
+	UINT n			/* Data length */
+)
+{
+	UINT r;
+
+
+	if (seed == 0) seed = 1;
+	do {
+		for (r = 0; r < 8; r++) seed = seed & 1 ? seed >> 1 ^ 0xA3000000 : seed >> 1;	/* Shift 8 bits the 32-bit LFSR */
+		*buff++ = (BYTE)seed;
+	} while (--n);
+	return seed;
+}
+
+#endif
+#endif
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Load a sector and check if it is an FAT VBR                           */
+/*-----------------------------------------------------------------------*/
+
+/* Check what the sector is */
+
+static UINT check_fs (	/* 0:FAT/FAT32 VBR, 1:exFAT VBR, 2:Not FAT and valid BS, 3:Not FAT and invalid BS, 4:Disk error */
+	FATFS* fs,			/* Filesystem object */
+	LBA_t sect			/* Sector to load and check if it is an FAT-VBR or not */
+)
+{
+	WORD w, sign;
+	BYTE b;
+
+
+	fs->wflag = 0; fs->winsect = (LBA_t)0 - 1;		/* Invaidate window */
+	if (move_window(fs, sect) != FR_OK) return 4;	/* Load the boot sector */
+	sign = ld_word(fs->win + BS_55AA);
+#if FF_FS_EXFAT
+	if (sign == 0xAA55 && !memcmp(fs->win + BS_JmpBoot, "\xEB\x76\x90" "EXFAT   ", 11)) return 1;	/* It is an exFAT VBR */
+#endif
+	b = fs->win[BS_JmpBoot];
+	if (b == 0xEB || b == 0xE9 || b == 0xE8) {	/* Valid JumpBoot code? (short jump, near jump or near call) */
+		if (sign == 0xAA55 && !memcmp(fs->win + BS_FilSysType32, "FAT32   ", 8)) {
+			return 0;	/* It is an FAT32 VBR */
+		}
+		/* FAT volumes formatted with early MS-DOS lack BS_55AA and BS_FilSysType, so FAT VBR needs to be identified without them. */
+		w = ld_word(fs->win + BPB_BytsPerSec);
+		b = fs->win[BPB_SecPerClus];
+		if ((w & (w - 1)) == 0 && w >= FF_MIN_SS && w <= FF_MAX_SS	/* Properness of sector size (512-4096 and 2^n) */
+			&& b != 0 && (b & (b - 1)) == 0				/* Properness of cluster size (2^n) */
+			&& ld_word(fs->win + BPB_RsvdSecCnt) != 0	/* Properness of reserved sectors (MNBZ) */
+			&& (UINT)fs->win[BPB_NumFATs] - 1 <= 1		/* Properness of FATs (1 or 2) */
+			&& ld_word(fs->win + BPB_RootEntCnt) != 0	/* Properness of root dir entries (MNBZ) */
+			&& (ld_word(fs->win + BPB_TotSec16) >= 128 || ld_dword(fs->win + BPB_TotSec32) >= 0x10000)	/* Properness of volume sectors (>=128) */
+			&& ld_word(fs->win + BPB_FATSz16) != 0) {	/* Properness of FAT size (MNBZ) */
+				return 0;	/* It can be presumed an FAT VBR */
+		}
+	}
+	return sign == 0xAA55 ? 2 : 3;	/* Not an FAT VBR (valid or invalid BS) */
+}
+
+
+/* Find an FAT volume */
+/* (It supports only generic partitioning rules, MBR, GPT and SFD) */
+
+static UINT find_volume (	/* Returns BS status found in the hosting drive */
+	FATFS* fs,		/* Filesystem object */
+	UINT part		/* Partition to fined = 0:auto, 1..:forced */
+)
+{
+	UINT fmt, i;
+	DWORD mbr_pt[4];
+
+
+	fmt = check_fs(fs, 0);				/* Load sector 0 and check if it is an FAT VBR as SFD format */
+	if (fmt != 2 && (fmt >= 3 || part == 0)) return fmt;	/* Returns if it is an FAT VBR as auto scan, not a BS or disk error */
+
+	/* Sector 0 is not an FAT VBR or forced partition number wants a partition */
+
+#if FF_LBA64
+	if (fs->win[MBR_Table + PTE_System] == 0xEE) {	/* GPT protective MBR? */
+		DWORD n_ent, v_ent, ofs;
+		QWORD pt_lba;
+
+		if (move_window(fs, 1) != FR_OK) return 4;	/* Load GPT header sector (next to MBR) */
+		if (!test_gpt_header(fs->win)) return 3;	/* Check if GPT header is valid */
+		n_ent = ld_dword(fs->win + GPTH_PtNum);		/* Number of entries */
+		pt_lba = ld_qword(fs->win + GPTH_PtOfs);	/* Table location */
+		for (v_ent = i = 0; i < n_ent; i++) {		/* Find FAT partition */
+			if (move_window(fs, pt_lba + i * SZ_GPTE / SS(fs)) != FR_OK) return 4;	/* PT sector */
+			ofs = i * SZ_GPTE % SS(fs);												/* Offset in the sector */
+			if (!memcmp(fs->win + ofs + GPTE_PtGuid, GUID_MS_Basic, 16)) {	/* MS basic data partition? */
+				v_ent++;
+				fmt = check_fs(fs, ld_qword(fs->win + ofs + GPTE_FstLba));	/* Load VBR and check stat
