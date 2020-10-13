@@ -3303,4 +3303,104 @@ static UINT find_volume (	/* Returns BS status found in the hosting drive */
 			ofs = i * SZ_GPTE % SS(fs);												/* Offset in the sector */
 			if (!memcmp(fs->win + ofs + GPTE_PtGuid, GUID_MS_Basic, 16)) {	/* MS basic data partition? */
 				v_ent++;
-				fmt = check_fs(fs, ld_qword(fs->win + ofs + GPTE_FstLba));	/* Load VBR and check stat
+				fmt = check_fs(fs, ld_qword(fs->win + ofs + GPTE_FstLba));	/* Load VBR and check status */
+				if (part == 0 && fmt <= 1) return fmt;			/* Auto search (valid FAT volume found first) */
+				if (part != 0 && v_ent == part) return fmt;		/* Forced partition order (regardless of it is valid or not) */
+			}
+		}
+		return 3;	/* Not found */
+	}
+#endif
+	if (FF_MULTI_PARTITION && part > 4) return 3;	/* MBR has 4 partitions max */
+	for (i = 0; i < 4; i++) {		/* Load partition offset in the MBR */
+		mbr_pt[i] = ld_dword(fs->win + MBR_Table + i * SZ_PTE + PTE_StLba);
+	}
+	i = part ? part - 1 : 0;		/* Table index to find first */
+	do {							/* Find an FAT volume */
+		fmt = mbr_pt[i] ? check_fs(fs, mbr_pt[i]) : 3;	/* Check if the partition is FAT */
+	} while (part == 0 && fmt >= 2 && ++i < 4);
+	return fmt;
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Determine logical drive number and mount the volume if needed         */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
+	const TCHAR** path,			/* Pointer to pointer to the path name (drive number) */
+	FATFS** rfs,				/* Pointer to pointer to the found filesystem object */
+	BYTE mode					/* !=0: Check write protection for write access */
+)
+{
+	int vol;
+	DSTATUS stat;
+	LBA_t bsect;
+	DWORD tsect, sysect, fasize, nclst, szbfat;
+	WORD nrsv;
+	FATFS *fs;
+	UINT fmt;
+
+
+	/* Get logical drive number */
+	*rfs = 0;
+	vol = get_ldnumber(path);
+	if (vol < 0) return FR_INVALID_DRIVE;
+
+	/* Check if the filesystem object is valid or not */
+	fs = FatFs[vol];					/* Get pointer to the filesystem object */
+	if (!fs) return FR_NOT_ENABLED;		/* Is the filesystem object available? */
+#if FF_FS_REENTRANT
+	if (!lock_fs(fs)) return FR_TIMEOUT;	/* Lock the volume */
+#endif
+	*rfs = fs;							/* Return pointer to the filesystem object */
+
+	mode &= (BYTE)~FA_READ;				/* Desired access mode, write access or not */
+	if (fs->fs_type != 0) {				/* If the volume has been mounted */
+		stat = disk_status(fs->pdrv);
+		if (!(stat & STA_NOINIT)) {		/* and the physical drive is kept initialized */
+			if (!FF_FS_READONLY && mode && (stat & STA_PROTECT)) {	/* Check write protection if needed */
+				return FR_WRITE_PROTECTED;
+			}
+			return FR_OK;				/* The filesystem object is already valid */
+		}
+	}
+
+	/* The filesystem object is not valid. */
+	/* Following code attempts to mount the volume. (find an FAT volume, analyze the BPB and initialize the filesystem object) */
+
+	fs->fs_type = 0;					/* Clear the filesystem object */
+	fs->pdrv = LD2PD(vol);				/* Volume hosting physical drive */
+	stat = disk_initialize(fs->pdrv);	/* Initialize the physical drive */
+	if (stat & STA_NOINIT) { 			/* Check if the initialization succeeded */
+		return FR_NOT_READY;			/* Failed to initialize due to no medium or hard error */
+	}
+	if (!FF_FS_READONLY && mode && (stat & STA_PROTECT)) { /* Check disk write protection if needed */
+		return FR_WRITE_PROTECTED;
+	}
+#if FF_MAX_SS != FF_MIN_SS				/* Get sector size (multiple sector size cfg only) */
+	if (disk_ioctl(fs->pdrv, GET_SECTOR_SIZE, &SS(fs)) != RES_OK) return FR_DISK_ERR;
+	if (SS(fs) > FF_MAX_SS || SS(fs) < FF_MIN_SS || (SS(fs) & (SS(fs) - 1))) return FR_DISK_ERR;
+#endif
+
+	/* Find an FAT volume on the drive */
+	fmt = find_volume(fs, LD2PT(vol));
+	if (fmt == 4) return FR_DISK_ERR;		/* An error occured in the disk I/O layer */
+	if (fmt >= 2) return FR_NO_FILESYSTEM;	/* No FAT volume is found */
+	bsect = fs->winsect;					/* Volume offset */
+
+	/* An FAT volume is found (bsect). Following code initializes the filesystem object */
+
+#if FF_FS_EXFAT
+	if (fmt == 1) {
+		QWORD maxlba;
+		DWORD so, cv, bcl, i;
+
+		for (i = BPB_ZeroedEx; i < BPB_ZeroedEx + 53 && fs->win[i] == 0; i++) ;	/* Check zero filler */
+		if (i < BPB_ZeroedEx + 53) return FR_NO_FILESYSTEM;
+
+		if (ld_word(fs->win + BPB_FSVerEx) != 0x100) return FR_NO_FILESYSTEM;	/* Check exFAT version (must be version 1.0) */
+
+		if (1 << fs->win[BPB_BytsPerSe
