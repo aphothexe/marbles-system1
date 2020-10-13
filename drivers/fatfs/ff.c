@@ -3403,4 +3403,84 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 
 		if (ld_word(fs->win + BPB_FSVerEx) != 0x100) return FR_NO_FILESYSTEM;	/* Check exFAT version (must be version 1.0) */
 
-		if (1 << fs->win[BPB_BytsPerSe
+		if (1 << fs->win[BPB_BytsPerSecEx] != SS(fs)) {	/* (BPB_BytsPerSecEx must be equal to the physical sector size) */
+			return FR_NO_FILESYSTEM;
+		}
+
+		maxlba = ld_qword(fs->win + BPB_TotSecEx) + bsect;	/* Last LBA of the volume + 1 */
+		if (!FF_LBA64 && maxlba >= 0x100000000) return FR_NO_FILESYSTEM;	/* (It cannot be accessed in 32-bit LBA) */
+
+		fs->fsize = ld_dword(fs->win + BPB_FatSzEx);	/* Number of sectors per FAT */
+
+		fs->n_fats = fs->win[BPB_NumFATsEx];			/* Number of FATs */
+		if (fs->n_fats != 1) return FR_NO_FILESYSTEM;	/* (Supports only 1 FAT) */
+
+		fs->csize = 1 << fs->win[BPB_SecPerClusEx];		/* Cluster size */
+		if (fs->csize == 0)	return FR_NO_FILESYSTEM;	/* (Must be 1..32768 sectors) */
+
+		nclst = ld_dword(fs->win + BPB_NumClusEx);		/* Number of clusters */
+		if (nclst > MAX_EXFAT) return FR_NO_FILESYSTEM;	/* (Too many clusters) */
+		fs->n_fatent = nclst + 2;
+
+		/* Boundaries and Limits */
+		fs->volbase = bsect;
+		fs->database = bsect + ld_dword(fs->win + BPB_DataOfsEx);
+		fs->fatbase = bsect + ld_dword(fs->win + BPB_FatOfsEx);
+		if (maxlba < (QWORD)fs->database + nclst * fs->csize) return FR_NO_FILESYSTEM;	/* (Volume size must not be smaller than the size requiered) */
+		fs->dirbase = ld_dword(fs->win + BPB_RootClusEx);
+
+		/* Get bitmap location and check if it is contiguous (implementation assumption) */
+		so = i = 0;
+		for (;;) {	/* Find the bitmap entry in the root directory (in only first cluster) */
+			if (i == 0) {
+				if (so >= fs->csize) return FR_NO_FILESYSTEM;	/* Not found? */
+				if (move_window(fs, clst2sect(fs, (DWORD)fs->dirbase) + so) != FR_OK) return FR_DISK_ERR;
+				so++;
+			}
+			if (fs->win[i] == ET_BITMAP) break;			/* Is it a bitmap entry? */
+			i = (i + SZDIRE) % SS(fs);	/* Next entry */
+		}
+		bcl = ld_dword(fs->win + i + 20);				/* Bitmap cluster */
+		if (bcl < 2 || bcl >= fs->n_fatent) return FR_NO_FILESYSTEM;	/* (Wrong cluster#) */
+		fs->bitbase = fs->database + fs->csize * (bcl - 2);	/* Bitmap sector */
+		for (;;) {	/* Check if bitmap is contiguous */
+			if (move_window(fs, fs->fatbase + bcl / (SS(fs) / 4)) != FR_OK) return FR_DISK_ERR;
+			cv = ld_dword(fs->win + bcl % (SS(fs) / 4) * 4);
+			if (cv == 0xFFFFFFFF) break;				/* Last link? */
+			if (cv != ++bcl) return FR_NO_FILESYSTEM;	/* Fragmented? */
+		}
+
+#if !FF_FS_READONLY
+		fs->last_clst = fs->free_clst = 0xFFFFFFFF;		/* Initialize cluster allocation information */
+#endif
+		fmt = FS_EXFAT;			/* FAT sub-type */
+	} else
+#endif	/* FF_FS_EXFAT */
+	{
+		if (ld_word(fs->win + BPB_BytsPerSec) != SS(fs)) return FR_NO_FILESYSTEM;	/* (BPB_BytsPerSec must be equal to the physical sector size) */
+
+		fasize = ld_word(fs->win + BPB_FATSz16);		/* Number of sectors per FAT */
+		if (fasize == 0) fasize = ld_dword(fs->win + BPB_FATSz32);
+		fs->fsize = fasize;
+
+		fs->n_fats = fs->win[BPB_NumFATs];				/* Number of FATs */
+		if (fs->n_fats != 1 && fs->n_fats != 2) return FR_NO_FILESYSTEM;	/* (Must be 1 or 2) */
+		fasize *= fs->n_fats;							/* Number of sectors for FAT area */
+
+		fs->csize = fs->win[BPB_SecPerClus];			/* Cluster size */
+		if (fs->csize == 0 || (fs->csize & (fs->csize - 1))) return FR_NO_FILESYSTEM;	/* (Must be power of 2) */
+
+		fs->n_rootdir = ld_word(fs->win + BPB_RootEntCnt);	/* Number of root directory entries */
+		if (fs->n_rootdir % (SS(fs) / SZDIRE)) return FR_NO_FILESYSTEM;	/* (Must be sector aligned) */
+
+		tsect = ld_word(fs->win + BPB_TotSec16);		/* Number of sectors on the volume */
+		if (tsect == 0) tsect = ld_dword(fs->win + BPB_TotSec32);
+
+		nrsv = ld_word(fs->win + BPB_RsvdSecCnt);		/* Number of reserved sectors */
+		if (nrsv == 0) return FR_NO_FILESYSTEM;			/* (Must not be 0) */
+
+		/* Determine the FAT sub type */
+		sysect = nrsv + fasize + fs->n_rootdir / (SS(fs) / SZDIRE);	/* RSV + FAT + DIR */
+		if (tsect < sysect) return FR_NO_FILESYSTEM;	/* (Invalid volume size) */
+		nclst = (tsect - sysect) / fs->csize;			/* Number of clusters */
+		if (nclst == 0) return FR_NO_FILESYSTEM;		/* (Inv
