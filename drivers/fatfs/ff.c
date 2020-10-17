@@ -3483,4 +3483,120 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 		sysect = nrsv + fasize + fs->n_rootdir / (SS(fs) / SZDIRE);	/* RSV + FAT + DIR */
 		if (tsect < sysect) return FR_NO_FILESYSTEM;	/* (Invalid volume size) */
 		nclst = (tsect - sysect) / fs->csize;			/* Number of clusters */
-		if (nclst == 0) return FR_NO_FILESYSTEM;		/* (Inv
+		if (nclst == 0) return FR_NO_FILESYSTEM;		/* (Invalid volume size) */
+		fmt = 0;
+		if (nclst <= MAX_FAT32) fmt = FS_FAT32;
+		if (nclst <= MAX_FAT16) fmt = FS_FAT16;
+		if (nclst <= MAX_FAT12) fmt = FS_FAT12;
+		if (fmt == 0) return FR_NO_FILESYSTEM;
+
+		/* Boundaries and Limits */
+		fs->n_fatent = nclst + 2;						/* Number of FAT entries */
+		fs->volbase = bsect;							/* Volume start sector */
+		fs->fatbase = bsect + nrsv; 					/* FAT start sector */
+		fs->database = bsect + sysect;					/* Data start sector */
+		if (fmt == FS_FAT32) {
+			if (ld_word(fs->win + BPB_FSVer32) != 0) return FR_NO_FILESYSTEM;	/* (Must be FAT32 revision 0.0) */
+			if (fs->n_rootdir != 0) return FR_NO_FILESYSTEM;	/* (BPB_RootEntCnt must be 0) */
+			fs->dirbase = ld_dword(fs->win + BPB_RootClus32);	/* Root directory start cluster */
+			szbfat = fs->n_fatent * 4;					/* (Needed FAT size) */
+		} else {
+			if (fs->n_rootdir == 0)	return FR_NO_FILESYSTEM;	/* (BPB_RootEntCnt must not be 0) */
+			fs->dirbase = fs->fatbase + fasize;			/* Root directory start sector */
+			szbfat = (fmt == FS_FAT16) ?				/* (Needed FAT size) */
+				fs->n_fatent * 2 : fs->n_fatent * 3 / 2 + (fs->n_fatent & 1);
+		}
+		if (fs->fsize < (szbfat + (SS(fs) - 1)) / SS(fs)) return FR_NO_FILESYSTEM;	/* (BPB_FATSz must not be less than the size needed) */
+
+#if !FF_FS_READONLY
+		/* Get FSInfo if available */
+		fs->last_clst = fs->free_clst = 0xFFFFFFFF;		/* Initialize cluster allocation information */
+		fs->fsi_flag = 0x80;
+#if (FF_FS_NOFSINFO & 3) != 3
+		if (fmt == FS_FAT32				/* Allow to update FSInfo only if BPB_FSInfo32 == 1 */
+			&& ld_word(fs->win + BPB_FSInfo32) == 1
+			&& move_window(fs, bsect + 1) == FR_OK)
+		{
+			fs->fsi_flag = 0;
+			if (ld_word(fs->win + BS_55AA) == 0xAA55	/* Load FSInfo data if available */
+				&& ld_dword(fs->win + FSI_LeadSig) == 0x41615252
+				&& ld_dword(fs->win + FSI_StrucSig) == 0x61417272)
+			{
+#if (FF_FS_NOFSINFO & 1) == 0
+				fs->free_clst = ld_dword(fs->win + FSI_Free_Count);
+#endif
+#if (FF_FS_NOFSINFO & 2) == 0
+				fs->last_clst = ld_dword(fs->win + FSI_Nxt_Free);
+#endif
+			}
+		}
+#endif	/* (FF_FS_NOFSINFO & 3) != 3 */
+#endif	/* !FF_FS_READONLY */
+	}
+
+	fs->fs_type = (BYTE)fmt;/* FAT sub-type */
+	fs->id = ++Fsid;		/* Volume mount ID */
+#if FF_USE_LFN == 1
+	fs->lfnbuf = LfnBuf;	/* Static LFN working buffer */
+#if FF_FS_EXFAT
+	fs->dirbuf = DirBuf;	/* Static directory block scratchpad buuffer */
+#endif
+#endif
+#if FF_FS_RPATH != 0
+	fs->cdir = 0;			/* Initialize current directory */
+#endif
+#if FF_FS_LOCK != 0			/* Clear file lock semaphores */
+	clear_lock(fs);
+#endif
+	return FR_OK;
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Check if the file/directory object is valid or not                    */
+/*-----------------------------------------------------------------------*/
+
+static FRESULT validate (	/* Returns FR_OK or FR_INVALID_OBJECT */
+	FFOBJID* obj,			/* Pointer to the FFOBJID, the 1st member in the FIL/DIR object, to check validity */
+	FATFS** rfs				/* Pointer to pointer to the owner filesystem object to return */
+)
+{
+	FRESULT res = FR_INVALID_OBJECT;
+
+
+	if (obj && obj->fs && obj->fs->fs_type && obj->id == obj->fs->id) {	/* Test if the object is valid */
+#if FF_FS_REENTRANT
+		if (lock_fs(obj->fs)) {	/* Obtain the filesystem object */
+			if (!(disk_status(obj->fs->pdrv) & STA_NOINIT)) { /* Test if the phsical drive is kept initialized */
+				res = FR_OK;
+			} else {
+				unlock_fs(obj->fs, FR_OK);
+			}
+		} else {
+			res = FR_TIMEOUT;
+		}
+#else
+		if (!(disk_status(obj->fs->pdrv) & STA_NOINIT)) { /* Test if the phsical drive is kept initialized */
+			res = FR_OK;
+		}
+#endif
+	}
+	*rfs = (res == FR_OK) ? obj->fs : 0;	/* Corresponding filesystem object */
+	return res;
+}
+
+
+
+
+/*---------------------------------------------------------------------------
+
+   Public Functions (FatFs API)
+
+----------------------------------------------------------------------------*/
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Mount/Unmount a Logical Drive
