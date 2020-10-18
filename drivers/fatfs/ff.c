@@ -3599,4 +3599,125 @@ static FRESULT validate (	/* Returns FR_OK or FR_INVALID_OBJECT */
 
 
 /*-----------------------------------------------------------------------*/
-/* Mount/Unmount a Logical Drive
+/* Mount/Unmount a Logical Drive                                         */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_mount (
+	FATFS* fs,			/* Pointer to the filesystem object to be registered (NULL:unmount)*/
+	const TCHAR* path,	/* Logical drive number to be mounted/unmounted */
+	BYTE opt			/* Mount option: 0=Do not mount (delayed mount), 1=Mount immediately */
+)
+{
+	FATFS *cfs;
+	int vol;
+	FRESULT res;
+	const TCHAR *rp = path;
+
+
+	/* Get logical drive number */
+	vol = get_ldnumber(&rp);
+	if (vol < 0) return FR_INVALID_DRIVE;
+	cfs = FatFs[vol];					/* Pointer to fs object */
+
+	if (cfs) {
+#if FF_FS_LOCK != 0
+		clear_lock(cfs);
+#endif
+#if FF_FS_REENTRANT						/* Discard sync object of the current volume */
+		if (!ff_del_syncobj(cfs->sobj)) return FR_INT_ERR;
+#endif
+		cfs->fs_type = 0;				/* Clear old fs object */
+	}
+
+	if (fs) {
+		fs->fs_type = 0;				/* Clear new fs object */
+#if FF_FS_REENTRANT						/* Create sync object for the new volume */
+		if (!ff_cre_syncobj((BYTE)vol, &fs->sobj)) return FR_INT_ERR;
+#endif
+	}
+	FatFs[vol] = fs;					/* Register new fs object */
+
+	if (opt == 0) return FR_OK;			/* Do not mount now, it will be mounted later */
+
+	res = mount_volume(&path, &fs, 0);	/* Force mounted the volume */
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Open or Create a File                                                 */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_open (
+	FIL* fp,			/* Pointer to the blank file object */
+	const TCHAR* path,	/* Pointer to the file name */
+	BYTE mode			/* Access mode and open mode flags */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+#if !FF_FS_READONLY
+	DWORD cl, bcs, clst, tm;
+	LBA_t sc;
+	FSIZE_t ofs;
+#endif
+	DEF_NAMBUF
+
+
+	if (!fp) return FR_INVALID_OBJECT;
+
+	/* Get logical drive number */
+	mode &= FF_FS_READONLY ? FA_READ : FA_READ | FA_WRITE | FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
+	res = mount_volume(&path, &fs, mode);
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);	/* Follow the file path */
+#if !FF_FS_READONLY	/* Read/Write configuration */
+		if (res == FR_OK) {
+			if (dj.fn[NSFLAG] & NS_NONAME) {	/* Origin directory itself? */
+				res = FR_INVALID_NAME;
+			}
+#if FF_FS_LOCK != 0
+			else {
+				res = chk_lock(&dj, (mode & ~FA_READ) ? 1 : 0);		/* Check if the file can be used */
+			}
+#endif
+		}
+		/* Create or Open a file */
+		if (mode & (FA_CREATE_ALWAYS | FA_OPEN_ALWAYS | FA_CREATE_NEW)) {
+			if (res != FR_OK) {					/* No file, create new */
+				if (res == FR_NO_FILE) {		/* There is no file to open, create a new entry */
+#if FF_FS_LOCK != 0
+					res = enq_lock() ? dir_register(&dj) : FR_TOO_MANY_OPEN_FILES;
+#else
+					res = dir_register(&dj);
+#endif
+				}
+				mode |= FA_CREATE_ALWAYS;		/* File is created */
+			}
+			else {								/* Any object with the same name is already existing */
+				if (dj.obj.attr & (AM_RDO | AM_DIR)) {	/* Cannot overwrite it (R/O or DIR) */
+					res = FR_DENIED;
+				} else {
+					if (mode & FA_CREATE_NEW) res = FR_EXIST;	/* Cannot create as new file */
+				}
+			}
+			if (res == FR_OK && (mode & FA_CREATE_ALWAYS)) {	/* Truncate the file if overwrite mode */
+#if FF_FS_EXFAT
+				if (fs->fs_type == FS_EXFAT) {
+					/* Get current allocation info */
+					fp->obj.fs = fs;
+					init_alloc_info(fs, &fp->obj);
+					/* Set directory entry block initial state */
+					memset(fs->dirbuf + 2, 0, 30);	/* Clear 85 entry except for NumSec */
+					memset(fs->dirbuf + 38, 0, 26);	/* Clear C0 entry except for NumName and NameHash */
+					fs->dirbuf[XDIR_Attr] = AM_ARC;
+					st_dword(fs->dirbuf + XDIR_CrtTime, GET_FATTIME());
+					fs->dirbuf[XDIR_GenFlags] = 1;
+					res = store_xdir(&dj);
+					if (res == FR_OK && fp->obj.sclust != 0) {	/* Remove the cluster chain if exist */
+						res = remove_chain(&fp->obj, f
