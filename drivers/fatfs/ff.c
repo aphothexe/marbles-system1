@@ -3720,4 +3720,128 @@ FRESULT f_open (
 					fs->dirbuf[XDIR_GenFlags] = 1;
 					res = store_xdir(&dj);
 					if (res == FR_OK && fp->obj.sclust != 0) {	/* Remove the cluster chain if exist */
-						res = remove_chain(&fp->obj, f
+						res = remove_chain(&fp->obj, fp->obj.sclust, 0);
+						fs->last_clst = fp->obj.sclust - 1;		/* Reuse the cluster hole */
+					}
+				} else
+#endif
+				{
+					/* Set directory entry initial state */
+					tm = GET_FATTIME();					/* Set created time */
+					st_dword(dj.dir + DIR_CrtTime, tm);
+					st_dword(dj.dir + DIR_ModTime, tm);
+					cl = ld_clust(fs, dj.dir);			/* Get current cluster chain */
+					dj.dir[DIR_Attr] = AM_ARC;			/* Reset attribute */
+					st_clust(fs, dj.dir, 0);			/* Reset file allocation info */
+					st_dword(dj.dir + DIR_FileSize, 0);
+					fs->wflag = 1;
+					if (cl != 0) {						/* Remove the cluster chain if exist */
+						sc = fs->winsect;
+						res = remove_chain(&dj.obj, cl, 0);
+						if (res == FR_OK) {
+							res = move_window(fs, sc);
+							fs->last_clst = cl - 1;		/* Reuse the cluster hole */
+						}
+					}
+				}
+			}
+		}
+		else {	/* Open an existing file */
+			if (res == FR_OK) {					/* Is the object exsiting? */
+				if (dj.obj.attr & AM_DIR) {		/* File open against a directory */
+					res = FR_NO_FILE;
+				} else {
+					if ((mode & FA_WRITE) && (dj.obj.attr & AM_RDO)) { /* Write mode open against R/O file */
+						res = FR_DENIED;
+					}
+				}
+			}
+		}
+		if (res == FR_OK) {
+			if (mode & FA_CREATE_ALWAYS) mode |= FA_MODIFIED;	/* Set file change flag if created or overwritten */
+			fp->dir_sect = fs->winsect;			/* Pointer to the directory entry */
+			fp->dir_ptr = dj.dir;
+#if FF_FS_LOCK != 0
+			fp->obj.lockid = inc_lock(&dj, (mode & ~FA_READ) ? 1 : 0);	/* Lock the file for this session */
+			if (fp->obj.lockid == 0) res = FR_INT_ERR;
+#endif
+		}
+#else		/* R/O configuration */
+		if (res == FR_OK) {
+			if (dj.fn[NSFLAG] & NS_NONAME) {	/* Is it origin directory itself? */
+				res = FR_INVALID_NAME;
+			} else {
+				if (dj.obj.attr & AM_DIR) {		/* Is it a directory? */
+					res = FR_NO_FILE;
+				}
+			}
+		}
+#endif
+
+		if (res == FR_OK) {
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				fp->obj.c_scl = dj.obj.sclust;							/* Get containing directory info */
+				fp->obj.c_size = ((DWORD)dj.obj.objsize & 0xFFFFFF00) | dj.obj.stat;
+				fp->obj.c_ofs = dj.blk_ofs;
+				init_alloc_info(fs, &fp->obj);
+			} else
+#endif
+			{
+				fp->obj.sclust = ld_clust(fs, dj.dir);					/* Get object allocation info */
+				fp->obj.objsize = ld_dword(dj.dir + DIR_FileSize);
+			}
+#if FF_USE_FASTSEEK
+			fp->cltbl = 0;		/* Disable fast seek mode */
+#endif
+			fp->obj.fs = fs;	/* Validate the file object */
+			fp->obj.id = fs->id;
+			fp->flag = mode;	/* Set file access mode */
+			fp->err = 0;		/* Clear error flag */
+			fp->sect = 0;		/* Invalidate current data sector */
+			fp->fptr = 0;		/* Set file pointer top of the file */
+#if !FF_FS_READONLY
+#if !FF_FS_TINY
+			memset(fp->buf, 0, sizeof fp->buf);	/* Clear sector buffer */
+#endif
+			if ((mode & FA_SEEKEND) && fp->obj.objsize > 0) {	/* Seek to end of file if FA_OPEN_APPEND is specified */
+				fp->fptr = fp->obj.objsize;			/* Offset to seek */
+				bcs = (DWORD)fs->csize * SS(fs);	/* Cluster size in byte */
+				clst = fp->obj.sclust;				/* Follow the cluster chain */
+				for (ofs = fp->obj.objsize; res == FR_OK && ofs > bcs; ofs -= bcs) {
+					clst = get_fat(&fp->obj, clst);
+					if (clst <= 1) res = FR_INT_ERR;
+					if (clst == 0xFFFFFFFF) res = FR_DISK_ERR;
+				}
+				fp->clust = clst;
+				if (res == FR_OK && ofs % SS(fs)) {	/* Fill sector buffer if not on the sector boundary */
+					sc = clst2sect(fs, clst);
+					if (sc == 0) {
+						res = FR_INT_ERR;
+					} else {
+						fp->sect = sc + (DWORD)(ofs / SS(fs));
+#if !FF_FS_TINY
+						if (disk_read(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) res = FR_DISK_ERR;
+#endif
+					}
+				}
+#if FF_FS_LOCK != 0
+				if (res != FR_OK) dec_lock(fp->obj.lockid); /* Decrement file open counter if seek failed */
+#endif
+			}
+#endif
+		}
+
+		FREE_NAMBUF();
+	}
+
+	if (res != FR_OK) fp->obj.fs = 0;	/* Invalidate file object on error */
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Read File       
