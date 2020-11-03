@@ -4183,4 +4183,146 @@ FRESULT f_close (
 #if FF_FS_RPATH >= 1
 /*-----------------------------------------------------------------------*/
 /* Change Current Directory or Current Drive, Get Current Directory      */
-/*------------------
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_chdrive (
+	const TCHAR* path		/* Drive number to set */
+)
+{
+	int vol;
+
+
+	/* Get logical drive number */
+	vol = get_ldnumber(&path);
+	if (vol < 0) return FR_INVALID_DRIVE;
+	CurrVol = (BYTE)vol;	/* Set it as current volume */
+
+	return FR_OK;
+}
+
+
+
+FRESULT f_chdir (
+	const TCHAR* path	/* Pointer to the directory path */
+)
+{
+#if FF_STR_VOLUME_ID == 2
+	UINT i;
+#endif
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	DEF_NAMBUF
+
+
+	/* Get logical drive */
+	res = mount_volume(&path, &fs, 0);
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);		/* Follow the path */
+		if (res == FR_OK) {					/* Follow completed */
+			if (dj.fn[NSFLAG] & NS_NONAME) {	/* Is it the start directory itself? */
+				fs->cdir = dj.obj.sclust;
+#if FF_FS_EXFAT
+				if (fs->fs_type == FS_EXFAT) {
+					fs->cdc_scl = dj.obj.c_scl;
+					fs->cdc_size = dj.obj.c_size;
+					fs->cdc_ofs = dj.obj.c_ofs;
+				}
+#endif
+			} else {
+				if (dj.obj.attr & AM_DIR) {	/* It is a sub-directory */
+#if FF_FS_EXFAT
+					if (fs->fs_type == FS_EXFAT) {
+						fs->cdir = ld_dword(fs->dirbuf + XDIR_FstClus);		/* Sub-directory cluster */
+						fs->cdc_scl = dj.obj.sclust;						/* Save containing directory information */
+						fs->cdc_size = ((DWORD)dj.obj.objsize & 0xFFFFFF00) | dj.obj.stat;
+						fs->cdc_ofs = dj.blk_ofs;
+					} else
+#endif
+					{
+						fs->cdir = ld_clust(fs, dj.dir);					/* Sub-directory cluster */
+					}
+				} else {
+					res = FR_NO_PATH;		/* Reached but a file */
+				}
+			}
+		}
+		FREE_NAMBUF();
+		if (res == FR_NO_FILE) res = FR_NO_PATH;
+#if FF_STR_VOLUME_ID == 2	/* Also current drive is changed if in Unix style volume ID */
+		if (res == FR_OK) {
+			for (i = FF_VOLUMES - 1; i && fs != FatFs[i]; i--) ;	/* Set current drive */
+			CurrVol = (BYTE)i;
+		}
+#endif
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+#if FF_FS_RPATH >= 2
+FRESULT f_getcwd (
+	TCHAR* buff,	/* Pointer to the directory path */
+	UINT len		/* Size of buff in unit of TCHAR */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	UINT i, n;
+	DWORD ccl;
+	TCHAR *tp = buff;
+#if FF_VOLUMES >= 2
+	UINT vl;
+#if FF_STR_VOLUME_ID
+	const char *vp;
+#endif
+#endif
+	FILINFO fno;
+	DEF_NAMBUF
+
+
+	/* Get logical drive */
+	buff[0] = 0;	/* Set null string to get current volume */
+	res = mount_volume((const TCHAR**)&buff, &fs, 0);	/* Get current volume */
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+
+		/* Follow parent directories and create the path */
+		i = len;			/* Bottom of buffer (directory stack base) */
+		if (!FF_FS_EXFAT || fs->fs_type != FS_EXFAT) {	/* (Cannot do getcwd on exFAT and returns root path) */
+			dj.obj.sclust = fs->cdir;				/* Start to follow upper directory from current directory */
+			while ((ccl = dj.obj.sclust) != 0) {	/* Repeat while current directory is a sub-directory */
+				res = dir_sdi(&dj, 1 * SZDIRE);	/* Get parent directory */
+				if (res != FR_OK) break;
+				res = move_window(fs, dj.sect);
+				if (res != FR_OK) break;
+				dj.obj.sclust = ld_clust(fs, dj.dir);	/* Goto parent directory */
+				res = dir_sdi(&dj, 0);
+				if (res != FR_OK) break;
+				do {							/* Find the entry links to the child directory */
+					res = DIR_READ_FILE(&dj);
+					if (res != FR_OK) break;
+					if (ccl == ld_clust(fs, dj.dir)) break;	/* Found the entry */
+					res = dir_next(&dj, 0);
+				} while (res == FR_OK);
+				if (res == FR_NO_FILE) res = FR_INT_ERR;/* It cannot be 'not found'. */
+				if (res != FR_OK) break;
+				get_fileinfo(&dj, &fno);		/* Get the directory name and push it to the buffer */
+				for (n = 0; fno.fname[n]; n++) ;	/* Name length */
+				if (i < n + 1) {	/* Insufficient space to store the path name? */
+					res = FR_NOT_ENOUGH_CORE; break;
+				}
+				while (n) buff[--i] = fno.fname[--n];	/* Stack the name */
+				buff[--i] = '/';
+			}
+		}
+		if (res == FR_OK) {
+			if (i == len) buff[--i] = '/';	/* Is it the root-directory? */
+#if FF_VOLUMES >= 2			/* Put drive prefix */
+			vl = 0;
+#if 
