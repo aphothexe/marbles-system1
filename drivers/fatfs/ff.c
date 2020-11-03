@@ -4048,4 +4048,139 @@ FRESULT f_write (
 		if (wcnt > btw) wcnt = btw;					/* Clip it by btw if needed */
 #if FF_FS_TINY
 		if (move_window(fs, fp->sect) != FR_OK) ABORT(fs, FR_DISK_ERR);	/* Move sector window */
-		memcpy(fs->win + fp->fptr % SS(fs), wbuff, 
+		memcpy(fs->win + fp->fptr % SS(fs), wbuff, wcnt);	/* Fit data to the sector */
+		fs->wflag = 1;
+#else
+		memcpy(fp->buf + fp->fptr % SS(fs), wbuff, wcnt);	/* Fit data to the sector */
+		fp->flag |= FA_DIRTY;
+#endif
+	}
+
+	fp->flag |= FA_MODIFIED;				/* Set file change flag */
+
+	LEAVE_FF(fs, FR_OK);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Synchronize the File                                                  */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_sync (
+	FIL* fp		/* Open file to be synced */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD tm;
+	BYTE *dir;
+
+
+	res = validate(&fp->obj, &fs);	/* Check validity of the file object */
+	if (res == FR_OK) {
+		if (fp->flag & FA_MODIFIED) {	/* Is there any change to the file? */
+#if !FF_FS_TINY
+			if (fp->flag & FA_DIRTY) {	/* Write-back cached data if needed */
+				if (disk_write(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) LEAVE_FF(fs, FR_DISK_ERR);
+				fp->flag &= (BYTE)~FA_DIRTY;
+			}
+#endif
+			/* Update the directory entry */
+			tm = GET_FATTIME();				/* Modified time */
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				res = fill_first_frag(&fp->obj);	/* Fill first fragment on the FAT if needed */
+				if (res == FR_OK) {
+					res = fill_last_frag(&fp->obj, fp->clust, 0xFFFFFFFF);	/* Fill last fragment on the FAT if needed */
+				}
+				if (res == FR_OK) {
+					DIR dj;
+					DEF_NAMBUF
+
+					INIT_NAMBUF(fs);
+					res = load_obj_xdir(&dj, &fp->obj);	/* Load directory entry block */
+					if (res == FR_OK) {
+						fs->dirbuf[XDIR_Attr] |= AM_ARC;				/* Set archive attribute to indicate that the file has been changed */
+						fs->dirbuf[XDIR_GenFlags] = fp->obj.stat | 1;	/* Update file allocation information */
+						st_dword(fs->dirbuf + XDIR_FstClus, fp->obj.sclust);		/* Update start cluster */
+						st_qword(fs->dirbuf + XDIR_FileSize, fp->obj.objsize);		/* Update file size */
+						st_qword(fs->dirbuf + XDIR_ValidFileSize, fp->obj.objsize);	/* (FatFs does not support Valid File Size feature) */
+						st_dword(fs->dirbuf + XDIR_ModTime, tm);		/* Update modified time */
+						fs->dirbuf[XDIR_ModTime10] = 0;
+						st_dword(fs->dirbuf + XDIR_AccTime, 0);
+						res = store_xdir(&dj);	/* Restore it to the directory */
+						if (res == FR_OK) {
+							res = sync_fs(fs);
+							fp->flag &= (BYTE)~FA_MODIFIED;
+						}
+					}
+					FREE_NAMBUF();
+				}
+			} else
+#endif
+			{
+				res = move_window(fs, fp->dir_sect);
+				if (res == FR_OK) {
+					dir = fp->dir_ptr;
+					dir[DIR_Attr] |= AM_ARC;						/* Set archive attribute to indicate that the file has been changed */
+					st_clust(fp->obj.fs, dir, fp->obj.sclust);		/* Update file allocation information  */
+					st_dword(dir + DIR_FileSize, (DWORD)fp->obj.objsize);	/* Update file size */
+					st_dword(dir + DIR_ModTime, tm);				/* Update modified time */
+					st_word(dir + DIR_LstAccDate, 0);
+					fs->wflag = 1;
+					res = sync_fs(fs);					/* Restore it to the directory */
+					fp->flag &= (BYTE)~FA_MODIFIED;
+				}
+			}
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+#endif /* !FF_FS_READONLY */
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Close File                                                            */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_close (
+	FIL* fp		/* Open file to be closed */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+
+#if !FF_FS_READONLY
+	res = f_sync(fp);					/* Flush cached data */
+	if (res == FR_OK)
+#endif
+	{
+		res = validate(&fp->obj, &fs);	/* Lock volume */
+		if (res == FR_OK) {
+#if FF_FS_LOCK != 0
+			res = dec_lock(fp->obj.lockid);		/* Decrement file open counter */
+			if (res == FR_OK) fp->obj.fs = 0;	/* Invalidate file object */
+#else
+			fp->obj.fs = 0;	/* Invalidate file object */
+#endif
+#if FF_FS_REENTRANT
+			unlock_fs(fs, FR_OK);		/* Unlock volume */
+#endif
+		}
+	}
+	return res;
+}
+
+
+
+
+#if FF_FS_RPATH >= 1
+/*-----------------------------------------------------------------------*/
+/* Change Current Directory or Current Drive, Get Current Directory      */
+/*------------------
