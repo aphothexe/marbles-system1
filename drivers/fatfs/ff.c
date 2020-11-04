@@ -4582,4 +4582,147 @@ FRESULT f_opendir (
 		FREE_NAMBUF();
 		if (res == FR_NO_FILE) res = FR_NO_PATH;
 	}
-	if (res != FR_OK) dp->obj.fs = 0;		
+	if (res != FR_OK) dp->obj.fs = 0;		/* Invalidate the directory object if function faild */
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Close Directory                                                       */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_closedir (
+	DIR *dp		/* Pointer to the directory object to be closed */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+
+
+	res = validate(&dp->obj, &fs);	/* Check validity of the file object */
+	if (res == FR_OK) {
+#if FF_FS_LOCK != 0
+		if (dp->obj.lockid) res = dec_lock(dp->obj.lockid);	/* Decrement sub-directory open counter */
+		if (res == FR_OK) dp->obj.fs = 0;	/* Invalidate directory object */
+#else
+		dp->obj.fs = 0;	/* Invalidate directory object */
+#endif
+#if FF_FS_REENTRANT
+		unlock_fs(fs, FR_OK);		/* Unlock volume */
+#endif
+	}
+	return res;
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Read Directory Entries in Sequence                                    */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_readdir (
+	DIR* dp,			/* Pointer to the open directory object */
+	FILINFO* fno		/* Pointer to file information to return */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DEF_NAMBUF
+
+
+	res = validate(&dp->obj, &fs);	/* Check validity of the directory object */
+	if (res == FR_OK) {
+		if (!fno) {
+			res = dir_sdi(dp, 0);			/* Rewind the directory object */
+		} else {
+			INIT_NAMBUF(fs);
+			res = DIR_READ_FILE(dp);		/* Read an item */
+			if (res == FR_NO_FILE) res = FR_OK;	/* Ignore end of directory */
+			if (res == FR_OK) {				/* A valid entry is found */
+				get_fileinfo(dp, fno);		/* Get the object information */
+				res = dir_next(dp, 0);		/* Increment index for next */
+				if (res == FR_NO_FILE) res = FR_OK;	/* Ignore end of directory now */
+			}
+			FREE_NAMBUF();
+		}
+	}
+	LEAVE_FF(fs, res);
+}
+
+
+
+#if FF_USE_FIND
+/*-----------------------------------------------------------------------*/
+/* Find Next File                                                        */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_findnext (
+	DIR* dp,		/* Pointer to the open directory object */
+	FILINFO* fno	/* Pointer to the file information structure */
+)
+{
+	FRESULT res;
+
+
+	for (;;) {
+		res = f_readdir(dp, fno);		/* Get a directory item */
+		if (res != FR_OK || !fno || !fno->fname[0]) break;	/* Terminate if any error or end of directory */
+		if (pattern_match(dp->pat, fno->fname, 0, FIND_RECURS)) break;		/* Test for the file name */
+#if FF_USE_LFN && FF_USE_FIND == 2
+		if (pattern_match(dp->pat, fno->altname, 0, FIND_RECURS)) break;	/* Test for alternative name if exist */
+#endif
+	}
+	return res;
+}
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Find First File                                                       */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_findfirst (
+	DIR* dp,				/* Pointer to the blank directory object */
+	FILINFO* fno,			/* Pointer to the file information structure */
+	const TCHAR* path,		/* Pointer to the directory to open */
+	const TCHAR* pattern	/* Pointer to the matching pattern */
+)
+{
+	FRESULT res;
+
+
+	dp->pat = pattern;		/* Save pointer to pattern string */
+	res = f_opendir(dp, path);		/* Open the target directory */
+	if (res == FR_OK) {
+		res = f_findnext(dp, fno);	/* Find the first item */
+	}
+	return res;
+}
+
+#endif	/* FF_USE_FIND */
+
+
+
+#if FF_FS_MINIMIZE == 0
+/*-----------------------------------------------------------------------*/
+/* Get File Status                                                       */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_stat (
+	const TCHAR* path,	/* Pointer to the file path */
+	FILINFO* fno		/* Pointer to file information to return */
+)
+{
+	FRESULT res;
+	DIR dj;
+	DEF_NAMBUF
+
+
+	/* Get logical drive */
+	res = mount_volume(&path, &dj.obj.fs, 0);
+	if (res == FR_OK) {
+		INI
