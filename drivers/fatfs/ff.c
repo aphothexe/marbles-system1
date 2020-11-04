@@ -4325,4 +4325,134 @@ FRESULT f_getcwd (
 			if (i == len) buff[--i] = '/';	/* Is it the root-directory? */
 #if FF_VOLUMES >= 2			/* Put drive prefix */
 			vl = 0;
-#if 
+#if FF_STR_VOLUME_ID >= 1	/* String volume ID */
+			for (n = 0, vp = (const char*)VolumeStr[CurrVol]; vp[n]; n++) ;
+			if (i >= n + 2) {
+				if (FF_STR_VOLUME_ID == 2) *tp++ = (TCHAR)'/';
+				for (vl = 0; vl < n; *tp++ = (TCHAR)vp[vl], vl++) ;
+				if (FF_STR_VOLUME_ID == 1) *tp++ = (TCHAR)':';
+				vl++;
+			}
+#else						/* Numeric volume ID */
+			if (i >= 3) {
+				*tp++ = (TCHAR)'0' + CurrVol;
+				*tp++ = (TCHAR)':';
+				vl = 2;
+			}
+#endif
+			if (vl == 0) res = FR_NOT_ENOUGH_CORE;
+#endif
+			/* Add current directory path */
+			if (res == FR_OK) {
+				do *tp++ = buff[i++]; while (i < len);	/* Copy stacked path string */
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	*tp = 0;
+	LEAVE_FF(fs, res);
+}
+
+#endif /* FF_FS_RPATH >= 2 */
+#endif /* FF_FS_RPATH >= 1 */
+
+
+
+#if FF_FS_MINIMIZE <= 2
+/*-----------------------------------------------------------------------*/
+/* Seek File Read/Write Pointer                                          */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_lseek (
+	FIL* fp,		/* Pointer to the file object */
+	FSIZE_t ofs		/* File pointer from top of file */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD clst, bcs;
+	LBA_t nsect;
+	FSIZE_t ifptr;
+#if FF_USE_FASTSEEK
+	DWORD cl, pcl, ncl, tcl, tlen, ulen;
+	DWORD *tbl;
+	LBA_t dsc;
+#endif
+
+	res = validate(&fp->obj, &fs);		/* Check validity of the file object */
+	if (res == FR_OK) res = (FRESULT)fp->err;
+#if FF_FS_EXFAT && !FF_FS_READONLY
+	if (res == FR_OK && fs->fs_type == FS_EXFAT) {
+		res = fill_last_frag(&fp->obj, fp->clust, 0xFFFFFFFF);	/* Fill last fragment on the FAT if needed */
+	}
+#endif
+	if (res != FR_OK) LEAVE_FF(fs, res);
+
+#if FF_USE_FASTSEEK
+	if (fp->cltbl) {	/* Fast seek */
+		if (ofs == CREATE_LINKMAP) {	/* Create CLMT */
+			tbl = fp->cltbl;
+			tlen = *tbl++; ulen = 2;	/* Given table size and required table size */
+			cl = fp->obj.sclust;		/* Origin of the chain */
+			if (cl != 0) {
+				do {
+					/* Get a fragment */
+					tcl = cl; ncl = 0; ulen += 2;	/* Top, length and used items */
+					do {
+						pcl = cl; ncl++;
+						cl = get_fat(&fp->obj, cl);
+						if (cl <= 1) ABORT(fs, FR_INT_ERR);
+						if (cl == 0xFFFFFFFF) ABORT(fs, FR_DISK_ERR);
+					} while (cl == pcl + 1);
+					if (ulen <= tlen) {		/* Store the length and top of the fragment */
+						*tbl++ = ncl; *tbl++ = tcl;
+					}
+				} while (cl < fs->n_fatent);	/* Repeat until end of chain */
+			}
+			*fp->cltbl = ulen;	/* Number of items used */
+			if (ulen <= tlen) {
+				*tbl = 0;		/* Terminate table */
+			} else {
+				res = FR_NOT_ENOUGH_CORE;	/* Given table size is smaller than required */
+			}
+		} else {						/* Fast seek */
+			if (ofs > fp->obj.objsize) ofs = fp->obj.objsize;	/* Clip offset at the file size */
+			fp->fptr = ofs;				/* Set file pointer */
+			if (ofs > 0) {
+				fp->clust = clmt_clust(fp, ofs - 1);
+				dsc = clst2sect(fs, fp->clust);
+				if (dsc == 0) ABORT(fs, FR_INT_ERR);
+				dsc += (DWORD)((ofs - 1) / SS(fs)) & (fs->csize - 1);
+				if (fp->fptr % SS(fs) && dsc != fp->sect) {	/* Refill sector cache if needed */
+#if !FF_FS_TINY
+#if !FF_FS_READONLY
+					if (fp->flag & FA_DIRTY) {		/* Write-back dirty sector cache */
+						if (disk_write(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);
+						fp->flag &= (BYTE)~FA_DIRTY;
+					}
+#endif
+					if (disk_read(fs->pdrv, fp->buf, dsc, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);	/* Load current sector */
+#endif
+					fp->sect = dsc;
+				}
+			}
+		}
+	} else
+#endif
+
+	/* Normal Seek */
+	{
+#if FF_FS_EXFAT
+		if (fs->fs_type != FS_EXFAT && ofs >= 0x100000000) ofs = 0xFFFFFFFF;	/* Clip at 4 GiB - 1 if at FATxx */
+#endif
+		if (ofs > fp->obj.objsize && (FF_FS_READONLY || !(fp->flag & FA_WRITE))) {	/* In read-only mode, clip offset with the file size */
+			ofs = fp->obj.objsize;
+		}
+		ifptr = fp->fptr;
+		fp->fptr = nsect = 0;
+		if (ofs > 0) {
+			bcs = (DWORD)fs->csize * SS(fs);	/* Cluster size (byte) */
+			if (ifptr > 0 &&
+				(ofs - 1) / bcs >= (ifptr - 1) / bcs) {	/* When seek to same or following cluster, */
+				fp->fptr = (ifptr - 1) & ~(FSIZE_t)(bcs - 1);	/* star
