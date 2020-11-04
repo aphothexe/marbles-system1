@@ -4725,4 +4725,137 @@ FRESULT f_stat (
 	/* Get logical drive */
 	res = mount_volume(&path, &dj.obj.fs, 0);
 	if (res == FR_OK) {
-		INI
+		INIT_NAMBUF(dj.obj.fs);
+		res = follow_path(&dj, path);	/* Follow the file path */
+		if (res == FR_OK) {				/* Follow completed */
+			if (dj.fn[NSFLAG] & NS_NONAME) {	/* It is origin directory */
+				res = FR_INVALID_NAME;
+			} else {							/* Found an object */
+				if (fno) get_fileinfo(&dj, fno);
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(dj.obj.fs, res);
+}
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Get Number of Free Clusters                                           */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_getfree (
+	const TCHAR* path,	/* Logical drive number */
+	DWORD* nclst,		/* Pointer to a variable to return number of free clusters */
+	FATFS** fatfs		/* Pointer to return pointer to corresponding filesystem object */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD nfree, clst, stat;
+	LBA_t sect;
+	UINT i;
+	FFOBJID obj;
+
+
+	/* Get logical drive */
+	res = mount_volume(&path, &fs, 0);
+	if (res == FR_OK) {
+		*fatfs = fs;				/* Return ptr to the fs object */
+		/* If free_clst is valid, return it without full FAT scan */
+		if (fs->free_clst <= fs->n_fatent - 2) {
+			*nclst = fs->free_clst;
+		} else {
+			/* Scan FAT to obtain number of free clusters */
+			nfree = 0;
+			if (fs->fs_type == FS_FAT12) {	/* FAT12: Scan bit field FAT entries */
+				clst = 2; obj.fs = fs;
+				do {
+					stat = get_fat(&obj, clst);
+					if (stat == 0xFFFFFFFF) { res = FR_DISK_ERR; break; }
+					if (stat == 1) { res = FR_INT_ERR; break; }
+					if (stat == 0) nfree++;
+				} while (++clst < fs->n_fatent);
+			} else {
+#if FF_FS_EXFAT
+				if (fs->fs_type == FS_EXFAT) {	/* exFAT: Scan allocation bitmap */
+					BYTE bm;
+					UINT b;
+
+					clst = fs->n_fatent - 2;	/* Number of clusters */
+					sect = fs->bitbase;			/* Bitmap sector */
+					i = 0;						/* Offset in the sector */
+					do {	/* Counts numbuer of bits with zero in the bitmap */
+						if (i == 0) {
+							res = move_window(fs, sect++);
+							if (res != FR_OK) break;
+						}
+						for (b = 8, bm = fs->win[i]; b && clst; b--, clst--) {
+							if (!(bm & 1)) nfree++;
+							bm >>= 1;
+						}
+						i = (i + 1) % SS(fs);
+					} while (clst);
+				} else
+#endif
+				{	/* FAT16/32: Scan WORD/DWORD FAT entries */
+					clst = fs->n_fatent;	/* Number of entries */
+					sect = fs->fatbase;		/* Top of the FAT */
+					i = 0;					/* Offset in the sector */
+					do {	/* Counts numbuer of entries with zero in the FAT */
+						if (i == 0) {
+							res = move_window(fs, sect++);
+							if (res != FR_OK) break;
+						}
+						if (fs->fs_type == FS_FAT16) {
+							if (ld_word(fs->win + i) == 0) nfree++;
+							i += 2;
+						} else {
+							if ((ld_dword(fs->win + i) & 0x0FFFFFFF) == 0) nfree++;
+							i += 4;
+						}
+						i %= SS(fs);
+					} while (--clst);
+				}
+			}
+			if (res == FR_OK) {		/* Update parameters if succeeded */
+				*nclst = nfree;			/* Return the free clusters */
+				fs->free_clst = nfree;	/* Now free_clst is valid */
+				fs->fsi_flag |= 1;		/* FAT32: FSInfo is to be updated */
+			}
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Truncate File                                                         */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_truncate (
+	FIL* fp		/* Pointer to the file object */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD ncl;
+
+
+	res = validate(&fp->obj, &fs);	/* Check validity of the file object */
+	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) LEAVE_FF(fs, res);
+	if (!(fp->flag & FA_WRITE)) LEAVE_FF(fs, FR_DENIED);	/* Check access mode */
+
+	if (fp->fptr < fp->obj.objsize) {	/* Process when fptr is not on the eof */
+		if (fp->fptr == 0) {	/* When set file size to zero, remove entire cluster chain */
+			res = remove_chain(&fp->obj, fp->obj.sclust, 0);
+			fp->obj.sclust = 0;
+		} else {				/* When truncate a part of the file, remove remaining clusters */
+			ncl = get_fat(&fp->obj, fp->clust);
+			res = FR_O
