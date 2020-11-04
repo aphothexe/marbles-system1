@@ -4455,4 +4455,131 @@ FRESULT f_lseek (
 			bcs = (DWORD)fs->csize * SS(fs);	/* Cluster size (byte) */
 			if (ifptr > 0 &&
 				(ofs - 1) / bcs >= (ifptr - 1) / bcs) {	/* When seek to same or following cluster, */
-				fp->fptr = (ifptr - 1) & ~(FSIZE_t)(bcs - 1);	/* star
+				fp->fptr = (ifptr - 1) & ~(FSIZE_t)(bcs - 1);	/* start from the current cluster */
+				ofs -= fp->fptr;
+				clst = fp->clust;
+			} else {									/* When seek to back cluster, */
+				clst = fp->obj.sclust;					/* start from the first cluster */
+#if !FF_FS_READONLY
+				if (clst == 0) {						/* If no cluster chain, create a new chain */
+					clst = create_chain(&fp->obj, 0);
+					if (clst == 1) ABORT(fs, FR_INT_ERR);
+					if (clst == 0xFFFFFFFF) ABORT(fs, FR_DISK_ERR);
+					fp->obj.sclust = clst;
+				}
+#endif
+				fp->clust = clst;
+			}
+			if (clst != 0) {
+				while (ofs > bcs) {						/* Cluster following loop */
+					ofs -= bcs; fp->fptr += bcs;
+#if !FF_FS_READONLY
+					if (fp->flag & FA_WRITE) {			/* Check if in write mode or not */
+						if (FF_FS_EXFAT && fp->fptr > fp->obj.objsize) {	/* No FAT chain object needs correct objsize to generate FAT value */
+							fp->obj.objsize = fp->fptr;
+							fp->flag |= FA_MODIFIED;
+						}
+						clst = create_chain(&fp->obj, clst);	/* Follow chain with forceed stretch */
+						if (clst == 0) {				/* Clip file size in case of disk full */
+							ofs = 0; break;
+						}
+					} else
+#endif
+					{
+						clst = get_fat(&fp->obj, clst);	/* Follow cluster chain if not in write mode */
+					}
+					if (clst == 0xFFFFFFFF) ABORT(fs, FR_DISK_ERR);
+					if (clst <= 1 || clst >= fs->n_fatent) ABORT(fs, FR_INT_ERR);
+					fp->clust = clst;
+				}
+				fp->fptr += ofs;
+				if (ofs % SS(fs)) {
+					nsect = clst2sect(fs, clst);	/* Current sector */
+					if (nsect == 0) ABORT(fs, FR_INT_ERR);
+					nsect += (DWORD)(ofs / SS(fs));
+				}
+			}
+		}
+		if (!FF_FS_READONLY && fp->fptr > fp->obj.objsize) {	/* Set file change flag if the file size is extended */
+			fp->obj.objsize = fp->fptr;
+			fp->flag |= FA_MODIFIED;
+		}
+		if (fp->fptr % SS(fs) && nsect != fp->sect) {	/* Fill sector cache if needed */
+#if !FF_FS_TINY
+#if !FF_FS_READONLY
+			if (fp->flag & FA_DIRTY) {			/* Write-back dirty sector cache */
+				if (disk_write(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);
+				fp->flag &= (BYTE)~FA_DIRTY;
+			}
+#endif
+			if (disk_read(fs->pdrv, fp->buf, nsect, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);	/* Fill sector cache */
+#endif
+			fp->sect = nsect;
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+#if FF_FS_MINIMIZE <= 1
+/*-----------------------------------------------------------------------*/
+/* Create a Directory Object                                             */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_opendir (
+	DIR* dp,			/* Pointer to directory object to create */
+	const TCHAR* path	/* Pointer to the directory path */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DEF_NAMBUF
+
+
+	if (!dp) return FR_INVALID_OBJECT;
+
+	/* Get logical drive */
+	res = mount_volume(&path, &fs, 0);
+	if (res == FR_OK) {
+		dp->obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(dp, path);			/* Follow the path to the directory */
+		if (res == FR_OK) {						/* Follow completed */
+			if (!(dp->fn[NSFLAG] & NS_NONAME)) {	/* It is not the origin directory itself */
+				if (dp->obj.attr & AM_DIR) {		/* This object is a sub-directory */
+#if FF_FS_EXFAT
+					if (fs->fs_type == FS_EXFAT) {
+						dp->obj.c_scl = dp->obj.sclust;							/* Get containing directory inforamation */
+						dp->obj.c_size = ((DWORD)dp->obj.objsize & 0xFFFFFF00) | dp->obj.stat;
+						dp->obj.c_ofs = dp->blk_ofs;
+						init_alloc_info(fs, &dp->obj);	/* Get object allocation info */
+					} else
+#endif
+					{
+						dp->obj.sclust = ld_clust(fs, dp->dir);	/* Get object allocation info */
+					}
+				} else {						/* This object is a file */
+					res = FR_NO_PATH;
+				}
+			}
+			if (res == FR_OK) {
+				dp->obj.id = fs->id;
+				res = dir_sdi(dp, 0);			/* Rewind directory */
+#if FF_FS_LOCK != 0
+				if (res == FR_OK) {
+					if (dp->obj.sclust != 0) {
+						dp->obj.lockid = inc_lock(dp, 0);	/* Lock the sub directory */
+						if (!dp->obj.lockid) res = FR_TOO_MANY_OPEN_FILES;
+					} else {
+						dp->obj.lockid = 0;	/* Root directory need not to be locked */
+					}
+				}
+#endif
+			}
+		}
+		FREE_NAMBUF();
+		if (res == FR_NO_FILE) res = FR_NO_PATH;
+	}
+	if (res != FR_OK) dp->obj.fs = 0;		
