@@ -4858,4 +4858,156 @@ FRESULT f_truncate (
 			fp->obj.sclust = 0;
 		} else {				/* When truncate a part of the file, remove remaining clusters */
 			ncl = get_fat(&fp->obj, fp->clust);
-			res = FR_O
+			res = FR_OK;
+			if (ncl == 0xFFFFFFFF) res = FR_DISK_ERR;
+			if (ncl == 1) res = FR_INT_ERR;
+			if (res == FR_OK && ncl < fs->n_fatent) {
+				res = remove_chain(&fp->obj, ncl, fp->clust);
+			}
+		}
+		fp->obj.objsize = fp->fptr;	/* Set file size to current read/write point */
+		fp->flag |= FA_MODIFIED;
+#if !FF_FS_TINY
+		if (res == FR_OK && (fp->flag & FA_DIRTY)) {
+			if (disk_write(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) {
+				res = FR_DISK_ERR;
+			} else {
+				fp->flag &= (BYTE)~FA_DIRTY;
+			}
+		}
+#endif
+		if (res != FR_OK) ABORT(fs, res);
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Delete a File/Directory                                               */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_unlink (
+	const TCHAR* path		/* Pointer to the file or directory path */
+)
+{
+	FRESULT res;
+	DIR dj, sdj;
+	DWORD dclst = 0;
+	FATFS *fs;
+#if FF_FS_EXFAT
+	FFOBJID obj;
+#endif
+	DEF_NAMBUF
+
+
+	/* Get logical drive */
+	res = mount_volume(&path, &fs, FA_WRITE);
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);		/* Follow the file path */
+		if (FF_FS_RPATH && res == FR_OK && (dj.fn[NSFLAG] & NS_DOT)) {
+			res = FR_INVALID_NAME;			/* Cannot remove dot entry */
+		}
+#if FF_FS_LOCK != 0
+		if (res == FR_OK) res = chk_lock(&dj, 2);	/* Check if it is an open object */
+#endif
+		if (res == FR_OK) {					/* The object is accessible */
+			if (dj.fn[NSFLAG] & NS_NONAME) {
+				res = FR_INVALID_NAME;		/* Cannot remove the origin directory */
+			} else {
+				if (dj.obj.attr & AM_RDO) {
+					res = FR_DENIED;		/* Cannot remove R/O object */
+				}
+			}
+			if (res == FR_OK) {
+#if FF_FS_EXFAT
+				obj.fs = fs;
+				if (fs->fs_type == FS_EXFAT) {
+					init_alloc_info(fs, &obj);
+					dclst = obj.sclust;
+				} else
+#endif
+				{
+					dclst = ld_clust(fs, dj.dir);
+				}
+				if (dj.obj.attr & AM_DIR) {			/* Is it a sub-directory? */
+#if FF_FS_RPATH != 0
+					if (dclst == fs->cdir) {	 	/* Is it the current directory? */
+						res = FR_DENIED;
+					} else
+#endif
+					{
+						sdj.obj.fs = fs;			/* Open the sub-directory */
+						sdj.obj.sclust = dclst;
+#if FF_FS_EXFAT
+						if (fs->fs_type == FS_EXFAT) {
+							sdj.obj.objsize = obj.objsize;
+							sdj.obj.stat = obj.stat;
+						}
+#endif
+						res = dir_sdi(&sdj, 0);
+						if (res == FR_OK) {
+							res = DIR_READ_FILE(&sdj);			/* Test if the directory is empty */
+							if (res == FR_OK) res = FR_DENIED;	/* Not empty? */
+							if (res == FR_NO_FILE) res = FR_OK;	/* Empty? */
+						}
+					}
+				}
+			}
+			if (res == FR_OK) {
+				res = dir_remove(&dj);			/* Remove the directory entry */
+				if (res == FR_OK && dclst != 0) {	/* Remove the cluster chain if exist */
+#if FF_FS_EXFAT
+					res = remove_chain(&obj, dclst, 0);
+#else
+					res = remove_chain(&dj.obj, dclst, 0);
+#endif
+				}
+				if (res == FR_OK) res = sync_fs(fs);
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Create a Directory                                                    */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_mkdir (
+	const TCHAR* path		/* Pointer to the directory path */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FFOBJID sobj;
+	FATFS *fs;
+	DWORD dcl, pcl, tm;
+	DEF_NAMBUF
+
+
+	res = mount_volume(&path, &fs, FA_WRITE);	/* Get logical drive */
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);			/* Follow the file path */
+		if (res == FR_OK) res = FR_EXIST;		/* Name collision? */
+		if (FF_FS_RPATH && res == FR_NO_FILE && (dj.fn[NSFLAG] & NS_DOT)) {	/* Invalid name? */
+			res = FR_INVALID_NAME;
+		}
+		if (res == FR_NO_FILE) {				/* It is clear to create a new directory */
+			sobj.fs = fs;						/* New object id to create a new chain */
+			dcl = create_chain(&sobj, 0);		/* Allocate a cluster for the new directory */
+			res = FR_OK;
+			if (dcl == 0) res = FR_DENIED;		/* No space to allocate a new cluster? */
+			if (dcl == 1) res = FR_INT_ERR;		/* Any insanity? */
+		
