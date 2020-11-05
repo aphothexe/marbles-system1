@@ -5010,4 +5010,108 @@ FRESULT f_mkdir (
 			res = FR_OK;
 			if (dcl == 0) res = FR_DENIED;		/* No space to allocate a new cluster? */
 			if (dcl == 1) res = FR_INT_ERR;		/* Any insanity? */
-		
+			if (dcl == 0xFFFFFFFF) res = FR_DISK_ERR;	/* Disk error? */
+			tm = GET_FATTIME();
+			if (res == FR_OK) {
+				res = dir_clear(fs, dcl);		/* Clean up the new table */
+				if (res == FR_OK) {
+					if (!FF_FS_EXFAT || fs->fs_type != FS_EXFAT) {	/* Create dot entries (FAT only) */
+						memset(fs->win + DIR_Name, ' ', 11);	/* Create "." entry */
+						fs->win[DIR_Name] = '.';
+						fs->win[DIR_Attr] = AM_DIR;
+						st_dword(fs->win + DIR_ModTime, tm);
+						st_clust(fs, fs->win, dcl);
+						memcpy(fs->win + SZDIRE, fs->win, SZDIRE);	/* Create ".." entry */
+						fs->win[SZDIRE + 1] = '.'; pcl = dj.obj.sclust;
+						st_clust(fs, fs->win + SZDIRE, pcl);
+						fs->wflag = 1;
+					}
+					res = dir_register(&dj);	/* Register the object to the parent directoy */
+				}
+			}
+			if (res == FR_OK) {
+#if FF_FS_EXFAT
+				if (fs->fs_type == FS_EXFAT) {	/* Initialize directory entry block */
+					st_dword(fs->dirbuf + XDIR_ModTime, tm);	/* Created time */
+					st_dword(fs->dirbuf + XDIR_FstClus, dcl);	/* Table start cluster */
+					st_dword(fs->dirbuf + XDIR_FileSize, (DWORD)fs->csize * SS(fs));	/* Directory size needs to be valid */
+					st_dword(fs->dirbuf + XDIR_ValidFileSize, (DWORD)fs->csize * SS(fs));
+					fs->dirbuf[XDIR_GenFlags] = 3;				/* Initialize the object flag */
+					fs->dirbuf[XDIR_Attr] = AM_DIR;				/* Attribute */
+					res = store_xdir(&dj);
+				} else
+#endif
+				{
+					st_dword(dj.dir + DIR_ModTime, tm);	/* Created time */
+					st_clust(fs, dj.dir, dcl);			/* Table start cluster */
+					dj.dir[DIR_Attr] = AM_DIR;			/* Attribute */
+					fs->wflag = 1;
+				}
+				if (res == FR_OK) {
+					res = sync_fs(fs);
+				}
+			} else {
+				remove_chain(&sobj, dcl, 0);		/* Could not register, remove the allocated cluster */
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Rename a File/Directory                                               */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_rename (
+	const TCHAR* path_old,	/* Pointer to the object name to be renamed */
+	const TCHAR* path_new	/* Pointer to the new name */
+)
+{
+	FRESULT res;
+	DIR djo, djn;
+	FATFS *fs;
+	BYTE buf[FF_FS_EXFAT ? SZDIRE * 2 : SZDIRE], *dir;
+	LBA_t sect;
+	DEF_NAMBUF
+
+
+	get_ldnumber(&path_new);						/* Snip the drive number of new name off */
+	res = mount_volume(&path_old, &fs, FA_WRITE);	/* Get logical drive of the old object */
+	if (res == FR_OK) {
+		djo.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&djo, path_old);			/* Check old object */
+		if (res == FR_OK && (djo.fn[NSFLAG] & (NS_DOT | NS_NONAME))) res = FR_INVALID_NAME;	/* Check validity of name */
+#if FF_FS_LOCK != 0
+		if (res == FR_OK) {
+			res = chk_lock(&djo, 2);
+		}
+#endif
+		if (res == FR_OK) {					/* Object to be renamed is found */
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {	/* At exFAT volume */
+				BYTE nf, nn;
+				WORD nh;
+
+				memcpy(buf, fs->dirbuf, SZDIRE * 2);	/* Save 85+C0 entry of old object */
+				memcpy(&djn, &djo, sizeof djo);
+				res = follow_path(&djn, path_new);		/* Make sure if new object name is not in use */
+				if (res == FR_OK) {						/* Is new name already in use by any other object? */
+					res = (djn.obj.sclust == djo.obj.sclust && djn.dptr == djo.dptr) ? FR_NO_FILE : FR_EXIST;
+				}
+				if (res == FR_NO_FILE) { 				/* It is a valid path and no name collision */
+					res = dir_register(&djn);			/* Register the new entry */
+					if (res == FR_OK) {
+						nf = fs->dirbuf[XDIR_NumSec]; nn = fs->dirbuf[XDIR_NumName];
+						nh = ld_word(fs->dirbuf + XDIR_NameHash);
+						memcpy(fs->dirbuf, buf, SZDIRE * 2);	/* Restore 85+C0 entry */
+						fs->dirbuf[XDIR_NumSec] = nf; fs->dirbuf[XDIR_NumName] = nn;
+						st_word(fs->dirbuf + XDIR_NameHash, nh);
+						if (!(fs->dirbuf[XDIR_Attr] & AM_DIR)) fs->dirbuf[XDIR_Attr] |= AM_ARC;	/* Set archive attribute if it is a file */
+/* Start of critical section where an interruption can cause a cross-link */
+	
