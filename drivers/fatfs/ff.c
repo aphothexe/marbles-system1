@@ -5114,4 +5114,134 @@ FRESULT f_rename (
 						st_word(fs->dirbuf + XDIR_NameHash, nh);
 						if (!(fs->dirbuf[XDIR_Attr] & AM_DIR)) fs->dirbuf[XDIR_Attr] |= AM_ARC;	/* Set archive attribute if it is a file */
 /* Start of critical section where an interruption can cause a cross-link */
-	
+						res = store_xdir(&djn);
+					}
+				}
+			} else
+#endif
+			{	/* At FAT/FAT32 volume */
+				memcpy(buf, djo.dir, SZDIRE);			/* Save directory entry of the object */
+				memcpy(&djn, &djo, sizeof (DIR));		/* Duplicate the directory object */
+				res = follow_path(&djn, path_new);		/* Make sure if new object name is not in use */
+				if (res == FR_OK) {						/* Is new name already in use by any other object? */
+					res = (djn.obj.sclust == djo.obj.sclust && djn.dptr == djo.dptr) ? FR_NO_FILE : FR_EXIST;
+				}
+				if (res == FR_NO_FILE) { 				/* It is a valid path and no name collision */
+					res = dir_register(&djn);			/* Register the new entry */
+					if (res == FR_OK) {
+						dir = djn.dir;					/* Copy directory entry of the object except name */
+						memcpy(dir + 13, buf + 13, SZDIRE - 13);
+						dir[DIR_Attr] = buf[DIR_Attr];
+						if (!(dir[DIR_Attr] & AM_DIR)) dir[DIR_Attr] |= AM_ARC;	/* Set archive attribute if it is a file */
+						fs->wflag = 1;
+						if ((dir[DIR_Attr] & AM_DIR) && djo.obj.sclust != djn.obj.sclust) {	/* Update .. entry in the sub-directory if needed */
+							sect = clst2sect(fs, ld_clust(fs, dir));
+							if (sect == 0) {
+								res = FR_INT_ERR;
+							} else {
+/* Start of critical section where an interruption can cause a cross-link */
+								res = move_window(fs, sect);
+								dir = fs->win + SZDIRE * 1;	/* Ptr to .. entry */
+								if (res == FR_OK && dir[1] == '.') {
+									st_clust(fs, dir, djn.obj.sclust);
+									fs->wflag = 1;
+								}
+							}
+						}
+					}
+				}
+			}
+			if (res == FR_OK) {
+				res = dir_remove(&djo);		/* Remove old entry */
+				if (res == FR_OK) {
+					res = sync_fs(fs);
+				}
+			}
+/* End of the critical section */
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+#endif /* !FF_FS_READONLY */
+#endif /* FF_FS_MINIMIZE == 0 */
+#endif /* FF_FS_MINIMIZE <= 1 */
+#endif /* FF_FS_MINIMIZE <= 2 */
+
+
+
+#if FF_USE_CHMOD && !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Change Attribute                                                      */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_chmod (
+	const TCHAR* path,	/* Pointer to the file path */
+	BYTE attr,			/* Attribute bits */
+	BYTE mask			/* Attribute mask to change */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	DEF_NAMBUF
+
+
+	res = mount_volume(&path, &fs, FA_WRITE);	/* Get logical drive */
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);	/* Follow the file path */
+		if (res == FR_OK && (dj.fn[NSFLAG] & (NS_DOT | NS_NONAME))) res = FR_INVALID_NAME;	/* Check object validity */
+		if (res == FR_OK) {
+			mask &= AM_RDO|AM_HID|AM_SYS|AM_ARC;	/* Valid attribute mask */
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				fs->dirbuf[XDIR_Attr] = (attr & mask) | (fs->dirbuf[XDIR_Attr] & (BYTE)~mask);	/* Apply attribute change */
+				res = store_xdir(&dj);
+			} else
+#endif
+			{
+				dj.dir[DIR_Attr] = (attr & mask) | (dj.dir[DIR_Attr] & (BYTE)~mask);	/* Apply attribute change */
+				fs->wflag = 1;
+			}
+			if (res == FR_OK) {
+				res = sync_fs(fs);
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Change Timestamp                                                      */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_utime (
+	const TCHAR* path,	/* Pointer to the file/directory name */
+	const FILINFO* fno	/* Pointer to the timestamp to be set */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	DEF_NAMBUF
+
+
+	res = mount_volume(&path, &fs, FA_WRITE);	/* Get logical drive */
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMBUF(fs);
+		res = follow_path(&dj, path);	/* Follow the file path */
+		if (res == FR_OK && (dj.fn[NSFLAG] & (NS_DOT | NS_NONAME))) res = FR_INVALID_NAME;	/* Check object validity */
+		if (res == FR_OK) {
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				st_dword(fs->dirbuf + XDIR_ModTime, (DWORD)fno->fdate << 
