@@ -5244,4 +5244,157 @@ FRESULT f_utime (
 		if (res == FR_OK) {
 #if FF_FS_EXFAT
 			if (fs->fs_type == FS_EXFAT) {
-				st_dword(fs->dirbuf + XDIR_ModTime, (DWORD)fno->fdate << 
+				st_dword(fs->dirbuf + XDIR_ModTime, (DWORD)fno->fdate << 16 | fno->ftime);
+				res = store_xdir(&dj);
+			} else
+#endif
+			{
+				st_dword(dj.dir + DIR_ModTime, (DWORD)fno->fdate << 16 | fno->ftime);
+				fs->wflag = 1;
+			}
+			if (res == FR_OK) {
+				res = sync_fs(fs);
+			}
+		}
+		FREE_NAMBUF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+#endif	/* FF_USE_CHMOD && !FF_FS_READONLY */
+
+
+
+#if FF_USE_LABEL
+/*-----------------------------------------------------------------------*/
+/* Get Volume Label                                                      */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_getlabel (
+	const TCHAR* path,	/* Logical drive number */
+	TCHAR* label,		/* Buffer to store the volume label */
+	DWORD* vsn			/* Variable to store the volume serial number */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	UINT si, di;
+	WCHAR wc;
+
+	/* Get logical drive */
+	res = mount_volume(&path, &fs, 0);
+
+	/* Get volume label */
+	if (res == FR_OK && label) {
+		dj.obj.fs = fs; dj.obj.sclust = 0;	/* Open root directory */
+		res = dir_sdi(&dj, 0);
+		if (res == FR_OK) {
+		 	res = DIR_READ_LABEL(&dj);		/* Find a volume label entry */
+		 	if (res == FR_OK) {
+#if FF_FS_EXFAT
+				if (fs->fs_type == FS_EXFAT) {
+					WCHAR hs;
+					UINT nw;
+
+					for (si = di = hs = 0; si < dj.dir[XDIR_NumLabel]; si++) {	/* Extract volume label from 83 entry */
+						wc = ld_word(dj.dir + XDIR_Label + si * 2);
+						if (hs == 0 && IsSurrogate(wc)) {	/* Is the code a surrogate? */
+							hs = wc; continue;
+						}
+						nw = put_utf((DWORD)hs << 16 | wc, &label[di], 4);	/* Store it in API encoding */
+						if (nw == 0) { di = 0; break; }		/* Encode error? */
+						di += nw;
+						hs = 0;
+					}
+					if (hs != 0) di = 0;	/* Broken surrogate pair? */
+					label[di] = 0;
+				} else
+#endif
+				{
+					si = di = 0;		/* Extract volume label from AM_VOL entry */
+					while (si < 11) {
+						wc = dj.dir[si++];
+#if FF_USE_LFN && FF_LFN_UNICODE >= 1 	/* Unicode output */
+						if (dbc_1st((BYTE)wc) && si < 11) wc = wc << 8 | dj.dir[si++];	/* Is it a DBC? */
+						wc = ff_oem2uni(wc, CODEPAGE);		/* Convert it into Unicode */
+						if (wc == 0) { di = 0; break; }		/* Invalid char in current code page? */
+						di += put_utf(wc, &label[di], 4);	/* Store it in Unicode */
+#else									/* ANSI/OEM output */
+						label[di++] = (TCHAR)wc;
+#endif
+					}
+					do {				/* Truncate trailing spaces */
+						label[di] = 0;
+						if (di == 0) break;
+					} while (label[--di] == ' ');
+				}
+			}
+		}
+		if (res == FR_NO_FILE) {	/* No label entry and return nul string */
+			label[0] = 0;
+			res = FR_OK;
+		}
+	}
+
+	/* Get volume serial number */
+	if (res == FR_OK && vsn) {
+		res = move_window(fs, fs->volbase);
+		if (res == FR_OK) {
+			switch (fs->fs_type) {
+			case FS_EXFAT:
+				di = BPB_VolIDEx;
+				break;
+
+			case FS_FAT32:
+				di = BS_VolID32;
+				break;
+
+			default:
+				di = BS_VolID;
+			}
+			*vsn = ld_dword(fs->win + di);
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+
+
+#if !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Set Volume Label                                                      */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_setlabel (
+	const TCHAR* label	/* Volume label to set with heading logical drive number */
+)
+{
+	FRESULT res;
+	DIR dj;
+	FATFS *fs;
+	BYTE dirvn[22];
+	UINT di;
+	WCHAR wc;
+	static const char badchr[18] = "+.,;=[]" "/*:<>|\\\"\?\x7F";	/* [0..16] for FAT, [7..16] for exFAT */
+#if FF_USE_LFN
+	DWORD dc;
+#endif
+
+	/* Get logical drive */
+	res = mount_volume(&label, &fs, FA_WRITE);
+	if (res != FR_OK) LEAVE_FF(fs, res);
+
+#if FF_FS_EXFAT
+	if (fs->fs_type == FS_EXFAT) {	/* On the exFAT volume */
+		memset(dirvn, 0, 22);
+		di = 0;
+		while ((UINT)*label >= ' ') {	/* Create volume label */
+			dc = tchar2uni(&label);	/* Get a Unicode character */
+			if (dc >= 0x10000) {
+				if (dc == 0xFFFFFFFF || di >= 10) {	/* Wrong surrogate or buffer overflow */
+					dc = 0;
+				} else {
+					st_word(
