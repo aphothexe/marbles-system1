@@ -5397,4 +5397,122 @@ FRESULT f_setlabel (
 				if (dc == 0xFFFFFFFF || di >= 10) {	/* Wrong surrogate or buffer overflow */
 					dc = 0;
 				} else {
-					st_word(
+					st_word(dirvn + di * 2, (WCHAR)(dc >> 16)); di++;
+				}
+			}
+			if (dc == 0 || strchr(&badchr[7], (int)dc) || di >= 11) {	/* Check validity of the volume label */
+				LEAVE_FF(fs, FR_INVALID_NAME);
+			}
+			st_word(dirvn + di * 2, (WCHAR)dc); di++;
+		}
+	} else
+#endif
+	{	/* On the FAT/FAT32 volume */
+		memset(dirvn, ' ', 11);
+		di = 0;
+		while ((UINT)*label >= ' ') {	/* Create volume label */
+#if FF_USE_LFN
+			dc = tchar2uni(&label);
+			wc = (dc < 0x10000) ? ff_uni2oem(ff_wtoupper(dc), CODEPAGE) : 0;
+#else									/* ANSI/OEM input */
+			wc = (BYTE)*label++;
+			if (dbc_1st((BYTE)wc)) wc = dbc_2nd((BYTE)*label) ? wc << 8 | (BYTE)*label++ : 0;
+			if (IsLower(wc)) wc -= 0x20;		/* To upper ASCII characters */
+#if FF_CODE_PAGE == 0
+			if (ExCvt && wc >= 0x80) wc = ExCvt[wc - 0x80];	/* To upper extended characters (SBCS cfg) */
+#elif FF_CODE_PAGE < 900
+			if (wc >= 0x80) wc = ExCvt[wc - 0x80];	/* To upper extended characters (SBCS cfg) */
+#endif
+#endif
+			if (wc == 0 || strchr(&badchr[0], (int)wc) || di >= (UINT)((wc >= 0x100) ? 10 : 11)) {	/* Reject invalid characters for volume label */
+				LEAVE_FF(fs, FR_INVALID_NAME);
+			}
+			if (wc >= 0x100) dirvn[di++] = (BYTE)(wc >> 8);
+			dirvn[di++] = (BYTE)wc;
+		}
+		if (dirvn[0] == DDEM) LEAVE_FF(fs, FR_INVALID_NAME);	/* Reject illegal name (heading DDEM) */
+		while (di && dirvn[di - 1] == ' ') di--;				/* Snip trailing spaces */
+	}
+
+	/* Set volume label */
+	dj.obj.fs = fs; dj.obj.sclust = 0;	/* Open root directory */
+	res = dir_sdi(&dj, 0);
+	if (res == FR_OK) {
+		res = DIR_READ_LABEL(&dj);	/* Get volume label entry */
+		if (res == FR_OK) {
+			if (FF_FS_EXFAT && fs->fs_type == FS_EXFAT) {
+				dj.dir[XDIR_NumLabel] = (BYTE)di;	/* Change the volume label */
+				memcpy(dj.dir + XDIR_Label, dirvn, 22);
+			} else {
+				if (di != 0) {
+					memcpy(dj.dir, dirvn, 11);	/* Change the volume label */
+				} else {
+					dj.dir[DIR_Name] = DDEM;	/* Remove the volume label */
+				}
+			}
+			fs->wflag = 1;
+			res = sync_fs(fs);
+		} else {			/* No volume label entry or an error */
+			if (res == FR_NO_FILE) {
+				res = FR_OK;
+				if (di != 0) {	/* Create a volume label entry */
+					res = dir_alloc(&dj, 1);	/* Allocate an entry */
+					if (res == FR_OK) {
+						memset(dj.dir, 0, SZDIRE);	/* Clean the entry */
+						if (FF_FS_EXFAT && fs->fs_type == FS_EXFAT) {
+							dj.dir[XDIR_Type] = ET_VLABEL;	/* Create volume label entry */
+							dj.dir[XDIR_NumLabel] = (BYTE)di;
+							memcpy(dj.dir + XDIR_Label, dirvn, 22);
+						} else {
+							dj.dir[DIR_Attr] = AM_VOL;		/* Create volume label entry */
+							memcpy(dj.dir, dirvn, 11);
+						}
+						fs->wflag = 1;
+						res = sync_fs(fs);
+					}
+				}
+			}
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+#endif /* !FF_FS_READONLY */
+#endif /* FF_USE_LABEL */
+
+
+
+#if FF_USE_EXPAND && !FF_FS_READONLY
+/*-----------------------------------------------------------------------*/
+/* Allocate a Contiguous Blocks to the File                              */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_expand (
+	FIL* fp,		/* Pointer to the file object */
+	FSIZE_t fsz,	/* File size to be expanded to */
+	BYTE opt		/* Operation mode 0:Find and prepare or 1:Find and allocate */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD n, clst, stcl, scl, ncl, tcl, lclst;
+
+
+	res = validate(&fp->obj, &fs);		/* Check validity of the file object */
+	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) LEAVE_FF(fs, res);
+	if (fsz == 0 || fp->obj.objsize != 0 || !(fp->flag & FA_WRITE)) LEAVE_FF(fs, FR_DENIED);
+#if FF_FS_EXFAT
+	if (fs->fs_type != FS_EXFAT && fsz >= 0x100000000) LEAVE_FF(fs, FR_DENIED);	/* Check if in size limit */
+#endif
+	n = (DWORD)fs->csize * SS(fs);	/* Cluster size */
+	tcl = (DWORD)(fsz / n) + ((fsz & (n - 1)) ? 1 : 0);	/* Number of clusters required */
+	stcl = fs->last_clst; lclst = 0;
+	if (stcl < 2 || stcl >= fs->n_fatent) stcl = 2;
+
+#if FF_FS_EXFAT
+	if (fs->fs_type == FS_EXFAT) {
+		scl = find_bitmap(fs, stcl, tcl);			/* Find a contiguous cluster block */
+		if (scl == 0) res = FR_DENIED;				/* No contiguous cluster block was found */
+		if (scl == 0xFFFFFFFF) res = FR_DISK_ERR;
+		if (res == FR_OK) {	/* A contiguous free area is
