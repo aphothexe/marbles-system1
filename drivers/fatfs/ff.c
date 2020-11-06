@@ -5515,4 +5515,119 @@ FRESULT f_expand (
 		scl = find_bitmap(fs, stcl, tcl);			/* Find a contiguous cluster block */
 		if (scl == 0) res = FR_DENIED;				/* No contiguous cluster block was found */
 		if (scl == 0xFFFFFFFF) res = FR_DISK_ERR;
-		if (res == FR_OK) {	/* A contiguous free area is
+		if (res == FR_OK) {	/* A contiguous free area is found */
+			if (opt) {		/* Allocate it now */
+				res = change_bitmap(fs, scl, tcl, 1);	/* Mark the cluster block 'in use' */
+				lclst = scl + tcl - 1;
+			} else {		/* Set it as suggested point for next allocation */
+				lclst = scl - 1;
+			}
+		}
+	} else
+#endif
+	{
+		scl = clst = stcl; ncl = 0;
+		for (;;) {	/* Find a contiguous cluster block */
+			n = get_fat(&fp->obj, clst);
+			if (++clst >= fs->n_fatent) clst = 2;
+			if (n == 1) { res = FR_INT_ERR; break; }
+			if (n == 0xFFFFFFFF) { res = FR_DISK_ERR; break; }
+			if (n == 0) {	/* Is it a free cluster? */
+				if (++ncl == tcl) break;	/* Break if a contiguous cluster block is found */
+			} else {
+				scl = clst; ncl = 0;		/* Not a free cluster */
+			}
+			if (clst == stcl) { res = FR_DENIED; break; }	/* No contiguous cluster? */
+		}
+		if (res == FR_OK) {	/* A contiguous free area is found */
+			if (opt) {		/* Allocate it now */
+				for (clst = scl, n = tcl; n; clst++, n--) {	/* Create a cluster chain on the FAT */
+					res = put_fat(fs, clst, (n == 1) ? 0xFFFFFFFF : clst + 1);
+					if (res != FR_OK) break;
+					lclst = clst;
+				}
+			} else {		/* Set it as suggested point for next allocation */
+				lclst = scl - 1;
+			}
+		}
+	}
+
+	if (res == FR_OK) {
+		fs->last_clst = lclst;		/* Set suggested start cluster to start next */
+		if (opt) {	/* Is it allocated now? */
+			fp->obj.sclust = scl;		/* Update object allocation information */
+			fp->obj.objsize = fsz;
+			if (FF_FS_EXFAT) fp->obj.stat = 2;	/* Set status 'contiguous chain' */
+			fp->flag |= FA_MODIFIED;
+			if (fs->free_clst <= fs->n_fatent - 2) {	/* Update FSINFO */
+				fs->free_clst -= tcl;
+				fs->fsi_flag |= 1;
+			}
+		}
+	}
+
+	LEAVE_FF(fs, res);
+}
+
+#endif /* FF_USE_EXPAND && !FF_FS_READONLY */
+
+
+
+#if FF_USE_FORWARD
+/*-----------------------------------------------------------------------*/
+/* Forward Data to the Stream Directly                                   */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_forward (
+	FIL* fp, 						/* Pointer to the file object */
+	UINT (*func)(const BYTE*,UINT),	/* Pointer to the streaming function */
+	UINT btf,						/* Number of bytes to forward */
+	UINT* bf						/* Pointer to number of bytes forwarded */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DWORD clst;
+	LBA_t sect;
+	FSIZE_t remain;
+	UINT rcnt, csect;
+	BYTE *dbuf;
+
+
+	*bf = 0;	/* Clear transfer byte counter */
+	res = validate(&fp->obj, &fs);		/* Check validity of the file object */
+	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) LEAVE_FF(fs, res);
+	if (!(fp->flag & FA_READ)) LEAVE_FF(fs, FR_DENIED);	/* Check access mode */
+
+	remain = fp->obj.objsize - fp->fptr;
+	if (btf > remain) btf = (UINT)remain;			/* Truncate btf by remaining bytes */
+
+	for ( ; btf > 0 && (*func)(0, 0); fp->fptr += rcnt, *bf += rcnt, btf -= rcnt) {	/* Repeat until all data transferred or stream goes busy */
+		csect = (UINT)(fp->fptr / SS(fs) & (fs->csize - 1));	/* Sector offset in the cluster */
+		if (fp->fptr % SS(fs) == 0) {				/* On the sector boundary? */
+			if (csect == 0) {						/* On the cluster boundary? */
+				clst = (fp->fptr == 0) ?			/* On the top of the file? */
+					fp->obj.sclust : get_fat(&fp->obj, fp->clust);
+				if (clst <= 1) ABORT(fs, FR_INT_ERR);
+				if (clst == 0xFFFFFFFF) ABORT(fs, FR_DISK_ERR);
+				fp->clust = clst;					/* Update current cluster */
+			}
+		}
+		sect = clst2sect(fs, fp->clust);			/* Get current data sector */
+		if (sect == 0) ABORT(fs, FR_INT_ERR);
+		sect += csect;
+#if FF_FS_TINY
+		if (move_window(fs, sect) != FR_OK) ABORT(fs, FR_DISK_ERR);	/* Move sector window to the file data */
+		dbuf = fs->win;
+#else
+		if (fp->sect != sect) {		/* Fill sector cache with file data */
+#if !FF_FS_READONLY
+			if (fp->flag & FA_DIRTY) {		/* Write-back dirty sector cache */
+				if (disk_write(fs->pdrv, fp->buf, fp->sect, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);
+				fp->flag &= (BYTE)~FA_DIRTY;
+			}
+#endif
+			if (disk_read(fs->pdrv, fp->buf, sect, 1) != RES_OK) ABORT(fs, FR_DISK_ERR);
+		}
+		dbuf = fp->buf;
+#endif
