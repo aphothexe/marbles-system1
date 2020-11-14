@@ -5631,3 +5631,92 @@ FRESULT f_forward (
 		}
 		dbuf = fp->buf;
 #endif
+		fp->sect = sect;
+		rcnt = SS(fs) - (UINT)fp->fptr % SS(fs);	/* Number of bytes remains in the sector */
+		if (rcnt > btf) rcnt = btf;					/* Clip it by btr if needed */
+		rcnt = (*func)(dbuf + ((UINT)fp->fptr % SS(fs)), rcnt);	/* Forward the file data */
+		if (rcnt == 0) ABORT(fs, FR_INT_ERR);
+	}
+
+	LEAVE_FF(fs, FR_OK);
+}
+#endif /* FF_USE_FORWARD */
+
+
+
+#if !FF_FS_READONLY && FF_USE_MKFS
+/*-----------------------------------------------------------------------*/
+/* Create FAT/exFAT volume (with sub-functions)                          */
+/*-----------------------------------------------------------------------*/
+
+#define N_SEC_TRACK 63			/* Sectors per track for determination of drive CHS */
+#define	GPT_ALIGN	0x100000	/* Alignment of partitions in GPT [byte] (>=128KB) */
+#define GPT_ITEMS	128			/* Number of GPT table size (>=128, sector aligned) */
+
+
+/* Create partitions on the physical drive in format of MBR or GPT */
+
+static FRESULT create_partition (
+	BYTE drv,			/* Physical drive number */
+	const LBA_t plst[],	/* Partition list */
+	BYTE sys,			/* System ID (for only MBR, temp setting) */
+	BYTE* buf			/* Working buffer for a sector */
+)
+{
+	UINT i, cy;
+	LBA_t sz_drv;
+	DWORD sz_drv32, nxt_alloc32, sz_part32;
+	BYTE *pte;
+	BYTE hd, n_hd, sc, n_sc;
+
+	/* Get physical drive size */
+	if (disk_ioctl(drv, GET_SECTOR_COUNT, &sz_drv) != RES_OK) return FR_DISK_ERR;
+
+#if FF_LBA64
+	if (sz_drv >= FF_MIN_GPT) {	/* Create partitions in GPT format */
+		WORD ss;
+		UINT sz_ptbl, pi, si, ofs;
+		DWORD bcc, rnd, align;
+		QWORD nxt_alloc, sz_part, sz_pool, top_bpt;
+		static const BYTE gpt_mbr[16] = {0x00, 0x00, 0x02, 0x00, 0xEE, 0xFE, 0xFF, 0x00, 0x01, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+
+#if FF_MAX_SS != FF_MIN_SS
+		if (disk_ioctl(drv, GET_SECTOR_SIZE, &ss) != RES_OK) return FR_DISK_ERR;	/* Get sector size */
+		if (ss > FF_MAX_SS || ss < FF_MIN_SS || (ss & (ss - 1))) return FR_DISK_ERR;
+#else
+		ss = FF_MAX_SS;
+#endif
+		rnd = (DWORD)sz_drv + GET_FATTIME();	/* Random seed */
+		align = GPT_ALIGN / ss;				/* Partition alignment for GPT [sector] */
+		sz_ptbl = GPT_ITEMS * SZ_GPTE / ss;	/* Size of partition table [sector] */
+		top_bpt = sz_drv - sz_ptbl - 1;		/* Backup partiiton table start sector */
+		nxt_alloc = 2 + sz_ptbl;			/* First allocatable sector */
+		sz_pool = top_bpt - nxt_alloc;		/* Size of allocatable area */
+		bcc = 0xFFFFFFFF; sz_part = 1;
+		pi = si = 0;	/* partition table index, size table index */
+		do {
+			if (pi * SZ_GPTE % ss == 0) memset(buf, 0, ss);	/* Clean the buffer if needed */
+			if (sz_part != 0) {				/* Is the size table not termintated? */
+				nxt_alloc = (nxt_alloc + align - 1) & ((QWORD)0 - align);	/* Align partition start */
+				sz_part = plst[si++];		/* Get a partition size */
+				if (sz_part <= 100) {		/* Is the size in percentage? */
+					sz_part = sz_pool * sz_part / 100;
+					sz_part = (sz_part + align - 1) & ((QWORD)0 - align);	/* Align partition end (only if in percentage) */
+				}
+				if (nxt_alloc + sz_part > top_bpt) {	/* Clip the size at end of the pool */
+					sz_part = (nxt_alloc < top_bpt) ? top_bpt - nxt_alloc : 0;
+				}
+			}
+			if (sz_part != 0) {				/* Add a partition? */
+				ofs = pi * SZ_GPTE % ss;
+				memcpy(buf + ofs + GPTE_PtGuid, GUID_MS_Basic, 16);	/* Set partition GUID (Microsoft Basic Data) */
+				rnd = make_rand(rnd, buf + ofs + GPTE_UpGuid, 16);	/* Set unique partition GUID */
+				st_qword(buf + ofs + GPTE_FstLba, nxt_alloc);		/* Set partition start sector */
+				st_qword(buf + ofs + GPTE_LstLba, nxt_alloc + sz_part - 1);	/* Set partition end sector */
+				nxt_alloc += sz_part;								/* Next allocatable sector */
+			}
+			if ((pi + 1) * SZ_GPTE % ss == 0) {		/* Write the buffer if it is filled up */
+				for (i = 0; i < ss; bcc = crc32(bcc, buf[i++])) ;	/* Calculate table check sum */
+				if (disk_write(drv, buf, 2 + pi * SZ_GPTE / ss, 1) != RES_OK) return FR_DISK_ERR;		/* Write to primary table */
+				if (disk_write(drv, buf, top_bpt + pi * SZ_GPTE / ss, 1) != RES_OK) return FR_DISK_ERR;	/* Write to secondary table */
+			}
