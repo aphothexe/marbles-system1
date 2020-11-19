@@ -5804,3 +5804,84 @@ FRESULT f_mkfs (
 	const MKFS_PARM* opt,	/* Format options */
 	void* work,				/* Pointer to working buffer (null: use heap memory) */
 	UINT len				/* Size of working buffer [byte] */
+)
+{
+	static const WORD cst[] = {1, 4, 16, 64, 256, 512, 0};	/* Cluster size boundary for FAT volume (4Ks unit) */
+	static const WORD cst32[] = {1, 2, 4, 8, 16, 32, 0};	/* Cluster size boundary for FAT32 volume (128Ks unit) */
+	static const MKFS_PARM defopt = {FM_ANY, 0, 0, 0, 0};	/* Default parameter */
+	BYTE fsopt, fsty, sys, *buf, *pte, pdrv, ipart;
+	WORD ss;	/* Sector size */
+	DWORD sz_buf, sz_blk, n_clst, pau, nsect, n, vsn;
+	LBA_t sz_vol, b_vol, b_fat, b_data;		/* Size of volume, Base LBA of volume, fat, data */
+	LBA_t sect, lba[2];
+	DWORD sz_rsv, sz_fat, sz_dir, sz_au;	/* Size of reserved, fat, dir, data, cluster */
+	UINT n_fat, n_root, i;					/* Index, Number of FATs and Number of roor dir entries */
+	int vol;
+	DSTATUS ds;
+	FRESULT fr;
+
+
+	/* Check mounted drive and clear work area */
+	vol = get_ldnumber(&path);					/* Get target logical drive */
+	if (vol < 0) return FR_INVALID_DRIVE;
+	if (FatFs[vol]) FatFs[vol]->fs_type = 0;	/* Clear the fs object if mounted */
+	pdrv = LD2PD(vol);			/* Physical drive */
+	ipart = LD2PT(vol);			/* Partition (0:create as new, 1..:get from partition table) */
+	if (!opt) opt = &defopt;	/* Use default parameter if it is not given */
+
+	/* Get physical drive status (sz_drv, sz_blk, ss) */
+	ds = disk_initialize(pdrv);
+	if (ds & STA_NOINIT) return FR_NOT_READY;
+	if (ds & STA_PROTECT) return FR_WRITE_PROTECTED;
+	sz_blk = opt->align;
+	if (sz_blk == 0 && disk_ioctl(pdrv, GET_BLOCK_SIZE, &sz_blk) != RES_OK) sz_blk = 1;
+ 	if (sz_blk == 0 || sz_blk > 0x8000 || (sz_blk & (sz_blk - 1))) sz_blk = 1;
+#if FF_MAX_SS != FF_MIN_SS
+	if (disk_ioctl(pdrv, GET_SECTOR_SIZE, &ss) != RES_OK) return FR_DISK_ERR;
+	if (ss > FF_MAX_SS || ss < FF_MIN_SS || (ss & (ss - 1))) return FR_DISK_ERR;
+#else
+	ss = FF_MAX_SS;
+#endif
+	/* Options for FAT sub-type and FAT parameters */
+	fsopt = opt->fmt & (FM_ANY | FM_SFD);
+	n_fat = (opt->n_fat >= 1 && opt->n_fat <= 2) ? opt->n_fat : 1;
+	n_root = (opt->n_root >= 1 && opt->n_root <= 32768 && (opt->n_root % (ss / SZDIRE)) == 0) ? opt->n_root : 512;
+	sz_au = (opt->au_size <= 0x1000000 && (opt->au_size & (opt->au_size - 1)) == 0) ? opt->au_size : 0;
+	sz_au /= ss;	/* Byte --> Sector */
+
+	/* Get working buffer */
+	sz_buf = len / ss;		/* Size of working buffer [sector] */
+	if (sz_buf == 0) return FR_NOT_ENOUGH_CORE;
+	buf = (BYTE*)work;		/* Working buffer */
+#if FF_USE_LFN == 3
+	if (!buf) buf = ff_memalloc(sz_buf * ss);	/* Use heap memory for working buffer */
+#endif
+	if (!buf) return FR_NOT_ENOUGH_CORE;
+
+	/* Determine where the volume to be located (b_vol, sz_vol) */
+	b_vol = sz_vol = 0;
+	if (FF_MULTI_PARTITION && ipart != 0) {	/* Is the volume associated with any specific partition? */
+		/* Get partition location from the existing partition table */
+		if (disk_read(pdrv, buf, 0, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Load MBR */
+		if (ld_word(buf + BS_55AA) != 0xAA55) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Check if MBR is valid */
+#if FF_LBA64
+		if (buf[MBR_Table + PTE_System] == 0xEE) {	/* GPT protective MBR? */
+			DWORD n_ent, ofs;
+			QWORD pt_lba;
+
+			/* Get the partition location from GPT */
+			if (disk_read(pdrv, buf, 1, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Load GPT header sector (next to MBR) */
+			if (!test_gpt_header(buf)) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Check if GPT header is valid */
+			n_ent = ld_dword(buf + GPTH_PtNum);		/* Number of entries */
+			pt_lba = ld_qword(buf + GPTH_PtOfs);	/* Table start sector */
+			ofs = i = 0;
+			while (n_ent) {		/* Find MS Basic partition with order of ipart */
+				if (ofs == 0 && disk_read(pdrv, buf, pt_lba++, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Get PT sector */
+				if (!memcmp(buf + ofs + GPTE_PtGuid, GUID_MS_Basic, 16) && ++i == ipart) {	/* MS basic data partition? */
+					b_vol = ld_qword(buf + ofs + GPTE_FstLba);
+					sz_vol = ld_qword(buf + ofs + GPTE_LstLba) - b_vol + 1;
+					break;
+				}
+				n_ent--; ofs = (ofs + SZ_GPTE) % ss;	/* Next entry */
+			}
+			if (n_ent == 0) LEAVE_MKFS(FR_MK
