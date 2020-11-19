@@ -5720,3 +5720,87 @@ static FRESULT create_partition (
 				if (disk_write(drv, buf, 2 + pi * SZ_GPTE / ss, 1) != RES_OK) return FR_DISK_ERR;		/* Write to primary table */
 				if (disk_write(drv, buf, top_bpt + pi * SZ_GPTE / ss, 1) != RES_OK) return FR_DISK_ERR;	/* Write to secondary table */
 			}
+		} while (++pi < GPT_ITEMS);
+
+		/* Create primary GPT header */
+		memset(buf, 0, ss);
+		memcpy(buf + GPTH_Sign, "EFI PART" "\0\0\1\0" "\x5C\0\0", 16);	/* Signature, version (1.0) and size (92) */
+		st_dword(buf + GPTH_PtBcc, ~bcc);			/* Table check sum */
+		st_qword(buf + GPTH_CurLba, 1);				/* LBA of this header */
+		st_qword(buf + GPTH_BakLba, sz_drv - 1);	/* LBA of secondary header */
+		st_qword(buf + GPTH_FstLba, 2 + sz_ptbl);	/* LBA of first allocatable sector */
+		st_qword(buf + GPTH_LstLba, top_bpt - 1);	/* LBA of last allocatable sector */
+		st_dword(buf + GPTH_PteSize, SZ_GPTE);		/* Size of a table entry */
+		st_dword(buf + GPTH_PtNum, GPT_ITEMS);		/* Number of table entries */
+		st_dword(buf + GPTH_PtOfs, 2);				/* LBA of this table */
+		rnd = make_rand(rnd, buf + GPTH_DskGuid, 16);	/* Disk GUID */
+		for (i = 0, bcc= 0xFFFFFFFF; i < 92; bcc = crc32(bcc, buf[i++])) ;	/* Calculate header check sum */
+		st_dword(buf + GPTH_Bcc, ~bcc);				/* Header check sum */
+		if (disk_write(drv, buf, 1, 1) != RES_OK) return FR_DISK_ERR;
+
+		/* Create secondary GPT header */
+		st_qword(buf + GPTH_CurLba, sz_drv - 1);	/* LBA of this header */
+		st_qword(buf + GPTH_BakLba, 1);				/* LBA of primary header */
+		st_qword(buf + GPTH_PtOfs, top_bpt);		/* LBA of this table */
+		st_dword(buf + GPTH_Bcc, 0);
+		for (i = 0, bcc= 0xFFFFFFFF; i < 92; bcc = crc32(bcc, buf[i++])) ;	/* Calculate header check sum */
+		st_dword(buf + GPTH_Bcc, ~bcc);				/* Header check sum */
+		if (disk_write(drv, buf, sz_drv - 1, 1) != RES_OK) return FR_DISK_ERR;
+
+		/* Create protective MBR */
+		memset(buf, 0, ss);
+		memcpy(buf + MBR_Table, gpt_mbr, 16);		/* Create a GPT partition */
+		st_word(buf + BS_55AA, 0xAA55);
+		if (disk_write(drv, buf, 0, 1) != RES_OK) return FR_DISK_ERR;
+
+	} else
+#endif
+	{	/* Create partitions in MBR format */
+		sz_drv32 = (DWORD)sz_drv;
+		n_sc = N_SEC_TRACK;				/* Determine drive CHS without any consideration of the drive geometry */
+		for (n_hd = 8; n_hd != 0 && sz_drv32 / n_hd / n_sc > 1024; n_hd *= 2) ;
+		if (n_hd == 0) n_hd = 255;		/* Number of heads needs to be <256 */
+
+		memset(buf, 0, FF_MAX_SS);		/* Clear MBR */
+		pte = buf + MBR_Table;	/* Partition table in the MBR */
+		for (i = 0, nxt_alloc32 = n_sc; i < 4 && nxt_alloc32 != 0 && nxt_alloc32 < sz_drv32; i++, nxt_alloc32 += sz_part32) {
+			sz_part32 = (DWORD)plst[i];	/* Get partition size */
+			if (sz_part32 <= 100) sz_part32 = (sz_part32 == 100) ? sz_drv32 : sz_drv32 / 100 * sz_part32;	/* Size in percentage? */
+			if (nxt_alloc32 + sz_part32 > sz_drv32 || nxt_alloc32 + sz_part32 < nxt_alloc32) sz_part32 = sz_drv32 - nxt_alloc32;	/* Clip at drive size */
+			if (sz_part32 == 0) break;	/* End of table or no sector to allocate? */
+
+			st_dword(pte + PTE_StLba, nxt_alloc32);	/* Start LBA */
+			st_dword(pte + PTE_SizLba, sz_part32);	/* Number of sectors */
+			pte[PTE_System] = sys;					/* System type */
+
+			cy = (UINT)(nxt_alloc32 / n_sc / n_hd);	/* Start cylinder */
+			hd = (BYTE)(nxt_alloc32 / n_sc % n_hd);	/* Start head */
+			sc = (BYTE)(nxt_alloc32 % n_sc + 1);	/* Start sector */
+			pte[PTE_StHead] = hd;
+			pte[PTE_StSec] = (BYTE)((cy >> 2 & 0xC0) | sc);
+			pte[PTE_StCyl] = (BYTE)cy;
+
+			cy = (UINT)((nxt_alloc32 + sz_part32 - 1) / n_sc / n_hd);	/* End cylinder */
+			hd = (BYTE)((nxt_alloc32 + sz_part32 - 1) / n_sc % n_hd);	/* End head */
+			sc = (BYTE)((nxt_alloc32 + sz_part32 - 1) % n_sc + 1);		/* End sector */
+			pte[PTE_EdHead] = hd;
+			pte[PTE_EdSec] = (BYTE)((cy >> 2 & 0xC0) | sc);
+			pte[PTE_EdCyl] = (BYTE)cy;
+
+			pte += SZ_PTE;		/* Next entry */
+		}
+
+		st_word(buf + BS_55AA, 0xAA55);		/* MBR signature */
+		if (disk_write(drv, buf, 0, 1) != RES_OK) return FR_DISK_ERR;	/* Write it to the MBR */
+	}
+
+	return FR_OK;
+}
+
+
+
+FRESULT f_mkfs (
+	const TCHAR* path,		/* Logical drive number */
+	const MKFS_PARM* opt,	/* Format options */
+	void* work,				/* Pointer to working buffer (null: use heap memory) */
+	UINT len				/* Size of working buffer [byte] */
