@@ -5884,4 +5884,97 @@ FRESULT f_mkfs (
 				}
 				n_ent--; ofs = (ofs + SZ_GPTE) % ss;	/* Next entry */
 			}
-			if (n_ent == 0) LEAVE_MKFS(FR_MK
+			if (n_ent == 0) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Partition not found */
+			fsopt |= 0x80;	/* Partitioning is in GPT */
+		} else
+#endif
+		{	/* Get the partition location from MBR partition table */
+			pte = buf + (MBR_Table + (ipart - 1) * SZ_PTE);
+			if (ipart > 4 || pte[PTE_System] == 0) LEAVE_MKFS(FR_MKFS_ABORTED);	/* No partition? */
+			b_vol = ld_dword(pte + PTE_StLba);		/* Get volume start sector */
+			sz_vol = ld_dword(pte + PTE_SizLba);	/* Get volume size */
+		}
+	} else {	/* The volume is associated with a physical drive */
+		if (disk_ioctl(pdrv, GET_SECTOR_COUNT, &sz_vol) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+		if (!(fsopt & FM_SFD)) {	/* To be partitioned? */
+			/* Create a single-partition on the drive in this function */
+#if FF_LBA64
+			if (sz_vol >= FF_MIN_GPT) {	/* Which partition type to create, MBR or GPT? */
+				fsopt |= 0x80;		/* Partitioning is in GPT */
+				b_vol = GPT_ALIGN / ss; sz_vol -= b_vol + GPT_ITEMS * SZ_GPTE / ss + 1;	/* Estimated partition offset and size */
+			} else
+#endif
+			{	/* Partitioning is in MBR */
+				if (sz_vol > N_SEC_TRACK) {
+					b_vol = N_SEC_TRACK; sz_vol -= b_vol;	/* Estimated partition offset and size */
+				}
+			}
+		}
+	}
+	if (sz_vol < 128) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Check if volume size is >=128s */
+
+	/* Now start to create an FAT volume at b_vol and sz_vol */
+
+	do {	/* Pre-determine the FAT type */
+		if (FF_FS_EXFAT && (fsopt & FM_EXFAT)) {	/* exFAT possible? */
+			if ((fsopt & FM_ANY) == FM_EXFAT || sz_vol >= 0x4000000 || sz_au > 128) {	/* exFAT only, vol >= 64MS or sz_au > 128S ? */
+				fsty = FS_EXFAT; break;
+			}
+		}
+#if FF_LBA64
+		if (sz_vol >= 0x100000000) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too large volume for FAT/FAT32 */
+#endif
+		if (sz_au > 128) sz_au = 128;	/* Invalid AU for FAT/FAT32? */
+		if (fsopt & FM_FAT32) {	/* FAT32 possible? */
+			if (!(fsopt & FM_FAT)) {	/* no-FAT? */
+				fsty = FS_FAT32; break;
+			}
+		}
+		if (!(fsopt & FM_FAT)) LEAVE_MKFS(FR_INVALID_PARAMETER);	/* no-FAT? */
+		fsty = FS_FAT16;
+	} while (0);
+
+	vsn = (DWORD)sz_vol + GET_FATTIME();	/* VSN generated from current time and partitiion size */
+
+#if FF_FS_EXFAT
+	if (fsty == FS_EXFAT) {	/* Create an exFAT volume */
+		DWORD szb_bit, szb_case, sum, nbit, clu, clen[3];
+		WCHAR ch, si;
+		UINT j, st;
+
+		if (sz_vol < 0x1000) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too small volume for exFAT? */
+#if FF_USE_TRIM
+		lba[0] = b_vol; lba[1] = b_vol + sz_vol - 1;	/* Inform storage device that the volume area may be erased */
+		disk_ioctl(pdrv, CTRL_TRIM, lba);
+#endif
+		/* Determine FAT location, data location and number of clusters */
+		if (sz_au == 0) {	/* AU auto-selection */
+			sz_au = 8;
+			if (sz_vol >= 0x80000) sz_au = 64;		/* >= 512Ks */
+			if (sz_vol >= 0x4000000) sz_au = 256;	/* >= 64Ms */
+		}
+		b_fat = b_vol + 32;										/* FAT start at offset 32 */
+		sz_fat = (DWORD)((sz_vol / sz_au + 2) * 4 + ss - 1) / ss;	/* Number of FAT sectors */
+		b_data = (b_fat + sz_fat + sz_blk - 1) & ~((LBA_t)sz_blk - 1);	/* Align data area to the erase block boundary */
+		if (b_data - b_vol >= sz_vol / 2) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too small volume? */
+		n_clst = (DWORD)(sz_vol - (b_data - b_vol)) / sz_au;	/* Number of clusters */
+		if (n_clst <16) LEAVE_MKFS(FR_MKFS_ABORTED);			/* Too few clusters? */
+		if (n_clst > MAX_EXFAT) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too many clusters? */
+
+		szb_bit = (n_clst + 7) / 8;								/* Size of allocation bitmap */
+		clen[0] = (szb_bit + sz_au * ss - 1) / (sz_au * ss);	/* Number of allocation bitmap clusters */
+
+		/* Create a compressed up-case table */
+		sect = b_data + sz_au * clen[0];	/* Table start sector */
+		sum = 0;							/* Table checksum to be stored in the 82 entry */
+		st = 0; si = 0; i = 0; j = 0; szb_case = 0;
+		do {
+			switch (st) {
+			case 0:
+				ch = (WCHAR)ff_wtoupper(si);	/* Get an up-case char */
+				if (ch != si) {
+					si++; break;		/* Store the up-case char if exist */
+				}
+				for (j = 1; (WCHAR)(si + j) && (WCHAR)(si + j) == ff_wtoupper((WCHAR)(si + j)); j++) ;	/* Get run length of no-case block */
+				if (j >= 128) {
+					ch = 0xFFFF; st = 2; break;	/* Compress the no-case block if run is >= 
