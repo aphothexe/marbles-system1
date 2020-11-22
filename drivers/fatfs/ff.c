@@ -5977,4 +5977,90 @@ FRESULT f_mkfs (
 				}
 				for (j = 1; (WCHAR)(si + j) && (WCHAR)(si + j) == ff_wtoupper((WCHAR)(si + j)); j++) ;	/* Get run length of no-case block */
 				if (j >= 128) {
-					ch = 0xFFFF; st = 2; break;	/* Compress the no-case block if run is >= 
+					ch = 0xFFFF; st = 2; break;	/* Compress the no-case block if run is >= 128 chars */
+				}
+				st = 1;			/* Do not compress short run */
+				/* FALLTHROUGH */
+			case 1:
+				ch = si++;		/* Fill the short run */
+				if (--j == 0) st = 0;
+				break;
+
+			default:
+				ch = (WCHAR)j; si += (WCHAR)j;	/* Number of chars to skip */
+				st = 0;
+			}
+			sum = xsum32(buf[i + 0] = (BYTE)ch, sum);	/* Put it into the write buffer */
+			sum = xsum32(buf[i + 1] = (BYTE)(ch >> 8), sum);
+			i += 2; szb_case += 2;
+			if (si == 0 || i == sz_buf * ss) {		/* Write buffered data when buffer full or end of process */
+				n = (i + ss - 1) / ss;
+				if (disk_write(pdrv, buf, sect, n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+				sect += n; i = 0;
+			}
+		} while (si);
+		clen[1] = (szb_case + sz_au * ss - 1) / (sz_au * ss);	/* Number of up-case table clusters */
+		clen[2] = 1;	/* Number of root dir clusters */
+
+		/* Initialize the allocation bitmap */
+		sect = b_data; nsect = (szb_bit + ss - 1) / ss;	/* Start of bitmap and number of bitmap sectors */
+		nbit = clen[0] + clen[1] + clen[2];				/* Number of clusters in-use by system (bitmap, up-case and root-dir) */
+		do {
+			memset(buf, 0, sz_buf * ss);				/* Initialize bitmap buffer */
+			for (i = 0; nbit != 0 && i / 8 < sz_buf * ss; buf[i / 8] |= 1 << (i % 8), i++, nbit--) ;	/* Mark used clusters */
+			n = (nsect > sz_buf) ? sz_buf : nsect;		/* Write the buffered data */
+			if (disk_write(pdrv, buf, sect, n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			sect += n; nsect -= n;
+		} while (nsect);
+
+		/* Initialize the FAT */
+		sect = b_fat; nsect = sz_fat;	/* Start of FAT and number of FAT sectors */
+		j = nbit = clu = 0;
+		do {
+			memset(buf, 0, sz_buf * ss); i = 0;	/* Clear work area and reset write offset */
+			if (clu == 0) {	/* Initialize FAT [0] and FAT[1] */
+				st_dword(buf + i, 0xFFFFFFF8); i += 4; clu++;
+				st_dword(buf + i, 0xFFFFFFFF); i += 4; clu++;
+			}
+			do {			/* Create chains of bitmap, up-case and root dir */
+				while (nbit != 0 && i < sz_buf * ss) {	/* Create a chain */
+					st_dword(buf + i, (nbit > 1) ? clu + 1 : 0xFFFFFFFF);
+					i += 4; clu++; nbit--;
+				}
+				if (nbit == 0 && j < 3) nbit = clen[j++];	/* Get next chain length */
+			} while (nbit != 0 && i < sz_buf * ss);
+			n = (nsect > sz_buf) ? sz_buf : nsect;	/* Write the buffered data */
+			if (disk_write(pdrv, buf, sect, n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			sect += n; nsect -= n;
+		} while (nsect);
+
+		/* Initialize the root directory */
+		memset(buf, 0, sz_buf * ss);
+		buf[SZDIRE * 0 + 0] = ET_VLABEL;				/* Volume label entry (no label) */
+		buf[SZDIRE * 1 + 0] = ET_BITMAP;				/* Bitmap entry */
+		st_dword(buf + SZDIRE * 1 + 20, 2);				/*  cluster */
+		st_dword(buf + SZDIRE * 1 + 24, szb_bit);		/*  size */
+		buf[SZDIRE * 2 + 0] = ET_UPCASE;				/* Up-case table entry */
+		st_dword(buf + SZDIRE * 2 + 4, sum);			/*  sum */
+		st_dword(buf + SZDIRE * 2 + 20, 2 + clen[0]);	/*  cluster */
+		st_dword(buf + SZDIRE * 2 + 24, szb_case);		/*  size */
+		sect = b_data + sz_au * (clen[0] + clen[1]); nsect = sz_au;	/* Start of the root directory and number of sectors */
+		do {	/* Fill root directory sectors */
+			n = (nsect > sz_buf) ? sz_buf : nsect;
+			if (disk_write(pdrv, buf, sect, n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			memset(buf, 0, ss);	/* Rest of entries are filled with zero */
+			sect += n; nsect -= n;
+		} while (nsect);
+
+		/* Create two set of the exFAT VBR blocks */
+		sect = b_vol;
+		for (n = 0; n < 2; n++) {
+			/* Main record (+0) */
+			memset(buf, 0, ss);
+			memcpy(buf + BS_JmpBoot, "\xEB\x76\x90" "EXFAT   ", 11);	/* Boot jump code (x86), OEM name */
+			st_qword(buf + BPB_VolOfsEx, b_vol);					/* Volume offset in the physical drive [sector] */
+			st_qword(buf + BPB_TotSecEx, sz_vol);					/* Volume size [sector] */
+			st_dword(buf + BPB_FatOfsEx, (DWORD)(b_fat - b_vol));	/* FAT offset [sector] */
+			st_dword(buf + BPB_FatSzEx, sz_fat);					/* FAT size [sector] */
+			st_dword(buf + BPB_DataOfsEx, (DWORD)(b_data - b_vol));	/* Data offset [sector] */
+			st_dword(buf + BPB_NumClusEx, n_clst);					/* Number of clusters 
