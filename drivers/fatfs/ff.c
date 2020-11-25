@@ -6063,4 +6063,88 @@ FRESULT f_mkfs (
 			st_dword(buf + BPB_FatOfsEx, (DWORD)(b_fat - b_vol));	/* FAT offset [sector] */
 			st_dword(buf + BPB_FatSzEx, sz_fat);					/* FAT size [sector] */
 			st_dword(buf + BPB_DataOfsEx, (DWORD)(b_data - b_vol));	/* Data offset [sector] */
-			st_dword(buf + BPB_NumClusEx, n_clst);					/* Number of clusters 
+			st_dword(buf + BPB_NumClusEx, n_clst);					/* Number of clusters */
+			st_dword(buf + BPB_RootClusEx, 2 + clen[0] + clen[1]);	/* Root dir cluster # */
+			st_dword(buf + BPB_VolIDEx, vsn);						/* VSN */
+			st_word(buf + BPB_FSVerEx, 0x100);						/* Filesystem version (1.00) */
+			for (buf[BPB_BytsPerSecEx] = 0, i = ss; i >>= 1; buf[BPB_BytsPerSecEx]++) ;	/* Log2 of sector size [byte] */
+			for (buf[BPB_SecPerClusEx] = 0, i = sz_au; i >>= 1; buf[BPB_SecPerClusEx]++) ;	/* Log2 of cluster size [sector] */
+			buf[BPB_NumFATsEx] = 1;					/* Number of FATs */
+			buf[BPB_DrvNumEx] = 0x80;				/* Drive number (for int13) */
+			st_word(buf + BS_BootCodeEx, 0xFEEB);	/* Boot code (x86) */
+			st_word(buf + BS_55AA, 0xAA55);			/* Signature (placed here regardless of sector size) */
+			for (i = sum = 0; i < ss; i++) {		/* VBR checksum */
+				if (i != BPB_VolFlagEx && i != BPB_VolFlagEx + 1 && i != BPB_PercInUseEx) sum = xsum32(buf[i], sum);
+			}
+			if (disk_write(pdrv, buf, sect++, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			/* Extended bootstrap record (+1..+8) */
+			memset(buf, 0, ss);
+			st_word(buf + ss - 2, 0xAA55);	/* Signature (placed at end of sector) */
+			for (j = 1; j < 9; j++) {
+				for (i = 0; i < ss; sum = xsum32(buf[i++], sum)) ;	/* VBR checksum */
+				if (disk_write(pdrv, buf, sect++, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			}
+			/* OEM/Reserved record (+9..+10) */
+			memset(buf, 0, ss);
+			for ( ; j < 11; j++) {
+				for (i = 0; i < ss; sum = xsum32(buf[i++], sum)) ;	/* VBR checksum */
+				if (disk_write(pdrv, buf, sect++, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			}
+			/* Sum record (+11) */
+			for (i = 0; i < ss; i += 4) st_dword(buf + i, sum);		/* Fill with checksum value */
+			if (disk_write(pdrv, buf, sect++, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+		}
+
+	} else
+#endif	/* FF_FS_EXFAT */
+	{	/* Create an FAT/FAT32 volume */
+		do {
+			pau = sz_au;
+			/* Pre-determine number of clusters and FAT sub-type */
+			if (fsty == FS_FAT32) {	/* FAT32 volume */
+				if (pau == 0) {	/* AU auto-selection */
+					n = (DWORD)sz_vol / 0x20000;	/* Volume size in unit of 128KS */
+					for (i = 0, pau = 1; cst32[i] && cst32[i] <= n; i++, pau <<= 1) ;	/* Get from table */
+				}
+				n_clst = (DWORD)sz_vol / pau;	/* Number of clusters */
+				sz_fat = (n_clst * 4 + 8 + ss - 1) / ss;	/* FAT size [sector] */
+				sz_rsv = 32;	/* Number of reserved sectors */
+				sz_dir = 0;		/* No static directory */
+				if (n_clst <= MAX_FAT16 || n_clst > MAX_FAT32) LEAVE_MKFS(FR_MKFS_ABORTED);
+			} else {				/* FAT volume */
+				if (pau == 0) {	/* au auto-selection */
+					n = (DWORD)sz_vol / 0x1000;	/* Volume size in unit of 4KS */
+					for (i = 0, pau = 1; cst[i] && cst[i] <= n; i++, pau <<= 1) ;	/* Get from table */
+				}
+				n_clst = (DWORD)sz_vol / pau;
+				if (n_clst > MAX_FAT12) {
+					n = n_clst * 2 + 4;		/* FAT size [byte] */
+				} else {
+					fsty = FS_FAT12;
+					n = (n_clst * 3 + 1) / 2 + 3;	/* FAT size [byte] */
+				}
+				sz_fat = (n + ss - 1) / ss;		/* FAT size [sector] */
+				sz_rsv = 1;						/* Number of reserved sectors */
+				sz_dir = (DWORD)n_root * SZDIRE / ss;	/* Root dir size [sector] */
+			}
+			b_fat = b_vol + sz_rsv;						/* FAT base */
+			b_data = b_fat + sz_fat * n_fat + sz_dir;	/* Data base */
+
+			/* Align data area to erase block boundary (for flash memory media) */
+			n = (DWORD)(((b_data + sz_blk - 1) & ~(sz_blk - 1)) - b_data);	/* Sectors to next nearest from current data base */
+			if (fsty == FS_FAT32) {		/* FAT32: Move FAT */
+				sz_rsv += n; b_fat += n;
+			} else {					/* FAT: Expand FAT */
+				if (n % n_fat) {	/* Adjust fractional error if needed */
+					n--; sz_rsv++; b_fat++;
+				}
+				sz_fat += n / n_fat;
+			}
+
+			/* Determine number of clusters and final check of validity of the FAT sub-type */
+			if (sz_vol < b_data + pau * 16 - b_vol) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too small volume? */
+			n_clst = ((DWORD)sz_vol - sz_rsv - sz_fat * n_fat - sz_dir) / pau;
+			if (fsty == FS_FAT32) {
+				if (n_clst <= MAX_FAT16) {	/* Too few clusters for FAT32? */
+					if (sz_au == 0 && (sz_au = pau / 2) != 0) continue;	/* Adjust cluster size and retry */
+					
