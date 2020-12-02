@@ -6147,4 +6147,87 @@ FRESULT f_mkfs (
 			if (fsty == FS_FAT32) {
 				if (n_clst <= MAX_FAT16) {	/* Too few clusters for FAT32? */
 					if (sz_au == 0 && (sz_au = pau / 2) != 0) continue;	/* Adjust cluster size and retry */
-					
+					LEAVE_MKFS(FR_MKFS_ABORTED);
+				}
+			}
+			if (fsty == FS_FAT16) {
+				if (n_clst > MAX_FAT16) {	/* Too many clusters for FAT16 */
+					if (sz_au == 0 && (pau * 2) <= 64) {
+						sz_au = pau * 2; continue;	/* Adjust cluster size and retry */
+					}
+					if ((fsopt & FM_FAT32)) {
+						fsty = FS_FAT32; continue;	/* Switch type to FAT32 and retry */
+					}
+					if (sz_au == 0 && (sz_au = pau * 2) <= 128) continue;	/* Adjust cluster size and retry */
+					LEAVE_MKFS(FR_MKFS_ABORTED);
+				}
+				if  (n_clst <= MAX_FAT12) {	/* Too few clusters for FAT16 */
+					if (sz_au == 0 && (sz_au = pau * 2) <= 128) continue;	/* Adjust cluster size and retry */
+					LEAVE_MKFS(FR_MKFS_ABORTED);
+				}
+			}
+			if (fsty == FS_FAT12 && n_clst > MAX_FAT12) LEAVE_MKFS(FR_MKFS_ABORTED);	/* Too many clusters for FAT12 */
+
+			/* Ok, it is the valid cluster configuration */
+			break;
+		} while (1);
+
+#if FF_USE_TRIM
+		lba[0] = b_vol; lba[1] = b_vol + sz_vol - 1;	/* Inform storage device that the volume area may be erased */
+		disk_ioctl(pdrv, CTRL_TRIM, lba);
+#endif
+		/* Create FAT VBR */
+		memset(buf, 0, ss);
+		memcpy(buf + BS_JmpBoot, "\xEB\xFE\x90" "MSDOS5.0", 11);	/* Boot jump code (x86), OEM name */
+		st_word(buf + BPB_BytsPerSec, ss);				/* Sector size [byte] */
+		buf[BPB_SecPerClus] = (BYTE)pau;				/* Cluster size [sector] */
+		st_word(buf + BPB_RsvdSecCnt, (WORD)sz_rsv);	/* Size of reserved area */
+		buf[BPB_NumFATs] = (BYTE)n_fat;					/* Number of FATs */
+		st_word(buf + BPB_RootEntCnt, (WORD)((fsty == FS_FAT32) ? 0 : n_root));	/* Number of root directory entries */
+		if (sz_vol < 0x10000) {
+			st_word(buf + BPB_TotSec16, (WORD)sz_vol);	/* Volume size in 16-bit LBA */
+		} else {
+			st_dword(buf + BPB_TotSec32, (DWORD)sz_vol);	/* Volume size in 32-bit LBA */
+		}
+		buf[BPB_Media] = 0xF8;							/* Media descriptor byte */
+		st_word(buf + BPB_SecPerTrk, 63);				/* Number of sectors per track (for int13) */
+		st_word(buf + BPB_NumHeads, 255);				/* Number of heads (for int13) */
+		st_dword(buf + BPB_HiddSec, (DWORD)b_vol);		/* Volume offset in the physical drive [sector] */
+		if (fsty == FS_FAT32) {
+			st_dword(buf + BS_VolID32, vsn);			/* VSN */
+			st_dword(buf + BPB_FATSz32, sz_fat);		/* FAT size [sector] */
+			st_dword(buf + BPB_RootClus32, 2);			/* Root directory cluster # (2) */
+			st_word(buf + BPB_FSInfo32, 1);				/* Offset of FSINFO sector (VBR + 1) */
+			st_word(buf + BPB_BkBootSec32, 6);			/* Offset of backup VBR (VBR + 6) */
+			buf[BS_DrvNum32] = 0x80;					/* Drive number (for int13) */
+			buf[BS_BootSig32] = 0x29;					/* Extended boot signature */
+			memcpy(buf + BS_VolLab32, "NO NAME    " "FAT32   ", 19);	/* Volume label, FAT signature */
+		} else {
+			st_dword(buf + BS_VolID, vsn);				/* VSN */
+			st_word(buf + BPB_FATSz16, (WORD)sz_fat);	/* FAT size [sector] */
+			buf[BS_DrvNum] = 0x80;						/* Drive number (for int13) */
+			buf[BS_BootSig] = 0x29;						/* Extended boot signature */
+			memcpy(buf + BS_VolLab, "NO NAME    " "FAT     ", 19);	/* Volume label, FAT signature */
+		}
+		st_word(buf + BS_55AA, 0xAA55);					/* Signature (offset is fixed here regardless of sector size) */
+		if (disk_write(pdrv, buf, b_vol, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Write it to the VBR sector */
+
+		/* Create FSINFO record if needed */
+		if (fsty == FS_FAT32) {
+			disk_write(pdrv, buf, b_vol + 6, 1);		/* Write backup VBR (VBR + 6) */
+			memset(buf, 0, ss);
+			st_dword(buf + FSI_LeadSig, 0x41615252);
+			st_dword(buf + FSI_StrucSig, 0x61417272);
+			st_dword(buf + FSI_Free_Count, n_clst - 1);	/* Number of free clusters */
+			st_dword(buf + FSI_Nxt_Free, 2);			/* Last allocated cluster# */
+			st_word(buf + BS_55AA, 0xAA55);
+			disk_write(pdrv, buf, b_vol + 7, 1);		/* Write backup FSINFO (VBR + 7) */
+			disk_write(pdrv, buf, b_vol + 1, 1);		/* Write original FSINFO (VBR + 1) */
+		}
+
+		/* Initialize FAT area */
+		memset(buf, 0, sz_buf * ss);
+		sect = b_fat;		/* FAT start sector */
+		for (i = 0; i < n_fat; i++) {			/* Initialize FATs each */
+			if (fsty == FS_FAT32) {
+				st_dword(buf + 0, 0xFFFFFFF8);
