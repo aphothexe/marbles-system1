@@ -6230,4 +6230,130 @@ FRESULT f_mkfs (
 		sect = b_fat;		/* FAT start sector */
 		for (i = 0; i < n_fat; i++) {			/* Initialize FATs each */
 			if (fsty == FS_FAT32) {
-				st_dword(buf + 0, 0xFFFFFFF8);
+				st_dword(buf + 0, 0xFFFFFFF8);	/* FAT[0] */
+				st_dword(buf + 4, 0xFFFFFFFF);	/* FAT[1] */
+				st_dword(buf + 8, 0x0FFFFFFF);	/* FAT[2] (root directory) */
+			} else {
+				st_dword(buf + 0, (fsty == FS_FAT12) ? 0xFFFFF8 : 0xFFFFFFF8);	/* FAT[0] and FAT[1] */
+			}
+			nsect = sz_fat;		/* Number of FAT sectors */
+			do {	/* Fill FAT sectors */
+				n = (nsect > sz_buf) ? sz_buf : nsect;
+				if (disk_write(pdrv, buf, sect, (UINT)n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+				memset(buf, 0, ss);	/* Rest of FAT all are cleared */
+				sect += n; nsect -= n;
+			} while (nsect);
+		}
+
+		/* Initialize root directory (fill with zero) */
+		nsect = (fsty == FS_FAT32) ? pau : sz_dir;	/* Number of root directory sectors */
+		do {
+			n = (nsect > sz_buf) ? sz_buf : nsect;
+			if (disk_write(pdrv, buf, sect, (UINT)n) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+			sect += n; nsect -= n;
+		} while (nsect);
+	}
+
+	/* A FAT volume has been created here */
+
+	/* Determine system ID in the MBR partition table */
+	if (FF_FS_EXFAT && fsty == FS_EXFAT) {
+		sys = 0x07;			/* exFAT */
+	} else {
+		if (fsty == FS_FAT32) {
+			sys = 0x0C;		/* FAT32X */
+		} else {
+			if (sz_vol >= 0x10000) {
+				sys = 0x06;	/* FAT12/16 (large) */
+			} else {
+				sys = (fsty == FS_FAT16) ? 0x04 : 0x01;	/* FAT16 : FAT12 */
+			}
+		}
+	}
+
+	/* Update partition information */
+	if (FF_MULTI_PARTITION && ipart != 0) {	/* Volume is in the existing partition */
+		if (!FF_LBA64 || !(fsopt & 0x80)) {
+			/* Update system ID in the partition table */
+			if (disk_read(pdrv, buf, 0, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Read the MBR */
+			buf[MBR_Table + (ipart - 1) * SZ_PTE + PTE_System] = sys;			/* Set system ID */
+			if (disk_write(pdrv, buf, 0, 1) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);	/* Write it back to the MBR */
+		}
+	} else {								/* Volume as a new single partition */
+		if (!(fsopt & FM_SFD)) {			/* Create partition table if not in SFD */
+			lba[0] = sz_vol; lba[1] = 0;
+			fr = create_partition(pdrv, lba, sys, buf);
+			if (fr != FR_OK) LEAVE_MKFS(fr);
+		}
+	}
+
+	if (disk_ioctl(pdrv, CTRL_SYNC, 0) != RES_OK) LEAVE_MKFS(FR_DISK_ERR);
+
+	LEAVE_MKFS(FR_OK);
+}
+
+
+
+
+#if FF_MULTI_PARTITION
+/*-----------------------------------------------------------------------*/
+/* Create Partition Table on the Physical Drive                          */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_fdisk (
+	BYTE pdrv,			/* Physical drive number */
+	const LBA_t ptbl[],	/* Pointer to the size table for each partitions */
+	void* work			/* Pointer to the working buffer (null: use heap memory) */
+)
+{
+	BYTE *buf = (BYTE*)work;
+	DSTATUS stat;
+
+
+	stat = disk_initialize(pdrv);
+	if (stat & STA_NOINIT) return FR_NOT_READY;
+	if (stat & STA_PROTECT) return FR_WRITE_PROTECTED;
+#if FF_USE_LFN == 3
+	if (!buf) buf = ff_memalloc(FF_MAX_SS);	/* Use heap memory for working buffer */
+#endif
+	if (!buf) return FR_NOT_ENOUGH_CORE;
+
+	LEAVE_MKFS(create_partition(pdrv, ptbl, 0x07, buf));
+}
+
+#endif /* FF_MULTI_PARTITION */
+#endif /* !FF_FS_READONLY && FF_USE_MKFS */
+
+
+
+
+#if FF_USE_STRFUNC
+#if FF_USE_LFN && FF_LFN_UNICODE && (FF_STRF_ENCODE < 0 || FF_STRF_ENCODE > 3)
+#error Wrong FF_STRF_ENCODE setting
+#endif
+/*-----------------------------------------------------------------------*/
+/* Get a String from the File                                            */
+/*-----------------------------------------------------------------------*/
+
+TCHAR* f_gets (
+	TCHAR* buff,	/* Pointer to the buffer to store read string */
+	int len,		/* Size of string buffer (items) */
+	FIL* fp			/* Pointer to the file object */
+)
+{
+	int nc = 0;
+	TCHAR *p = buff;
+	BYTE s[4];
+	UINT rc;
+	DWORD dc;
+#if FF_USE_LFN && FF_LFN_UNICODE && FF_STRF_ENCODE <= 2
+	WCHAR wc;
+#endif
+#if FF_USE_LFN && FF_LFN_UNICODE && FF_STRF_ENCODE == 3
+	UINT ct;
+#endif
+
+#if FF_USE_LFN && FF_LFN_UNICODE			/* With code conversion (Unicode API) */
+	/* Make a room for the character and terminator  */
+	if (FF_LFN_UNICODE == 1) len -= (FF_STRF_ENCODE == 0) ? 1 : 2;
+	if (FF_LFN_UNICODE == 2) len -= (FF_STRF_EN
