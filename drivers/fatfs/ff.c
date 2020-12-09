@@ -6601,4 +6601,183 @@ static void putc_bfd (putbuff* pb, TCHAR c)
 	pb->buf[i++] = (BYTE)wc;
 #endif
 
-#else							/* ANSI/OEM input
+#else							/* ANSI/OEM input (without re-encoding) */
+	pb->buf[i++] = (BYTE)c;
+#endif
+
+	if (i >= (int)(sizeof pb->buf) - 4) {	/* Write buffered characters to the file */
+		f_write(pb->fp, pb->buf, (UINT)i, &n);
+		i = (n == (UINT)i) ? 0 : -1;
+	}
+	pb->idx = i;
+	pb->nchr = nc + 1;
+}
+
+
+/* Flush remaining characters in the buffer */
+
+static int putc_flush (putbuff* pb)
+{
+	UINT nw;
+
+	if (   pb->idx >= 0	/* Flush buffered characters to the file */
+		&& f_write(pb->fp, pb->buf, (UINT)pb->idx, &nw) == FR_OK
+		&& (UINT)pb->idx == nw) return pb->nchr;
+	return -1;
+}
+
+
+/* Initialize write buffer */
+
+static void putc_init (putbuff* pb, FIL* fp)
+{
+	memset(pb, 0, sizeof (putbuff));
+	pb->fp = fp;
+}
+
+
+
+int f_putc (
+	TCHAR c,	/* A character to be output */
+	FIL* fp		/* Pointer to the file object */
+)
+{
+	putbuff pb;
+
+
+	putc_init(&pb, fp);
+	putc_bfd(&pb, c);	/* Put the character */
+	return putc_flush(&pb);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Put a String to the File                                              */
+/*-----------------------------------------------------------------------*/
+
+int f_puts (
+	const TCHAR* str,	/* Pointer to the string to be output */
+	FIL* fp				/* Pointer to the file object */
+)
+{
+	putbuff pb;
+
+
+	putc_init(&pb, fp);
+	while (*str) putc_bfd(&pb, *str++);		/* Put the string */
+	return putc_flush(&pb);
+}
+
+
+
+
+/*-----------------------------------------------------------------------*/
+/* Put a Formatted String to the File (with sub-functions)               */
+/*-----------------------------------------------------------------------*/
+#if FF_PRINT_FLOAT && FF_INTDEF == 2
+#include <math.h>
+
+static int ilog10 (double n)	/* Calculate log10(n) in integer output */
+{
+	int rv = 0;
+
+	while (n >= 10) {	/* Decimate digit in right shift */
+		if (n >= 100000) {
+			n /= 100000; rv += 5;
+		} else {
+			n /= 10; rv++;
+		}
+	}
+	while (n < 1) {		/* Decimate digit in left shift */
+		if (n < 0.00001) {
+			n *= 100000; rv -= 5;
+		} else {
+			n *= 10; rv--;
+		}
+	}
+	return rv;
+}
+
+
+static double i10x (int n)	/* Calculate 10^n in integer input */
+{
+	double rv = 1;
+
+	while (n > 0) {		/* Left shift */
+		if (n >= 5) {
+			rv *= 100000; n -= 5;
+		} else {
+			rv *= 10; n--;
+		}
+	}
+	while (n < 0) {		/* Right shift */
+		if (n <= -5) {
+			rv /= 100000; n += 5;
+		} else {
+			rv /= 10; n++;
+		}
+	}
+	return rv;
+}
+
+
+static void ftoa (
+	char* buf,	/* Buffer to output the floating point string */
+	double val,	/* Value to output */
+	int prec,	/* Number of fractional digits */
+	TCHAR fmt	/* Notation */
+)
+{
+	int d;
+	int e = 0, m = 0;
+	char sign = 0;
+	double w;
+	const char *er = 0;
+	const char ds = FF_PRINT_FLOAT == 2 ? ',' : '.';
+
+
+	if (isnan(val)) {			/* Not a number? */
+		er = "NaN";
+	} else {
+		if (prec < 0) prec = 6;	/* Default precision? (6 fractional digits) */
+		if (val < 0) {			/* Nagative? */
+			val = 0 - val; sign = '-';
+		} else {
+			sign = '+';
+		}
+		if (isinf(val)) {		/* Infinite? */
+			er = "INF";
+		} else {
+			if (fmt == 'f') {	/* Decimal notation? */
+				val += i10x(0 - prec) / 2;	/* Round (nearest) */
+				m = ilog10(val);
+				if (m < 0) m = 0;
+				if (m + prec + 3 >= SZ_NUM_BUF) er = "OV";	/* Buffer overflow? */
+			} else {			/* E notation */
+				if (val != 0) {		/* Not a true zero? */
+					val += i10x(ilog10(val) - prec) / 2;	/* Round (nearest) */
+					e = ilog10(val);
+					if (e > 99 || prec + 7 >= SZ_NUM_BUF) {	/* Buffer overflow or E > +99? */
+						er = "OV";
+					} else {
+						if (e < -99) e = -99;
+						val /= i10x(e);	/* Normalize */
+					}
+				}
+			}
+		}
+		if (!er) {	/* Not error condition */
+			if (sign == '-') *buf++ = sign;	/* Add a - if negative value */
+			do {				/* Put decimal number */
+				if (m == -1) *buf++ = ds;	/* Insert a decimal separator when get into fractional part */
+				w = i10x(m);				/* Snip the highest digit d */
+				d = (int)(val / w); val -= d * w;
+				*buf++ = (char)('0' + d);	/* Put the digit */
+			} while (--m >= -prec);			/* Output all digits specified by prec */
+			if (fmt != 'f') {	/* Put exponent if needed */
+				*buf++ = (char)fmt;
+				if (e < 0) {
+					e = 0 - e; *buf++ = '-';
+				} e
