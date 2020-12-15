@@ -6922,4 +6922,61 @@ int f_printf (
 		if (f & 4) {	/* long argument? */
 			v = (DWORD)va_arg(arp, long);
 		} else {		/* int/short/char argument */
-			v = (tc == 'd') ? (DWORD)(long)va_arg(arp, int) : (DWORD)va_arg(a
+			v = (tc == 'd') ? (DWORD)(long)va_arg(arp, int) : (DWORD)va_arg(arp, unsigned int);
+		}
+		if (tc == 'd' && (v & 0x80000000)) {	/* Negative value? */
+			v = 0 - v; f |= 1;
+		}
+#endif
+		i = 0;
+		do {	/* Make an integer number string */
+			d = (char)(v % r); v /= r;
+			if (d > 9) d += (tc == 'x') ? 0x27 : 0x07;
+			str[i++] = d + '0';
+		} while (v && i < SZ_NUM_BUF);
+		if (f & 1) str[i++] = '-';	/* Sign */
+		/* Write it */
+		for (j = i; !(f & 2) && j < w; j++) putc_bfd(&pb, pad);	/* Left pads */
+		do putc_bfd(&pb, (TCHAR)str[--i]); while (i);	/* Body */
+		while (j++ < w) putc_bfd(&pb, ' ');		/* Right pads */
+	}
+
+	va_end(arp);
+
+	return putc_flush(&pb);
+}
+
+#endif /* !FF_FS_READONLY */
+#endif /* FF_USE_STRFUNC */
+
+
+
+#if FF_CODE_PAGE == 0
+/*-----------------------------------------------------------------------*/
+/* Set Active Codepage for the Path Name                                 */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_setcp (
+	WORD cp		/* Value to be set as active code page */
+)
+{
+	static const WORD       validcp[22] = {  437,   720,   737,   771,   775,   850,   852,   855,   857,   860,   861,   862,   863,   864,   865,   866,   869,   932,   936,   949,   950, 0};
+	static const BYTE* const tables[22] = {Ct437, Ct720, Ct737, Ct771, Ct775, Ct850, Ct852, Ct855, Ct857, Ct860, Ct861, Ct862, Ct863, Ct864, Ct865, Ct866, Ct869, Dc932, Dc936, Dc949, Dc950, 0};
+	UINT i;
+
+
+	for (i = 0; validcp[i] != 0 && validcp[i] != cp; i++) ;	/* Find the code page */
+	if (validcp[i] != cp) return FR_INVALID_PARAMETER;	/* Not found? */
+
+	CodePage = cp;
+	if (cp >= 900) {	/* DBCS */
+		ExCvt = 0;
+		DbcTbl = tables[i];
+	} else {			/* SBCS */
+		ExCvt = tables[i];
+		DbcTbl = 0;
+	}
+	return FR_OK;
+}
+#endif	/* FF_CODE_PAGE == 0 */
+
