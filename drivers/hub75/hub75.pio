@@ -1,0 +1,45 @@
+;
+; Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+.program hub75_row
+
+; side-set pin 0 is LATCH
+; side-set pin 1 is OEn
+; OUT pins are row select A-E
+;
+; Each FIFO record consists of:
+; - 5-bit row select (LSBs)
+; - Pulse width - 1 (27 MSBs)
+;
+; Repeatedly select a row, pulse LATCH, and generate a pulse of a certain
+; width on OEn.
+
+.side_set 2
+
+.wrap_target
+    out pins, 5 [1]    side 0x2 ; Deassert OEn, output row select
+    out x, 27   [7]    side 0x3 ; Pulse LATCH, get OEn pulse width
+pulse_loop:
+    jmp x-- pulse_loop side 0x0 ; Assert OEn for x+1 cycles
+.wrap
+
+.program hub75_row_inverted
+
+; side-set pin 0 is LATCH
+; side-set pin 1 is OEn
+; OUT pins are row select A-E
+;
+; Each FIFO record consists of:
+; - 5-bit row select (LSBs)
+; - Pulse width - 1 (27 MSBs)
+;
+; Repeatedly select a row, pulse LATCH, and generate a pulse of a certain
+; width on OEn.
+
+.side_set 2
+
+.wrap_target
+    out pins, 5 [1]    side 0x3 ; Deassert OEn
