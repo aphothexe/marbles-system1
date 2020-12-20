@@ -34,4 +34,35 @@ namespace pimoroni {
         struct reading {
           float temperature;
           float pressure;
-          reading_st
+          reading_status status;
+        };
+
+        static const uint8_t DEFAULT_I2C_ADDRESS = 0x63;
+        static const uint8_t CHIP_ID = 0x08;
+
+        ICP10125() : ICP10125(new I2C()) {};
+
+        ICP10125(I2C *i2c) : i2c(i2c) {}
+
+        bool init();
+        int chip_id();
+        void reset();
+        reading measure(meas_command cmd=NORMAL);
+
+      private:
+        I2C *i2c;
+        int8_t address = DEFAULT_I2C_ADDRESS;
+
+        float sensor_constants[4];
+        const float p_Pa_calib[3] = {45000.0f, 80000.0f, 105000.0f};
+        const float LUT_lower = 3.5 * (1 << 20);
+        const float LUT_upper = 11.5 * (1 << 20);
+        const float quadr_factor = 1.0 / 16777216.0;
+        const float offst_factor = 2048.0;
+        bool read_otp();
+        void process_data(const int p_LSB, const int T_LSB, float *pressure, float *temperature);
+        void calculate_conversion_constants(const float *p_Pa, const float *p_LUT, float *out);
+        uint8_t crc8(uint8_t *bytes, size_t length, uint8_t polynomial = 0x31);
+  };
+
+}

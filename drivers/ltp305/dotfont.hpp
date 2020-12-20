@@ -1,0 +1,20 @@
+#pragma once
+
+#include <cstdint>
+#include <map>
+
+namespace pimoroni {
+
+  static const uint8_t DOT_CHAR_WIDTH = 5;
+
+  struct DotChar {
+    uint8_t data[DOT_CHAR_WIDTH];
+  };
+
+  static const std::map<uint16_t, DotChar> dotfont = {
+    {32, {0x00, 0x00, 0x00, 0x00, 0x00}},   // (space)
+    {33, {0x00, 0x00, 0x5f, 0x00, 0x00}},   // !
+    {34, {0x00, 0x07, 0x00, 0x07, 0x00}},   // "
+    {35, {0x14, 0x7f, 0x14, 0x7f, 0x14}},   // #
+    {36, {0x24, 0x2a, 0x7f, 0x2a, 0x12}},   // $
+    {3
