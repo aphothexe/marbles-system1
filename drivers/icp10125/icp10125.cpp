@@ -86,4 +86,95 @@ namespace pimoroni {
         uint16_result result;
         uint16_t command = __builtin_bswap16(READ_ID);
 
-       
+        i2c->write_blocking(address, (uint8_t *)&command, 2, true);
+        i2c->read_blocking(address, (uint8_t *)&result, 3, false);
+
+        if(result.crc8 != crc8((uint8_t *)&result.data, 2)) {
+            return -1;
+        }
+
+        return __builtin_bswap16(result.data) & 0x3f;
+    }
+
+    bool ICP10125::read_otp() {
+        uint16_result result[4];
+        uint16_t command = __builtin_bswap16(READ_OTP);
+        uint8_t move_address_ptr[] = {
+            MOVE_ADDRESS_PTR >> 8, MOVE_ADDRESS_PTR & 0xff,
+            0x00,
+            0x66,
+            0x9c  // Address CRC8
+        };
+
+        i2c->write_blocking(address, move_address_ptr, sizeof(move_address_ptr), false);
+
+        for(auto x = 0u; x < 4; x++) {
+            i2c->write_blocking(address, (uint8_t *)&command, 2, false);
+            i2c->read_blocking(address, (uint8_t *)&result[x], 3, false);
+            if(result[x].crc8 != crc8((uint8_t *)&result[x].data, 2)) {
+                return false;
+            }
+            sensor_constants[x] = (float)__builtin_bswap16(result[x].data);
+        }
+
+        return true;
+    }
+
+    void ICP10125::process_data(const int p_LSB, const int T_LSB, float *pressure, float *temperature) { 
+        float t; 
+        float s1, s2, s3; 
+        float in[3]; 
+        float out[3]; 
+        float A, B, C; 
+        
+        t = (float)(T_LSB - 32768); 
+        s1 = LUT_lower + (float)(sensor_constants[0] * t * t) * quadr_factor; 
+        s2 = offst_factor * sensor_constants[3] + (float)(sensor_constants[1] * t * t) * quadr_factor; 
+        s3 = LUT_upper + (float)(sensor_constants[2] * t * t) * quadr_factor; 
+        in[0] = s1; 
+        in[1] = s2; 
+        in[2] = s3; 
+        
+        calculate_conversion_constants(p_Pa_calib, in, out); 
+        A = out[0]; 
+        B = out[1]; 
+        C = out[2]; 
+        
+        *pressure = A + B / (C + p_LSB); 
+        *temperature = -45.f + 175.f / 65536.f * T_LSB;
+    }
+
+    void ICP10125::calculate_conversion_constants(const float *p_Pa, const float *p_LUT, float *out) { 
+        float A, B, C; 
+        
+        C = (p_LUT[0] * p_LUT[1] * (p_Pa[0] - p_Pa[1]) + 
+        p_LUT[1] * p_LUT[2] * (p_Pa[1] - p_Pa[2]) + 
+        p_LUT[2] * p_LUT[0] * (p_Pa[2] - p_Pa[0])) / 
+        (p_LUT[2] * (p_Pa[0] - p_Pa[1]) + 
+        p_LUT[0] * (p_Pa[1] - p_Pa[2]) + 
+        p_LUT[1] * (p_Pa[2] - p_Pa[0])); 
+        A = (p_Pa[0] * p_LUT[0] - p_Pa[1] * p_LUT[1] - (p_Pa[1] - p_Pa[0]) * C) / (p_LUT[0] - p_LUT[1]); 
+        B = (p_Pa[0] - A) * (p_LUT[0] + C); 
+        
+        out[0] = A; 
+        out[1] = B; 
+        out[2] = C; 
+    }
+
+    uint8_t ICP10125::crc8(uint8_t *bytes, size_t length, uint8_t polynomial) {
+        uint8_t result = 0xff;
+        for (auto byte = 0u; byte < length; byte++) {
+            result ^= bytes[byte];
+            for (auto bit = 0u; bit < 8; bit++) {
+                if (result & 0x80) {
+                    result <<= 1;
+                    result ^= polynomial;
+                } else {
+                    result <<= 1;
+                }
+            }
+        }
+        return result;
+    }
+
+}
