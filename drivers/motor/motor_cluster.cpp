@@ -159,4 +159,134 @@ namespace motor {
   void MotorCluster::duty(const uint8_t *motors, uint8_t length, float duty, bool load) {
     assert(motors != nullptr);
     for(uint8_t i = 0; i < length; i++) {
-      this->duty(motors[i], d
+      this->duty(motors[i], duty, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::duty(std::initializer_list<uint8_t> motors, float duty, bool load) {
+    for(auto motor : motors) {
+      this->duty(motor, duty, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_to_duty(float duty, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->duty(motor, duty, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  float MotorCluster::speed(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return states[motor].get_speed();
+  }
+
+  void MotorCluster::speed(uint8_t motor, float speed, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].set_speed_with_return(speed);
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::speed(const uint8_t *motors, uint8_t length, float speed, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->speed(motors[i], speed, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::speed(std::initializer_list<uint8_t> motors, float speed, bool load) {
+    for(auto motor : motors) {
+      this->speed(motor, speed, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_to_speed(float speed, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->speed(motor, speed, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  float MotorCluster::phase(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return configs[motor].phase;
+  }
+
+  void MotorCluster::phase(uint8_t motor, float phase, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    configs[motor].phase = MIN(MAX(phase, 0.0f), 1.0f);
+    pwms.set_chan_offset(motor, (uint32_t)(configs[motor].phase * (float)pwms.get_wrap()), load);
+  }
+
+  void MotorCluster::phase(const uint8_t *motors, uint8_t length, float phase, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->phase(motors[i], phase, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::phase(std::initializer_list<uint8_t> motors, float phase, bool load) {
+    for(auto motor : motors) {
+      this->phase(motor, phase, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_to_phase(float phase, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->phase(motor, phase, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  float MotorCluster::frequency() const {
+    return pwm_frequency;
+  }
+
+  bool MotorCluster::frequency(float freq) {
+    bool success = false;
+
+    if((freq >= MotorState::MIN_FREQUENCY) && (freq <= MotorState::MAX_FREQUENCY)) {
+      // Calculate a suitable pwm wrap period for this frequency
+      uint32_t period; uint32_t div256;
+      if(pimoroni::PWMCluster::calculate_pwm_factors(freq, period, div256)) {
+
+        pwm_period = period;
+        pwm_frequency = freq;
+
+        // Update the pwm before setting the new wrap
+        uint8_t motor_count = pwms.get_chan_pair_count();
+        for(uint motor = 0; motor < motor_count; motor++) {
+          apply_duty(motor, states[motor].get_deadzoned_duty(), configs[motor].mode, false);
+          pwms.set_chan_offset(POS_MOTOR(motor), (uint32_t)(configs[motor].phase * (float)pwm_period), false);
+          pwms.set_chan_offset(NEG_MOTOR(motor), (uint32_t)(configs[motor].phase * (float)pwm_period), false);
+        }
+
+        // Set the new wrap (should be 1 less than the period to get full 0 to 100%)
+        pwms.set_wrap(pwm_period, true);
+
+        // Apply the new divider
+        uint16_t div = div256 >> 8;
+        uint8_t mod = div256 % 256;
+        pwms.set_clkdiv_int_frac(div, mod);
+
+        success = true;
+      }
+    }
