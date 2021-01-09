@@ -546,4 +546,125 @@ namespace motor {
 
   void MotorCluster::all_directions(Direction direction) {
     uint8_t motor_count = pwms.get_chan_pair_count();
-    for(uint8_t motor = 0; motor < mot
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->direction(motor, direction);
+    }
+  }
+
+  float MotorCluster::speed_scale(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return states[motor].get_speed_scale();
+  }
+
+  void MotorCluster::speed_scale(uint8_t motor, float speed_scale) {
+    assert(motor < pwms.get_chan_pair_count());
+    states[motor].set_speed_scale(speed_scale);
+  }
+
+  void MotorCluster::speed_scale(const uint8_t *motors, uint8_t length, float speed_scale) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->speed_scale(motors[i], speed_scale);
+    }
+  }
+
+  void MotorCluster::speed_scale(std::initializer_list<uint8_t> motors, float speed_scale) {
+    for(auto motor : motors) {
+      this->speed_scale(motor, speed_scale);
+    }
+  }
+
+  void MotorCluster::all_speed_scales(float speed_scale) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->speed_scale(motor, speed_scale);
+    }
+  }
+
+  float MotorCluster::zeropoint(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return states[motor].get_zeropoint();
+  }
+
+  void MotorCluster::zeropoint(uint8_t motor, float zeropoint, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    states[motor].set_zeropoint(zeropoint);
+  }
+
+  void MotorCluster::zeropoint(const uint8_t *motors, uint8_t length, float zeropoint, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->zeropoint(motors[i], zeropoint);
+    }
+  }
+
+  void MotorCluster::zeropoint(std::initializer_list<uint8_t> motors, float zeropoint, bool load) {
+    for(auto motor : motors) {
+      this->zeropoint(motor, zeropoint);
+    }
+  }
+
+  void MotorCluster::all_zeropoints(float zeropoint, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->zeropoint(motor, zeropoint);
+    }
+  }
+
+  float MotorCluster::deadzone(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return states[motor].get_deadzone();
+  }
+
+  void MotorCluster::deadzone(uint8_t motor, float deadzone, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].set_deadzone_with_return(deadzone);
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::deadzone(const uint8_t *motors, uint8_t length, float deadzone, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->deadzone(motors[i], deadzone);
+    }
+  }
+
+  void MotorCluster::deadzone(std::initializer_list<uint8_t> motors, float deadzone, bool load) {
+    for(auto motor : motors) {
+      this->deadzone(motor, deadzone);
+    }
+  }
+
+  void MotorCluster::all_deadzones(float deadzone, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->deadzone(motor, deadzone);
+    }
+  }
+
+  DecayMode MotorCluster::decay_mode(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return configs[motor].mode;
+  }
+
+  void MotorCluster::decay_mode(uint8_t motor, DecayMode mode, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    configs[motor].mode = mode;
+    apply_duty(motor, states[motor].get_deadzoned_duty(), configs[motor].mode, false);
+  }
+
+  void MotorCluster::decay_mode(const uint8_t *motors, uint8_t length, DecayMode mode, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->decay_mode(motors[i], mode);
+    }
+  }
+
+  void MotorCluster::decay_mode(std::initializer_list<uint8_t> motors, DecayMode mode, bool load) {
+    for(auto motor : motors) {
+      this->decay_mode(motor, mode);
+    }
+  }
+
+  void MotorCluster::all_decay_modes(DecayMode mode, bool load) {
+    uint8_t motor_count
