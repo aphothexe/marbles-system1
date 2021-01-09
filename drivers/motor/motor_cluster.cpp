@@ -290,3 +290,144 @@ namespace motor {
         success = true;
       }
     }
+    return success;
+  }
+
+  void MotorCluster::stop(uint8_t motor, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].stop_with_return();
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::stop(const uint8_t *motors, uint8_t length, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->stop(motors[i], false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::stop(std::initializer_list<uint8_t> motors, bool load) {
+    for(auto motor : motors) {
+      this->stop(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::stop_all(bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->stop(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::coast(uint8_t motor, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].stop_with_return();
+    apply_duty(motor, new_duty, FAST_DECAY, load);
+  }
+
+  void MotorCluster::coast(const uint8_t *motors, uint8_t length, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->coast(motors[i], false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::coast(std::initializer_list<uint8_t> motors, bool load) {
+    for(auto motor : motors) {
+      this->coast(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::coast_all(bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->coast(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::brake(uint8_t motor, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].stop_with_return();
+    apply_duty(motor, new_duty, SLOW_DECAY, load);
+  }
+
+  void MotorCluster::brake(const uint8_t *motors, uint8_t length, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->brake(motors[i], false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::brake(std::initializer_list<uint8_t> motors, bool load) {
+    for(auto motor : motors) {
+      this->brake(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::brake_all(bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->brake(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::full_negative(uint8_t motor, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].full_negative_with_return();
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::full_negative(const uint8_t *motors, uint8_t length, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->full_negative(motors[i], false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::full_negative(std::initializer_list<uint8_t> motors, bool load) {
+    for(auto motor : motors) {
+      this->full_negative(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_full_negative(bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->full_negative(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::full_positive(uint8_t motor, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].full_positive_with_return();
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::full_positive(const uint8_t *motors, uint8_t length, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->
