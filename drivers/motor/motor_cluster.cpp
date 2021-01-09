@@ -430,4 +430,120 @@ namespace motor {
   void MotorCluster::full_positive(const uint8_t *motors, uint8_t length, bool load) {
     assert(motors != nullptr);
     for(uint8_t i = 0; i < length; i++) {
-      this->
+      this->full_positive(motors[i], false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::full_positive(std::initializer_list<uint8_t> motors, bool load) {
+    for(auto motor : motors) {
+      this->full_positive(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_full_positive(bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->full_positive(motor, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::to_percent(uint8_t motor, float in, float in_min, float in_max, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].to_percent_with_return(in, in_min, in_max);
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::to_percent(const uint8_t *motors, uint8_t length, float in, float in_min, float in_max, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      to_percent(motors[i], in, in_min, in_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::to_percent(std::initializer_list<uint8_t> motors, float in, float in_min, float in_max, bool load) {
+    for(auto motor : motors) {
+      to_percent(motor, in, in_min, in_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_to_percent(float in, float in_min, float in_max, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      to_percent(motor, in, in_min, in_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::to_percent(uint8_t motor, float in, float in_min, float in_max, float speed_min, float speed_max, bool load) {
+    assert(motor < pwms.get_chan_pair_count());
+    float new_duty = states[motor].to_percent_with_return(in, in_min, in_max, speed_min, speed_max);
+    apply_duty(motor, new_duty, configs[motor].mode, load);
+  }
+
+  void MotorCluster::to_percent(const uint8_t *motors, uint8_t length, float in, float in_min, float in_max, float speed_min, float speed_max, bool load) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      to_percent(motors[i], in, in_min, in_max, speed_min, speed_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::to_percent(std::initializer_list<uint8_t> motors, float in, float in_min, float in_max, float speed_min, float speed_max, bool load) {
+    for(auto motor : motors) {
+      to_percent(motor, in, in_min, in_max, speed_min, speed_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::all_to_percent(float in, float in_min, float in_max, float speed_min, float speed_max, bool load) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      to_percent(motor, in, in_min, in_max, speed_min, speed_max, false);
+    }
+    if(load)
+      pwms.load_pwm();
+  }
+
+  void MotorCluster::load() {
+    pwms.load_pwm();
+  }
+
+  Direction MotorCluster::direction(uint8_t motor) const {
+    assert(motor < pwms.get_chan_pair_count());
+    return states[motor].get_direction();
+  }
+
+  void MotorCluster::direction(uint8_t motor, Direction direction) {
+    assert(motor < pwms.get_chan_pair_count());
+    states[motor].set_direction(direction);
+  }
+
+  void MotorCluster::direction(const uint8_t *motors, uint8_t length, Direction direction) {
+    assert(motors != nullptr);
+    for(uint8_t i = 0; i < length; i++) {
+      this->direction(motors[i], direction);
+    }
+  }
+
+  void MotorCluster::direction(std::initializer_list<uint8_t> motors, Direction direction) {
+    for(auto motor : motors) {
+      this->direction(motor, direction);
+    }
+  }
+
+  void MotorCluster::all_directions(Direction direction) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < mot
