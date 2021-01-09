@@ -667,4 +667,60 @@ namespace motor {
   }
 
   void MotorCluster::all_decay_modes(DecayMode mode, bool load) {
-    uint8_t motor_count
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    for(uint8_t motor = 0; motor < motor_count; motor++) {
+      this->decay_mode(motor, mode);
+    }
+  }
+
+
+  void MotorCluster::apply_duty(uint8_t motor, float duty, DecayMode mode, bool load) {
+    if(isfinite(duty)) {
+      int32_t signed_level = MotorState::duty_to_level(duty, pwm_period);
+
+      switch(mode) {
+      case SLOW_DECAY: //aka 'Braking'
+        if(signed_level >= 0) {
+          pwms.set_chan_level(POS_MOTOR(motor), pwm_period, false);
+          pwms.set_chan_level(NEG_MOTOR(motor), pwm_period - signed_level, load);
+        }
+        else {
+          pwms.set_chan_level(POS_MOTOR(motor), pwm_period + signed_level, false);
+          pwms.set_chan_level(NEG_MOTOR(motor), pwm_period, load);
+        }
+        break;
+
+      case FAST_DECAY: //aka 'Coasting'
+      default:
+        if(signed_level >= 0) {
+          pwms.set_chan_level(POS_MOTOR(motor), signed_level, false);
+          pwms.set_chan_level(NEG_MOTOR(motor), 0, load);
+        }
+        else {
+          pwms.set_chan_level(POS_MOTOR(motor), 0, false);
+          pwms.set_chan_level(NEG_MOTOR(motor), 0 - signed_level, load);
+        }
+        break;
+      }
+    }
+    else {
+      pwms.set_chan_level(POS_MOTOR(motor), 0, false);
+      pwms.set_chan_level(NEG_MOTOR(motor), 0, load);
+    }
+  }
+
+  void MotorCluster::create_motor_states(Direction direction, float speed_scale, float zeropoint,
+                                         float deadzone, DecayMode mode, bool auto_phase) {
+    uint8_t motor_count = pwms.get_chan_pair_count();
+    if(motor_count > 0) {
+      states = new MotorState[motor_count];
+      configs = new motor_config[motor_count];
+
+      for(uint motor = 0; motor < motor_count; motor++) {
+        states[motor] = MotorState(direction, speed_scale, zeropoint, deadzone);
+        configs[motor].phase = (auto_phase) ? (float)motor / (float)motor_count : 0.0f;
+        configs[motor].mode = mode;
+      }
+    }
+  }
+}
