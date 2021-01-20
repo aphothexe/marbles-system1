@@ -24,4 +24,24 @@ namespace pimoroni {
               div16_top /= 3;
               top *= 3;
           }
-          else if((div16_top >= (2 << 4)) && (top * 2 <= MAX_PWM_WR
+          else if((div16_top >= (2 << 4)) && (top * 2 <= MAX_PWM_WRAP)) {
+              div16_top /= 2;
+              top *= 2;
+          }
+          else {
+              break;
+          }
+      }
+
+      // Only return valid factors if the divisor is actually achievable
+      if(div16_top >= 16 && div16_top <= (UINT8_MAX << 4)) {
+        top_out = top;
+        div16_out = div16_top;
+
+        success = true;
+      }
+    }
+    return success;
+  }
+
+};
