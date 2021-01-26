@@ -169,4 +169,21 @@ namespace pimoroni {
     void set_chan_polarity(uint8_t channel, bool polarity, bool load = true);
 
     uint32_t get_wrap() const;
-    void set_wrap(uint32_t wrap, bool loa
+    void set_wrap(uint32_t wrap, bool load = true);
+
+    void set_clkdiv(float divider);
+    void set_clkdiv_int_frac(uint16_t integer, uint8_t fract);
+
+    void load_pwm();
+
+    //--------------------------------------------------
+  public:
+    static bool calculate_pwm_factors(float freq, uint32_t& top_out, uint32_t& div256_out);
+  private:
+    static bool bit_in_mask(uint bit, uint mask);
+    static void sorted_insert(TransitionData array[], uint &size, const TransitionData &data);
+    void populate_sequence(const TransitionData transitions[], const uint &data_size, Sequence &seq_out, uint &pin_states_in_out) const;
+
+    void next_dma_sequence();
+  };
+}
