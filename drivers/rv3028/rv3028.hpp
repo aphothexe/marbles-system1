@@ -327,3 +327,6 @@ private:
 
   // POSSIBLE ENHANCEMENTS :
   // ENHANCEMENT: Battery Interrupt / check battery voltage
+  // ENHANCEMENT: External Event Interrupt
+
+}
