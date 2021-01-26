@@ -54,4 +54,119 @@ namespace pimoroni {
 
       //--------------------------------------------------
       // Constructors/Destructor
-      //-------------------------------
+      //--------------------------------------------------
+      Sequence() : size(1), data{Transition()} {};
+    };
+
+    struct TransitionData {
+      //--------------------------------------------------
+      // Variables
+      //--------------------------------------------------
+      uint8_t channel;
+      uint32_t level;
+      bool state;
+      bool dummy;
+
+
+      //--------------------------------------------------
+      // Constructors/Destructor
+      //--------------------------------------------------
+      TransitionData() : channel(0), level(0), state(false), dummy(false) {};
+      TransitionData(uint8_t channel, uint32_t level, bool new_state) : channel(channel), level(level), state(new_state), dummy(false) {};
+      TransitionData(uint32_t level) : channel(0), level(level), state(false), dummy(true) {};
+    };
+
+  private:
+    struct ChannelState {
+      //--------------------------------------------------
+      // Variables
+      //--------------------------------------------------
+      uint level;
+      uint offset;
+      bool polarity;
+      uint overrun;
+      uint next_overrun;
+
+
+      //--------------------------------------------------
+      // Constructors/Destructor
+      //--------------------------------------------------
+      ChannelState() : level(0), offset(0), polarity(false), overrun(0), next_overrun(0) {}
+    };
+
+
+    //--------------------------------------------------
+    // Variables
+    //--------------------------------------------------
+  private:
+    PIO pio;
+    uint sm;
+    int dma_channel;
+    uint pin_mask;
+    uint8_t channel_count;
+    ChannelState* channels;
+    uint8_t channel_to_pin_map[NUM_BANK0_GPIOS];
+    uint wrap_level;
+
+    Sequence sequences[NUM_BUFFERS];
+    Sequence loop_sequences[NUM_BUFFERS];
+
+    TransitionData transitions[BUFFER_SIZE];
+    TransitionData looping_transitions[BUFFER_SIZE];
+
+    volatile uint read_index = 0;
+    volatile uint last_written_index = 0;
+
+    bool initialised = false;
+    bool loading_zone = true;
+
+
+    //--------------------------------------------------
+    // Statics
+    //--------------------------------------------------
+    static PWMCluster* clusters[NUM_DMA_CHANNELS];
+    static uint8_t claimed_sms[NUM_PIOS];
+    static uint pio_program_offset;
+    static void dma_interrupt_handler();
+
+
+    //--------------------------------------------------
+    // Constructors/Destructor
+    //--------------------------------------------------
+  public:
+    PWMCluster(PIO pio, uint sm, uint pin_mask, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+    PWMCluster(PIO pio, uint sm, uint pin_base, uint pin_count, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+    PWMCluster(PIO pio, uint sm, const uint8_t *pins, uint32_t length, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+    PWMCluster(PIO pio, uint sm, std::initializer_list<uint8_t> pins, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+
+    PWMCluster(PIO pio, uint sm, const pin_pair *pin_pairs, uint32_t length, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+    PWMCluster(PIO pio, uint sm, std::initializer_list<pin_pair> pin_pairs, bool loading_zone = DEFAULT_USE_LOADING_ZONE);
+    ~PWMCluster();
+
+  private:
+    void constructor_common();
+
+
+    //--------------------------------------------------
+    // Methods
+    //--------------------------------------------------
+  public:
+    bool init();
+
+    uint8_t get_chan_count() const;
+    uint8_t get_chan_pair_count() const;
+    uint8_t get_chan_pin(uint8_t channel) const;
+    pin_pair get_chan_pin_pair(uint8_t channel_pair) const;
+    static uint8_t channel_from_pair(uint8_t channel_pair);
+
+    uint32_t get_chan_level(uint8_t channel) const;
+    void set_chan_level(uint8_t channel, uint32_t level, bool load = true);
+
+    uint32_t get_chan_offset(uint8_t channel) const;
+    void set_chan_offset(uint8_t channel, uint32_t offset, bool load = true);
+
+    bool get_chan_polarity(uint8_t channel) const;
+    void set_chan_polarity(uint8_t channel, bool polarity, bool load = true);
+
+    uint32_t get_wrap() const;
+    void set_wrap(uint32_t wrap, bool loa
