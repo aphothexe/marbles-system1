@@ -90,4 +90,24 @@ int8_t sensirion_i2c_hal_write(uint8_t address, const uint8_t* data,
 
 /**
  * Sleep for a given number of microseconds. The function should delay the
- * execution approximately, bu
+ * execution approximately, but no less than, the given time.
+ *
+ * When using hardware i2c:
+ * Despite the unit, a <10 millisecond precision is sufficient.
+ *
+ * When using software i2c:
+ * The precision needed depends on the desired i2c frequency, i.e. should be
+ * exact to about half a clock cycle (defined in
+ * `SENSIRION_I2C_CLOCK_PERIOD_USEC` in `sensirion_sw_i2c_gpio.h`).
+ *
+ * Example with 400kHz requires a precision of 1 / (2 * 400kHz) == 1.25usec.
+ *
+ * @param useconds the sleep time in microseconds
+ */
+void sensirion_i2c_hal_sleep_usec(uint32_t useconds);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+
+#endif /* SENSIRION_I2C_HAL_H */
