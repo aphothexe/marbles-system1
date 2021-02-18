@@ -154,4 +154,120 @@ namespace servo {
     return calibration[0];
   }
 
-  float Calibration::first_pulse() c
+  float Calibration::first_pulse() const {
+    return first().pulse;
+  }
+
+  void Calibration::first_pulse(float pulse) {
+    first().pulse = pulse;
+  }
+
+  float Calibration::first_value() const {
+    return first().value;
+  }
+
+  void Calibration::first_value(float value) {
+    first().value = value;
+  }
+
+  Calibration::Pair &Calibration::last() {
+    assert(calibration_size > 0);
+    return calibration[calibration_size - 1];
+  }
+
+  const Calibration::Pair &Calibration::last() const {
+    assert(calibration_size > 0);
+    return calibration[calibration_size - 1];
+  }
+
+  float Calibration::last_pulse() const {
+    return last().pulse;
+  }
+
+  void Calibration::last_pulse(float pulse) {
+    last().pulse = pulse;
+  }
+
+  float Calibration::last_value() const {
+    return last().value;
+  }
+
+  void Calibration::last_value(float value) {
+    last().value = value;
+  }
+
+  bool Calibration::has_lower_limit() const {
+    return limit_lower;
+  }
+
+  bool Calibration::has_upper_limit() const {
+    return limit_upper;
+  }
+
+  void Calibration::limit_to_calibration(bool lower, bool upper) {
+    limit_lower = lower;
+    limit_upper = upper;
+  }
+
+  bool Calibration::value_to_pulse(float value, float &pulse_out, float &value_out) const {
+    bool success = false;
+    if(calibration_size >= 2) {
+      uint8_t last = calibration_size - 1;
+
+      value_out = value;
+
+      // Is the value below the bottom most calibration pair?
+      if(value < calibration[0].value) {
+        // Should the value be limited to the calibration or projected below it?
+        if(limit_lower) {
+          pulse_out = calibration[0].pulse;
+          value_out = calibration[0].value;
+        }
+        else {
+          pulse_out = map_float(value, calibration[0].value, calibration[1].value,
+                                       calibration[0].pulse, calibration[1].pulse);
+        }
+      }
+      // Is the value above the top most calibration pair?
+      else if(value > calibration[last].value) {
+        // Should the value be limited to the calibration or projected above it?
+        if(limit_upper) {
+          pulse_out = calibration[last].pulse;
+          value_out = calibration[last].value;
+        }
+        else {
+          pulse_out = map_float(value, calibration[last - 1].value, calibration[last].value,
+                                       calibration[last - 1].pulse, calibration[last].pulse);
+        }
+      }
+      else {
+        // The value must between two calibration pairs, so iterate through them to find which ones
+        for(uint8_t i = 0; i < last; i++) {
+          if(value <= calibration[i + 1].value) {
+            pulse_out = map_float(value, calibration[i].value, calibration[i + 1].value,
+                                         calibration[i].pulse, calibration[i + 1].pulse);
+            break; // No need to continue checking so break out of the loop
+          }
+        }
+      }
+
+      // Clamp the pulse between the hard limits
+      if(pulse_out < LOWER_HARD_LIMIT || pulse_out > UPPER_HARD_LIMIT) {
+        pulse_out = MIN(MAX(pulse_out, LOWER_HARD_LIMIT), UPPER_HARD_LIMIT);
+
+        // Is the pulse below the bottom most calibration pair?
+        if(pulse_out < calibration[0].pulse) {
+          value_out = map_float(pulse_out, calibration[0].pulse, calibration[1].pulse,
+                                           calibration[0].value, calibration[1].value);
+        }
+        // Is the pulse above the top most calibration pair?
+        else if(pulse_out > calibration[last].pulse) {
+          value_out = map_float(pulse_out, calibration[last - 1].pulse, calibration[last].pulse,
+                                           calibration[last - 1].value, calibration[last].value);
+        }
+        else {
+          // The pulse must between two calibration pairs, so iterate through them to find which ones
+          for(uint8_t i = 0; i < last; i++) {
+            if(pulse_out <= calibration[i + 1].pulse) {
+              value_out = map_float(pulse_out, calibration[i].pulse, calibration[i + 1].pulse,
+                       
