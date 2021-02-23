@@ -55,3 +55,4 @@ If a backlight pin has been configured, you can set the backlight from 0 to 255:
 
 ```c++
 st7789.set_backlight(128)
+```
