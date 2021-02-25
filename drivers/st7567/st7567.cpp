@@ -138,4 +138,46 @@ namespace pimoroni {
     uint8_t page_byte_selector;
     uint8_t page_bit_selector;
 
-    for(uint8_t page
+    for(uint8_t page=0; page < 8 ; page++) { //select page
+      for(uint16_t pixel_index=0 ; pixel_index < (PAGESIZE * 8)  ; pixel_index++) {  //cycle through a page worth of bits from the fb
+        page_byte_selector = ((pixel_index % 128)); 
+        page_bit_selector = (pixel_index / 128);
+
+        if(*fb & (0b10000000 >> (pixel_index % 8))) { // check selected pixel is present
+          page_buffer[page_byte_selector] |= (1 << page_bit_selector);
+        }
+        else {
+          page_buffer[page_byte_selector] &=  ~( 1 << page_bit_selector);
+        }
+    
+        if((pixel_index % 8) >= 7) { //increment fb pointer at end of byte        
+          fb++;       
+        }
+      }
+  
+      if(graphics->pen_type == PicoGraphics::PEN_1BIT) {
+        command(reg::ENTER_RMWMODE);
+        command(reg::SETPAGESTART | page);
+        command(reg::SETCOLL);
+        command(reg::SETCOLH);
+        gpio_put(dc, 1); // data mode
+        gpio_put(cs, 0);
+        spi_write_blocking(spi, &page_buffer[0], PAGESIZE );
+        gpio_put(cs, 1);
+        gpio_put(dc, 0); // Back to command mode
+      } 
+      else { //other pen types incompatable
+        return;
+      }
+    }
+    gpio_put(cs, 1);
+  }
+
+  void ST7567::set_backlight(uint8_t brightness) {
+    // gamma correct the provided 0-255 brightness value onto a
+    // 0-65535 range for the pwm counter
+    float gamma = 2.8;
+    uint16_t value = (uint16_t)(pow((float)(brightness) / 255.0f, gamma) * 65535.0f + 0.5f);
+    pwm_set_gpio_level(bl, value);
+  }
+} 
