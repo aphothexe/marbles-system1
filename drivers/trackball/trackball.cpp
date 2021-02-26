@@ -146,4 +146,26 @@ namespace pimoroni {
   }
 
   void Trackball::wait_for_flash(void) {
-    unsign
+    unsigned long start_time = millis();
+    while(get_interrupt()) {
+      if(millis() - start_time > timeout) {
+        printf("Timed out waiting for interrupt!\n");
+        return;
+      }
+      sleep_ms(1);
+    }
+
+    start_time = millis();
+    while(!get_interrupt()) {
+      if(millis() - start_time > timeout) {
+        printf("Timed out waiting for interrupt!\n");
+        return;
+      }
+      sleep_ms(1);
+    }
+  }
+
+  uint32_t Trackball::millis() {
+    return to_ms_since_boot(get_absolute_time());
+  }
+}
