@@ -79,4 +79,7 @@ namespace pimoroni {
         return status == VL53L5CX_STATUS_OK && is_ready;
     }
     bool VL53L5CX::get_data(ResultsData *results) {
-       
+        uint8_t status = vl53l5cx_get_ranging_data(configuration, results);
+        return status == VL53L5CX_STATUS_OK;
+    }
+}

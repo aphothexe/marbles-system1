@@ -1,0 +1,13 @@
+add_subdirectory(breakout_dotmatrix)
+add_subdirectory(breakout_encoder)
+add_subdirectory(breakout_ioexpander)
+add_subdirectory(breakout_ltr559)
+add_subdirectory(breakout_colourlcd160x80)
+add_subdirectory(breakout_roundlcd)
+add_subdirectory(breakout_rgbmatrix5x5)
+add_subdirectory(breakout_matrix11x7)
+add_subdirectory(breakout_mics6814)
+add_subdirectory(breakout_pmw3901)
+add_subdirectory(breakout_potentiometer)
+add_subdirectory(breakout_rtc)
+ad
