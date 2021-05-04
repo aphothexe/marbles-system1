@@ -281,4 +281,34 @@
       {.width=18, .vertex_count=43, .vertices=&gothgbt_vertices[6604]},
       {.width=14, .vertex_count=34, .vertices=&gothgbt_vertices[6690]},
       {.width=17, .vertex_count=40, .vertices=&gothgbt_vertices[6758]},
-      
+      {.width=14, .vertex_count=31, .vertices=&gothgbt_vertices[6838]},
+      {.width=13, .vertex_count=40, .vertices=&gothgbt_vertices[6900]},
+      {.width=18, .vertex_count=55, .vertices=&gothgbt_vertices[6980]},
+      {.width=18, .vertex_count=46, .vertices=&gothgbt_vertices[7090]},
+      {.width=10, .vertex_count=34, .vertices=&gothgbt_vertices[7182]},
+      {.width=10, .vertex_count=38, .vertices=&gothgbt_vertices[7250]},
+      {.width=17, .vertex_count=49, .vertices=&gothgbt_vertices[7326]},
+      {.width=10, .vertex_count=21, .vertices=&gothgbt_vertices[7424]},
+      {.width=26, .vertex_count=66, .vertices=&gothgbt_vertices[7466]},
+      {.width=18, .vertex_count=44, .vertices=&gothgbt_vertices[7598]},
+      {.width=18, .vertex_count=39, .vertices=&gothgbt_vertices[7686]},
+      {.width=18, .vertex_count=53, .vertices=&gothgbt_vertices[7764]},
+      {.width=18, .vertex_count=43, .vertices=&gothgbt_vertices[7870]},
+      {.width=14, .vertex_count=37, .vertices=&gothgbt_vertices[7956]},
+      {.width=16, .vertex_count=58, .vertices=&gothgbt_vertices[8030]},
+      {.width=10, .vertex_count=27, .vertices=&gothgbt_vertices[8146]},
+      {.width=18, .vertex_count=46, .vertices=&gothgbt_vertices[8200]},
+      {.width=18, .vertex_count=35, .vertices=&gothgbt_vertices[8292]},
+      {.width=26, .vertex_count=56, .vertices=&gothgbt_vertices[8362]},
+      {.width=19, .vertex_count=58, .vertices=&gothgbt_vertices[8474]},
+      {.width=18, .vertex_count=59, .vertices=&gothgbt_vertices[8590]},
+      {.width=18, .vertex_count=37, .vertices=&gothgbt_vertices[8708]},
+      {.width=14, .vertex_count=39, .vertices=&gothgbt_vertices[8782]},
+      {.width=8, .vertex_count=2, .vertices=&gothgbt_vertices[8860]},
+      {.width=14, .vertex_count=39, .vertices=&gothgbt_vertices[8864]},
+      {.width=24, .vertex_count=23, .vertices=&gothgbt_vertices[8942]}
+      }
+    };
+
+    static const int8_t scriptc_vertices[5530] = {
+      8, -12, 7, -11, 5, 1, -128, -128, 8, -11, 5, 1, -128, -128, 8, -12, 9, -11, 5, 1, -128, -128, 3, 7, 2, 8, 3, 9, 4, 8, 3, 7, 7, -12, 5, -5, -128, -128, 8, -12, 5, -5, -128, -128, 16, -12, 14, -5, -128, -128, 17, -12, 14, -5, 11, -12, 4, 16, -128, -128, 17, -12, 10, 16, -128, -128, 4, -1, 18, -1, -128, -128, 3, 5, 17, 5, 12, -16, 4, 13, -128, -128, 17, -16, 9, 13, -128, -128, 18, -8, 17, -7, 18, -6, 19, -7, 19, -8, 18, -10, 17, -11, 14, -12, 10, -12, 7, -11, 5, -9, 5, -7, 6, -5, 7, -4, 14, 0, 16, 2, -128, -128, 5, -7, 7, -5, 14, -1, 15, 0, 16, 2, 16, 5, 15, 7, 14, 8, 11, 9, 7, 9, 4, 8, 3, 7, 2, 5, 2, 4, 3, 3, 4, 4, 3, 5, 21, -12, 3, 9, -128, -128, 8, -12, 10, -10, 10, -8, 9, -6, 7, -5, 5, -5, 3, -7, 3, -9, 4, -11, 6, -12, 8, -12, 10, -11, 13, -10, 16, -10, 19, -11, 21, -12, -128, -128, 17, 2, 15, 3, 14, 5, 14, 7, 16, 9, 18, 9, 20, 8, 21, 6, 21, 4, 19, 2, 17, 2, 23, -4, 22, -3, 23, -2, 24, -3, 24, -4, 23, -5, 22, -5, 20, -4, 18, -2, 13, 6, 11, 8, 9, 9, 6, 9, 3, 8, 2, 6, 2, 4, 3, 2, 4, 1, 6, 0, 11, -2, 13, -3, 15, -5, 16, -7, 16, -9, 15, -11, 13, -12, 11, -11, 10, -9, 10, -6, 11, 0, 12, 3, 14, 6, 16, 8, 18, 9, 20, 9, 21, 7, 21, 6, -128, -128, 6, 9, 4, 8, 3, 6, 3, 4, 4, 2, 5, 1, 11, -2, -128, -128, 10, -6, 11, -1, 12, 2, 14, 5, 16, 7, 18, 8, 20, 8, 21, 7, 8, -10, 7, -11, 8, -12, 9, -11, 9, -10, 8, -8, 6, -6, 15, -16, 11, -13, 8, -10, 6, -7, 4, -3, 3, 2, 3, 6, 4, 11, 5, 14, 6, 16, -128, -128, 11, -13, 8, -9, 6, -5, 5, -2, 4, 3, 4, 8, 5, 13, 6, 16, 9, -16, 10, -14, 11, -11, 12, -6, 12, -2, 11, 3, 9, 7, 7, 10, 4, 13, 0, 16, -128, -128, 9, -16, 10, -13, 11, -8, 11, -3, 10, 2, 9, 5, 7, 9, 4, 13, 10, -12, 10, 0, -128, -128, 5, -9, 15, -3, -128, -128, 15, -9, 5, -3, 13, -9, 13, 9, -128, -128, 4, 0, 22, 0, 3, 9, 2, 8, 3, 7, 4, 8, 4, 9, 3, 11, 1, 13, 4, 0, 22, 0, 3, 7, 2, 8, 3, 9, 4, 8, 3, 7, 24, -16, -2, 16, 12, -12, 9, -11, 7, -9, 5, -6, 4, -3, 3, 1, 3, 4, 4, 7, 5, 8, 7, 9, 9, 9, 12, 8, 14, 6, 16, 3, 17, 0, 18, -4, 18, -7, 17, -10, 16, -11, 14, -12, 12, -12, -128, -128, 12, -12, 10, -11, 8, -9, 6, -6, 5, -3, 4, 1, 4, 4, 5, 7, 7, 9, -128, -128, 9, 9, 11, 8, 13, 6, 15, 3, 16, 0, 17, -4
