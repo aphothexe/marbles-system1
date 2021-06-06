@@ -593,4 +593,34 @@
       {.width=19, .vertex_count=35, .vertices=&timesi_vertices[2956]},
       {.width=18, .vertex_count=24, .vertices=&timesi_vertices[3026]},
       {.width=21, .vertex_count=41, .vertices=&timesi_vertices[3074]},
-      {.width=18, .vertex_count=25, .vertices=&timesi_ver
+      {.width=18, .vertex_count=25, .vertices=&timesi_vertices[3156]},
+      {.width=15, .vertex_count=34, .vertices=&timesi_vertices[3206]},
+      {.width=20, .vertex_count=42, .vertices=&timesi_vertices[3274]},
+      {.width=21, .vertex_count=30, .vertices=&timesi_vertices[3358]},
+      {.width=13, .vertex_count=25, .vertices=&timesi_vertices[3418]},
+      {.width=13, .vertex_count=31, .vertices=&timesi_vertices[3468]},
+      {.width=20, .vertex_count=33, .vertices=&timesi_vertices[3530]},
+      {.width=12, .vertex_count=17, .vertices=&timesi_vertices[3596]},
+      {.width=33, .vertex_count=51, .vertices=&timesi_vertices[3630]},
+      {.width=23, .vertex_count=36, .vertices=&timesi_vertices[3732]},
+      {.width=18, .vertex_count=31, .vertices=&timesi_vertices[3804]},
+      {.width=21, .vertex_count=41, .vertices=&timesi_vertices[3866]},
+      {.width=20, .vertex_count=32, .vertices=&timesi_vertices[3948]},
+      {.width=17, .vertex_count=25, .vertices=&timesi_vertices[4012]},
+      {.width=17, .vertex_count=27, .vertices=&timesi_vertices[4062]},
+      {.width=14, .vertex_count=17, .vertices=&timesi_vertices[4116]},
+      {.width=23, .vertex_count=36, .vertices=&timesi_vertices[4150]},
+      {.width=20, .vertex_count=25, .vertices=&timesi_vertices[4222]},
+      {.width=29, .vertex_count=40, .vertices=&timesi_vertices[4272]},
+      {.width=20, .vertex_count=41, .vertices=&timesi_vertices[4352]},
+      {.width=21, .vertex_count=40, .vertices=&timesi_vertices[4434]},
+      {.width=20, .vertex_count=30, .vertices=&timesi_vertices[4514]},
+      {.width=14, .vertex_count=39, .vertices=&timesi_vertices[4574]},
+      {.width=8, .vertex_count=2, .vertices=&timesi_vertices[4652]},
+      {.width=14, .vertex_count=39, .vertices=&timesi_vertices[4656]},
+      {.width=24, .vertex_count=23, .vertices=&timesi_vertices[4734]}
+      }
+    };
+
+    static const int8_t timesr_vertices[4600] = {
+      5, -12, 4, -10, 5, 2, 6, -10, 5, -12, -128, -128, 5, -10, 5, -4, -128, -128, 5, 7, 4, 8, 5, 9, 6, 8, 5, 7, 5, -12, 4, -11, 4, -5, -128, -128, 5, -11, 4, -5, -128, -128, 5, -12, 6, -11, 4, -5, -128, -128, 14, -12, 13, -11, 13, -5, -128, -128, 14, -11, 13, -5, -128, -128, 14, -12, 15, -11, 13, -5, 11, -16, 4, 16, -128, -128, 17, -16, 10, 16, -128, -128, 4, -3, 18, -3, -128, -128, 3, 3, 17, 3, 8, -16, 8, 13, -128, -128, 12, -16, 12, 13, -128, -128, 16, -9, 15, -8, 16, -7, 17, -8, 17, -9, 15, -11, 12, -12, 8, -12, 5, -11, 3, -9, 3, -7, 4, -5, 5, -4, 7, -3, 13, -1, 15, 0, 17, 2, -128, -128, 3, -7, 5, -5, 7, -4, 13, -2, 15, -1, 16, 0, 17, 2, 17, 6, 15, 8, 12, 9, 8, 9, 5, 8, 3, 6, 3, 5, 4, 4, 5, 5, 4, 6, 21, -12, 3, 9, -128, -128, 8, -12, 10, -10, 10, -8, 9, -6, 7, -5, 5, -5, 3, -7, 3, -9, 4, -11, 6, -12, 8, -12, 10, -11, 13, -10, 16, -10, 19, -11, 21, -12, -128, -128, 17, 2, 15, 3, 14, 5, 14, 7, 16, 9, 18, 9, 20, 8, 21, 6, 21, 4, 19, 2, 17, 2, 21, -4, 20, -3, 21, -2, 22, -3, 22, -4, 21, -5, 20, -5, 19, -4, 18, -2, 16, 3, 14, 6, 12, 8, 10, 9, 7, 9, 4, 8, 3, 6, 3, 3, 4, 1, 10, -3, 12, -5, 13, -7, 13, -9, 12, -11, 10, -12, 8, -11, 7, -9, 7, -7, 8, -4, 10, -1, 15, 6, 17, 8, 20, 9, 21, 9, 22, 8, 22, 7, -128, -128, 7, 9, 5, 8, 4, 6, 4, 3, 5, 1, 7, -1, -128, -128, 7, -7, 8, -5, 16, 6, 18, 8, 20, 9, 4, -12, 3, -5, -128, -128, 5, -12, 3, -5, 11, -16, 9, -14, 7, -11, 5, -7, 4, -2, 4, 2, 5, 7, 7, 11, 9, 14, 11, 16, -128, -128, 9, -14, 7, -10, 6, -7, 5, -2, 5, 2, 6, 7, 7, 10, 9, 14, 3, -16, 5, -14, 7, -11, 9, -7, 10, -2, 10, 2, 9, 7, 7, 11, 5, 14, 3, 16, -128, -128, 5, -14, 7, -10, 8, -7, 9, -2, 9, 2, 8, 7, 7, 10, 5, 14, 8, -6, 8, 6, -128, -128, 3, -3, 13, 3, -128, -128, 13, -3, 3, 3, 13, -9, 13, 9, -128, -128, 4, 0, 22, 0, 5, 5, 4, 6, 3, 5, 4, 4, 5, 5, 5, 7, 3, 9, 4, 0, 22, 0, 4, 4, 3, 5, 4, 6, 5, 5, 4, 4, 20, -16, 2, 16, 9, -12, 6, -11, 4, -8, 3, -3, 3, 0, 4, 5, 6, 8, 9, 9, 11, 9, 14, 8, 16, 5, 17, 0, 17, -3, 16, -8, 14, -11, 11, -12, 9, -12, -128, -128, 9, -12, 7, -11, 6, -10, 5, -8, 4, -3, 4, 0, 5, 5, 6, 7, 7, 8, 9, 9, -128, -128, 11, 9, 13, 8, 14, 7, 15, 5, 16, 0, 16, -3, 15, -8, 14, -10, 13, -11, 11, -12, 6, -8, 8, -9, 11, -12, 11, 9, -128, -128, 10, -11, 10, 9, -128, -128, 6, 9, 15, 9, 4, -8, 5, -7, 4, -6, 3, -7, 3, -8, 
