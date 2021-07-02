@@ -796,4 +796,48 @@
       {.width=14, .vertex_count=11, .vertices=&timesrb_vertices[5162]},
       {.width=22, .vertex_count=7, .vertices=&timesrb_vertices[5184]},
       {.width=20, .vertex_count=2, .vertices=&timesrb_vertices[5198]},
-      {.width=12, .vertex_count=6, .vertices=&ti
+      {.width=12, .vertex_count=6, .vertices=&timesrb_vertices[5202]},
+      {.width=20, .vertex_count=53, .vertices=&timesrb_vertices[5214]},
+      {.width=21, .vertex_count=46, .vertices=&timesrb_vertices[5320]},
+      {.width=19, .vertex_count=33, .vertices=&timesrb_vertices[5412]},
+      {.width=21, .vertex_count=51, .vertices=&timesrb_vertices[5478]},
+      {.width=19, .vertex_count=40, .vertices=&timesrb_vertices[5580]},
+      {.width=14, .vertex_count=39, .vertices=&timesrb_vertices[5660]},
+      {.width=19, .vertex_count=88, .vertices=&timesrb_vertices[5738]},
+      {.width=23, .vertex_count=64, .vertices=&timesrb_vertices[5914]},
+      {.width=12, .vertex_count=42, .vertices=&timesrb_vertices[6042]},
+      {.width=13, .vertex_count=40, .vertices=&timesrb_vertices[6126]},
+      {.width=22, .vertex_count=60, .vertices=&timesrb_vertices[6206]},
+      {.width=12, .vertex_count=30, .vertices=&timesrb_vertices[6326]},
+      {.width=34, .vertex_count=98, .vertices=&timesrb_vertices[6386]},
+      {.width=23, .vertex_count=64, .vertices=&timesrb_vertices[6582]},
+      {.width=20, .vertex_count=45, .vertices=&timesrb_vertices[6710]},
+      {.width=21, .vertex_count=59, .vertices=&timesrb_vertices[6800]},
+      {.width=20, .vertex_count=54, .vertices=&timesrb_vertices[6918]},
+      {.width=17, .vertex_count=42, .vertices=&timesrb_vertices[7026]},
+      {.width=17, .vertex_count=42, .vertices=&timesrb_vertices[7110]},
+      {.width=15, .vertex_count=21, .vertices=&timesrb_vertices[7194]},
+      {.width=23, .vertex_count=42, .vertices=&timesrb_vertices[7236]},
+      {.width=18, .vertex_count=30, .vertices=&timesrb_vertices[7320]},
+      {.width=24, .vertex_count=44, .vertices=&timesrb_vertices[7380]},
+      {.width=20, .vertex_count=47, .vertices=&timesrb_vertices[7468]},
+      {.width=19, .vertex_count=39, .vertices=&timesrb_vertices[7562]},
+      {.width=18, .vertex_count=40, .vertices=&timesrb_vertices[7640]},
+      {.width=14, .vertex_count=39, .vertices=&timesrb_vertices[7720]},
+      {.width=8, .vertex_count=2, .vertices=&timesrb_vertices[7798]},
+      {.width=14, .vertex_count=39, .vertices=&timesrb_vertices[7802]},
+      {.width=24, .vertex_count=23, .vertices=&timesrb_vertices[7880]}
+      }
+    };
+
+std::map<std::string, const hershey_font_t*> fonts = {
+  { "sans",         &futural },
+  { "sans_bold",    &futuram },
+  { "gothic",       &gothgbt },
+  { "cursive_bold", &scriptc },
+  { "cursive",      &scripts },
+  { "serif_italic", &timesi },
+  { "serif",        &timesr },
+  { "serif_bold",   &timesrb }
+};
+
