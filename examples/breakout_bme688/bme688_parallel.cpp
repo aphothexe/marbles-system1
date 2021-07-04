@@ -39,4 +39,30 @@ int main() {
 
   while (1) {
     sleep_ms(1000);
-    au
+    auto time_start = get_absolute_time();
+
+    printf("Fetching %u readings, please wait...\n", profile_length);
+
+    auto result = bme68x.read_parallel(data, temps, durations, profile_length);
+    (void)result;
+
+    auto time_end = get_absolute_time();
+    auto duration = absolute_time_diff_us(time_start, time_end);
+    auto time_ms = to_ms_since_boot(time_start);
+
+    printf("Done at %lu in %lluus\n", (long unsigned int)time_ms, (long long unsigned int)duration);
+
+    for(auto i = 0u; i < 10u; i++){
+      printf("%d, %d: %.2f, %.2f, %.2f, %.2f, 0x%x\n",
+          data[i].gas_index,
+          data[i].meas_index,
+          data[i].temperature,
+          data[i].pressure,
+          data[i].humidity,
+          data[i].gas_resistance,
+          data[i].status);
+    }
+  }
+
+  return 0;
+}
