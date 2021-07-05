@@ -5,10 +5,11 @@
 
 using namespace pimoroni;
 
-static const uint8_t IOE_ADC_PIN = 10;
+//Connect a button between this pin and ground
+static const uint8_t IOE_BUTTON_PIN = 14;
 
 BreakoutIOExpander ioe(0x18);
-bool toggle = false;
+bool last_state = true;
 
 int main() {
 #ifdef PICO_DEFAULT_LED_PIN
@@ -21,25 +22,32 @@ int main() {
   if(ioe.init()) {
     printf("IOExpander found...\n");
 
-    // ioe.set_adc_vref(5.0f);    //Uncomment this if running the IOExpander off a 5V supply
-    ioe.set_mode(IOE_ADC_PIN, IOExpander::PIN_ADC);
+    ioe.set_mode(IOE_BUTTON_PIN, IOExpander::PIN_IN_PULL_UP);
 
     while(true) {
+      bool state = ioe.input(IOE_BUTTON_PIN);
+      if(state != last_state) {
+        if(state) {
+          printf("Button has been released\n");
 #ifdef PICO_DEFAULT_LED_PIN
-      gpio_put(PICO_DEFAULT_LED_PIN, toggle);
+          gpio_put(PICO_DEFAULT_LED_PIN, false);
 #endif
-      toggle = !toggle;
+        }
+        else {
+          printf("Button has been pressed\n");
+#ifdef PICO_DEFAULT_LED_PIN
+          gpio_put(PICO_DEFAULT_LED_PIN, true);
+#endif
+        }
 
-      float voltage = ioe.input_as_voltage(IOE_ADC_PIN);
-
-      printf("Voltage: %f\n", voltage);
+        last_state = state;
+      }
 
       sleep_ms(20);
     }
   }
   else {
     printf("IOExpander not found :'(\n");
-
 #ifdef PICO_DEFAULT_LED_PIN
     gpio_put(PICO_DEFAULT_LED_PIN, true);
 #endif
