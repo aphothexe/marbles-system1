@@ -58,4 +58,9 @@ int main() {
   else {
     printf("IOExpander not found :'(\n");
 #ifdef PICO_DEFAULT_LED_PIN
-    gpio_put(PICO_DEFA
+    gpio_put(PICO_DEFAULT_LED_PIN, true);
+#endif
+  }
+
+  return 0;
+}
