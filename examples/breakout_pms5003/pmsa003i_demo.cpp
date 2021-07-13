@@ -1,7 +1,8 @@
+
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "common/pimoroni_common.hpp"
-#include "hardware/uart.h"
+#include "common/pimoroni_i2c.hpp"
 
 #include <cstring>
 
@@ -9,12 +10,17 @@
 
 using namespace pimoroni;
 
-
-PMS5003 pms5003(uart1, 8, 9, 2, 3);
+I2C i2c(4, 5, 100000);
+PMS5003 pms5003(&i2c, 9, 10);
 PMS5003::response_data data;
 
 int main() {
   stdio_init_all();
+
+  // Enable Enviro power supply!
+  gpio_init(11);
+  gpio_set_dir(11, GPIO_OUT);
+  gpio_put(11, true);
 
   while(true){
     bool result = pms5003.read(data);
