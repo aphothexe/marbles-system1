@@ -25,4 +25,77 @@
  * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
  * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <stdio.h>  // printf
+
+#include "scd4x_i2c.h"
+#include "sensirion_common.h"
+#include "sensirion_i2c_hal.h"
+
+#include "pico/stdlib.h"
+#include "common/pimoroni_i2c.hpp"
+
+using namespace pimoroni;
+
+I2C i2c(BOARD::BREAKOUT_GARDEN);
+
+/**
+ * TO USE CONSOLE OUTPUT (PRINTF) IF NOT PRESENT ON YOUR PLATFORM
+ */
+//#define printf(...)
+
+int main(void) {
+    stdio_init_all();
+    int16_t error = 0;
+
+    sensirion_i2c_hal_init(&i2c);
+
+    // Clean up potential SCD40 states
+    scd4x_wake_up();
+    scd4x_stop_periodic_measurement();
+    scd4x_reinit();
+
+    uint16_t serial_0;
+    uint16_t serial_1;
+    uint16_t serial_2;
+    error = scd4x_get_serial_number(&serial_0, &serial_1, &serial_2);
+    if (error) {
+        printf("Error executing scd4x_get_serial_number(): %i\n", error);
+    } else {
+        printf("serial: 0x%04x%04x%04x\n", serial_0, serial_1, serial_2);
+    }
+
+    // Start Measurement
+
+    error = scd4x_start_periodic_measurement();
+    if (error) {
+        printf("Error executing scd4x_start_periodic_measurement(): %i\n",
+               error);
+    }
+
+    printf("Waiting for first measurement... (5 sec)\n");
+
+    for (;;) {
+        // Read Measurement
+        sensirion_i2c_hal_sleep_usec(5000000);
+
+        uint16_t co2;
+        int32_t temperature;
+        int32_t humidity;
+        error = scd4x_read_measurement(&co2, &temperature, &humidity);
+        if (error) {
+            printf("Error executing scd4x_read_measurement(): %i\n", error);
+        } else if (co2 == 0) {
+            printf("Invalid sample detected, skipping.\n");
+        } else {
+            printf("CO2: %u\n", co2);
+            printf("Temperature: %ld m°C\n", temperature);
+            printf("Humidity: %ld mRH\n", humidity);
+        }
+    }
+
+    return 0;
+}
