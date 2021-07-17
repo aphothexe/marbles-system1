@@ -66,4 +66,12 @@ int main() {
         printf("Resetting device\n");
         sgp30.soft_reset();
         sleep_ms(500);
-        printf("Restart
+        printf("Restarting measurement, waiting 15 secs before returning\n");
+        sgp30.start_measurement(true);
+        printf("Measurement restarted, now read every second\n");
+      }
+    }
+  }
+
+  return 0;
+}
