@@ -51,4 +51,37 @@ int main() {
         // update this pixel by averaging the below pixels
         if(x == 0) {
           heat[x][y] = (heat[x][y] + heat[x][y + 2] + heat[x][y + 1] + heat[x + 1][y + 1]) / 4.0f;
-        } else if(x == 52
+        } else if(x == 52) {
+          heat[x][y] = (heat[x][y] + heat[x][y + 2] + heat[x][y + 1] + heat[x - 1][y + 1]) / 4.0f;
+        } else {
+          heat[x][y] = (heat[x][y] + heat[x][y + 2] + heat[x][y + 1] + heat[x - 1][y + 1] + heat[x + 1][y + 1]) / 5.0f;
+        } 
+
+        heat[x][y] -= 0.01f;
+        heat[x][y] = heat[x][y] < 0.0f ? 0.0f: heat[x][y];
+      }
+    }
+
+    galactic_unicorn.update(&graphics);
+
+    // clear the bottom row and then add a new fire seed to it
+    for(int x = 0; x < 53; x++) {
+      heat[x][11] = 0.0f;
+    }
+
+    // add a new random heat source
+    for(int c = 0; c < 5; c++) {
+      int px = (rand() % 51) + 1;
+      heat[px][11] = 1.0f;
+      heat[px + 1][11] = 1.0f;
+      heat[px - 1][11] = 1.0f;
+      heat[px][12] = 1.0f;
+      heat[px + 1][12] = 1.0f;
+      heat[px - 1][12] = 1.0f;
+    }
+
+    sleep_ms(50);
+  }
+
+  return 0;
+}
