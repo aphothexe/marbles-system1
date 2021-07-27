@@ -55,4 +55,110 @@ void outline_text(std::string text) {
 
   graphics.set_pen(0, 0, 0);
   graphics.text(text, Point(x - 1, y - 1), -1, 1);
-  gra
+  graphics.text(text, Point(x    , y - 1), -1, 1);
+  graphics.text(text, Point(x + 1, y - 1), -1, 1);
+  graphics.text(text, Point(x - 1, y    ), -1, 1);
+  graphics.text(text, Point(x + 1, y    ), -1, 1);
+  graphics.text(text, Point(x - 1, y + 1), -1, 1);
+  graphics.text(text, Point(x    , y + 1), -1, 1);
+  graphics.text(text, Point(x + 1, y + 1), -1, 1);
+
+  graphics.set_pen(v, v, v);
+  graphics.text(text, Point(x, y), -1, 1);
+}
+
+int main() {
+  stdio_init_all();
+
+  galactic_unicorn.init();
+
+  //galactic_unicorn.set_brightness(0.5f);
+
+  while(true) {
+    if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_BRIGHTNESS_UP)) {
+      galactic_unicorn.adjust_brightness(+0.01f);
+    }
+    if(galactic_unicorn.is_pressed(galactic_unicorn.SWITCH_BRIGHTNESS_DOWN)) {
+      galactic_unicorn.adjust_brightness(-0.01f);
+    }
+
+    uint ms = to_ms_since_boot(get_absolute_time());
+
+    uint8_t test = (ms / 1000) % 4;
+
+    graphics.set_pen(0, 0, 0);
+    graphics.clear();
+
+    switch(test) {
+      case 0: {
+        printf("grid pattern");
+        shader_fill(ms, grid);
+      }break;
+
+      case 1: {
+        printf("green gradient");
+        gradient(0, 255, 0);
+      }break;
+
+      case 2: {
+        printf("blue gradient");
+        gradient(0, 0, 255);
+      }break;
+
+      case 3: {
+        printf("white gradient");
+        gradient(255, 255, 255);
+      }break;
+    }
+
+    printf("%d\n", galactic_unicorn.light());
+
+    std::string text = "";
+    static bool was_a_pressed = false;
+
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_A)) {
+      if(!was_a_pressed) {
+        galactic_unicorn.play_sample(left_channel_bin, left_channel_bin_len);
+      }
+      was_a_pressed = true;
+    }else{
+      was_a_pressed = false;
+    }
+
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_A)) {
+      text = "Button A";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_B)) {
+      text = "Button B";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_C)) {
+      text = "Button C";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_D)) {
+      text = "Button D";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_VOLUME_UP)) {
+      text = "Louder!";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_VOLUME_DOWN)) {
+      text = "quieter";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_BRIGHTNESS_UP)) {
+      text = "Brighter!";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_BRIGHTNESS_DOWN)) {
+      text = "Darker";
+    }
+    if(galactic_unicorn.is_pressed(GalacticUnicorn::SWITCH_SLEEP)) {
+      text = "Zzz... zzz...";
+    }
+
+    outline_text(text);
+
+    galactic_unicorn.update(&graphics);
+
+    sleep_ms(50);
+  }
+
+  return 0;
+}
