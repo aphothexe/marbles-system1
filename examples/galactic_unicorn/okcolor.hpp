@@ -140,4 +140,147 @@ float compute_max_saturation(float a, float b)
 		float m_ = 1.f + S * k_m;
 		float s_ = 1.f + S * k_s;
 
-		float 
+		float l = l_ * l_ * l_;
+		float m = m_ * m_ * m_;
+		float s = s_ * s_ * s_;
+
+		float l_dS = 3.f * k_l * l_ * l_;
+		float m_dS = 3.f * k_m * m_ * m_;
+		float s_dS = 3.f * k_s * s_ * s_;
+
+		float l_dS2 = 6.f * k_l * k_l * l_;
+		float m_dS2 = 6.f * k_m * k_m * m_;
+		float s_dS2 = 6.f * k_s * k_s * s_;
+
+		float f = wl * l + wm * m + ws * s;
+		float f1 = wl * l_dS + wm * m_dS + ws * s_dS;
+		float f2 = wl * l_dS2 + wm * m_dS2 + ws * s_dS2;
+
+		S = S - f * f1 / (f1 * f1 - 0.5f * f * f2);
+	}
+
+	return S;
+}
+
+// finds L_cusp and C_cusp for a given hue
+// a and b must be normalized so a^2 + b^2 == 1
+LC find_cusp(float a, float b)
+{
+	// First, find the maximum saturation (saturation S = C/L)
+	float S_cusp = compute_max_saturation(a, b);
+
+	// Convert to linear sRGB to find the first point where at least one of r,g or b >= 1:
+	RGB rgb_at_max = oklab_to_linear_srgb({ 1, S_cusp * a, S_cusp * b });
+	float L_cusp = cbrtf(1.f / fmax(fmax(rgb_at_max.r, rgb_at_max.g), rgb_at_max.b));
+	float C_cusp = L_cusp * S_cusp;
+
+	return { L_cusp , C_cusp };
+}
+
+// Finds intersection of the line defined by 
+// L = L0 * (1 - t) + t * L1;
+// C = t * C1;
+// a and b must be normalized so a^2 + b^2 == 1
+float find_gamut_intersection(float a, float b, float L1, float C1, float L0, LC cusp)
+{
+	// Find the intersection for upper and lower half seprately
+	float t;
+	if (((L1 - L0) * cusp.C - (cusp.L - L0) * C1) <= 0.f)
+	{
+		// Lower half
+
+		t = cusp.C * L0 / (C1 * cusp.L + cusp.C * (L0 - L1));
+	}
+	else
+	{
+		// Upper half
+
+		// First intersect with triangle
+		t = cusp.C * (L0 - 1.f) / (C1 * (cusp.L - 1.f) + cusp.C * (L0 - L1));
+
+		// Then one step Halley's method
+		{
+			float dL = L1 - L0;
+			float dC = C1;
+
+			float k_l = +0.3963377774f * a + 0.2158037573f * b;
+			float k_m = -0.1055613458f * a - 0.0638541728f * b;
+			float k_s = -0.0894841775f * a - 1.2914855480f * b;
+
+			float l_dt = dL + dC * k_l;
+			float m_dt = dL + dC * k_m;
+			float s_dt = dL + dC * k_s;
+
+
+			// If higher accuracy is required, 2 or 3 iterations of the following block can be used:
+			{
+				float L = L0 * (1.f - t) + t * L1;
+				float C = t * C1;
+
+				float l_ = L + C * k_l;
+				float m_ = L + C * k_m;
+				float s_ = L + C * k_s;
+
+				float l = l_ * l_ * l_;
+				float m = m_ * m_ * m_;
+				float s = s_ * s_ * s_;
+
+				float ldt = 3 * l_dt * l_ * l_;
+				float mdt = 3 * m_dt * m_ * m_;
+				float sdt = 3 * s_dt * s_ * s_;
+
+				float ldt2 = 6 * l_dt * l_dt * l_;
+				float mdt2 = 6 * m_dt * m_dt * m_;
+				float sdt2 = 6 * s_dt * s_dt * s_;
+
+				float r = 4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s - 1;
+				float r1 = 4.0767416621f * ldt - 3.3077115913f * mdt + 0.2309699292f * sdt;
+				float r2 = 4.0767416621f * ldt2 - 3.3077115913f * mdt2 + 0.2309699292f * sdt2;
+
+				float u_r = r1 / (r1 * r1 - 0.5f * r * r2);
+				float t_r = -r * u_r;
+
+				float g = -1.2684380046f * l + 2.6097574011f * m - 0.3413193965f * s - 1;
+				float g1 = -1.2684380046f * ldt + 2.6097574011f * mdt - 0.3413193965f * sdt;
+				float g2 = -1.2684380046f * ldt2 + 2.6097574011f * mdt2 - 0.3413193965f * sdt2;
+
+				float u_g = g1 / (g1 * g1 - 0.5f * g * g2);
+				float t_g = -g * u_g;
+
+				float b = -0.0041960863f * l - 0.7034186147f * m + 1.7076147010f * s - 1;
+				float b1 = -0.0041960863f * ldt - 0.7034186147f * mdt + 1.7076147010f * sdt;
+				float b2 = -0.0041960863f * ldt2 - 0.7034186147f * mdt2 + 1.7076147010f * sdt2;
+
+				float u_b = b1 / (b1 * b1 - 0.5f * b * b2);
+				float t_b = -b * u_b;
+
+				t_r = u_r >= 0.f ? t_r : FLT_MAX;
+				t_g = u_g >= 0.f ? t_g : FLT_MAX;
+				t_b = u_b >= 0.f ? t_b : FLT_MAX;
+
+				t += fmin(t_r, fmin(t_g, t_b));
+			}
+		}
+	}
+
+	return t;
+}
+
+float find_gamut_intersection(float a, float b, float L1, float C1, float L0)
+{
+	// Find the cusp of the gamut triangle
+	LC cusp = find_cusp(a, b);
+
+	return find_gamut_intersection(a, b, L1, C1, L0, cusp);
+}
+
+RGB gamut_clip_preserve_chroma(RGB rgb)
+{
+	if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
+		return rgb;
+
+	Lab lab = linear_srgb_to_oklab(rgb);
+
+	float L = lab.L;
+	float eps = 0.00001f;
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b *
