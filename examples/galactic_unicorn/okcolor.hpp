@@ -283,4 +283,147 @@ RGB gamut_clip_preserve_chroma(RGB rgb)
 
 	float L = lab.L;
 	float eps = 0.00001f;
-	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b *
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b * lab.b));
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	float L0 = clamp(L, 0, 1);
+
+	float t = find_gamut_intersection(a_, b_, L, C, L0);
+	float L_clipped = L0 * (1 - t) + t * L;
+	float C_clipped = t * C;
+
+	return oklab_to_linear_srgb({ L_clipped, C_clipped * a_, C_clipped * b_ });
+}
+
+RGB gamut_clip_project_to_0_5(RGB rgb)
+{
+	if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
+		return rgb;
+
+	Lab lab = linear_srgb_to_oklab(rgb);
+
+	float L = lab.L;
+	float eps = 0.00001f;
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b * lab.b));
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	float L0 = 0.5;
+
+	float t = find_gamut_intersection(a_, b_, L, C, L0);
+	float L_clipped = L0 * (1 - t) + t * L;
+	float C_clipped = t * C;
+
+	return oklab_to_linear_srgb({ L_clipped, C_clipped * a_, C_clipped * b_ });
+}
+
+RGB gamut_clip_project_to_L_cusp(RGB rgb)
+{
+	if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
+		return rgb;
+
+	Lab lab = linear_srgb_to_oklab(rgb);
+
+	float L = lab.L;
+	float eps = 0.00001f;
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b * lab.b));
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	// The cusp is computed here and in find_gamut_intersection, an optimized solution would only compute it once.
+	LC cusp = find_cusp(a_, b_);
+
+	float L0 = cusp.L;
+
+	float t = find_gamut_intersection(a_, b_, L, C, L0);
+
+	float L_clipped = L0 * (1 - t) + t * L;
+	float C_clipped = t * C;
+
+	return oklab_to_linear_srgb({ L_clipped, C_clipped * a_, C_clipped * b_ });
+}
+
+RGB gamut_clip_adaptive_L0_0_5(RGB rgb, float alpha = 0.05f)
+{
+	if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
+		return rgb;
+
+	Lab lab = linear_srgb_to_oklab(rgb);
+
+	float L = lab.L;
+	float eps = 0.00001f;
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b * lab.b));
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	float Ld = L - 0.5f;
+	float e1 = 0.5f + fabs(Ld) + alpha * C;
+	float L0 = 0.5f * (1.f + sgn(Ld) * (e1 - sqrtf(e1 * e1 - 2.f * fabs(Ld))));
+
+	float t = find_gamut_intersection(a_, b_, L, C, L0);
+	float L_clipped = L0 * (1.f - t) + t * L;
+	float C_clipped = t * C;
+
+	return oklab_to_linear_srgb({ L_clipped, C_clipped * a_, C_clipped * b_ });
+}
+
+RGB gamut_clip_adaptive_L0_L_cusp(RGB rgb, float alpha = 0.05f)
+{
+	if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
+		return rgb;
+
+	Lab lab = linear_srgb_to_oklab(rgb);
+
+	float L = lab.L;
+	float eps = 0.00001f;
+	float C = fmax(eps, sqrtf(lab.a * lab.a + lab.b * lab.b));
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	// The cusp is computed here and in find_gamut_intersection, an optimized solution would only compute it once.
+	LC cusp = find_cusp(a_, b_);
+
+	float Ld = L - cusp.L;
+	float k = 2.f * (Ld > 0 ? 1.f - cusp.L : cusp.L);
+
+	float e1 = 0.5f * k + fabs(Ld) + alpha * C / k;
+	float L0 = cusp.L + 0.5f * (sgn(Ld) * (e1 - sqrtf(e1 * e1 - 2.f * k * fabs(Ld))));
+
+	float t = find_gamut_intersection(a_, b_, L, C, L0);
+	float L_clipped = L0 * (1.f - t) + t * L;
+	float C_clipped = t * C;
+
+	return oklab_to_linear_srgb({ L_clipped, C_clipped * a_, C_clipped * b_ });
+}
+
+float toe(float x)
+{
+	constexpr float k_1 = 0.206f;
+	constexpr float k_2 = 0.03f;
+	constexpr float k_3 = (1.f + k_1) / (1.f + k_2);
+	return 0.5f * (k_3 * x - k_1 + sqrtf((k_3 * x - k_1) * (k_3 * x - k_1) + 4 * k_2 * k_3 * x));
+}
+
+float toe_inv(float x)
+{
+	constexpr float k_1 = 0.206f;
+	constexpr float k_2 = 0.03f;
+	constexpr float k_3 = (1.f + k_1) / (1.f + k_2);
+	return (x * x + k_1 * x) / (k_3 * (x + k_2));
+}
+
+ST to_ST(LC cusp)
+{
+	float L = cusp.L;
+	float C = cusp.C;
+	return { C / L, C / (1 - L) };
+}
+
+// Returns a smooth approximation of the location of the cusp
+// This polynomial was created by an optimization process
+// It has been designed so that S_mid < S_max and T_mid < T_max
+ST get_ST_mid(float a_, float b_)
+{
+	float S = 0.11516993f + 1.f / (
+		+7.44778970f + 4.15901240f * b
