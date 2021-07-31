@@ -426,4 +426,188 @@ ST to_ST(LC cusp)
 ST get_ST_mid(float a_, float b_)
 {
 	float S = 0.11516993f + 1.f / (
-		+7.44778970f + 4.15901240f * b
+		+7.44778970f + 4.15901240f * b_
+		+ a_ * (-2.19557347f + 1.75198401f * b_
+			+ a_ * (-2.13704948f - 10.02301043f * b_
+				+ a_ * (-4.24894561f + 5.38770819f * b_ + 4.69891013f * a_
+					)))
+		);
+
+	float T = 0.11239642f + 1.f / (
+		+1.61320320f - 0.68124379f * b_
+		+ a_ * (+0.40370612f + 0.90148123f * b_
+			+ a_ * (-0.27087943f + 0.61223990f * b_
+				+ a_ * (+0.00299215f - 0.45399568f * b_ - 0.14661872f * a_
+					)))
+		);
+
+	return { S, T };
+}
+
+struct Cs { float C_0; float C_mid; float C_max; };
+Cs get_Cs(float L, float a_, float b_)
+{
+	LC cusp = find_cusp(a_, b_);
+
+	float C_max = find_gamut_intersection(a_, b_, L, 1, L, cusp);
+	ST ST_max = to_ST(cusp);
+	
+	// Scale factor to compensate for the curved part of gamut shape:
+	float k = C_max / fmin((L * ST_max.S), (1 - L) * ST_max.T);
+
+	float C_mid;
+	{
+		ST ST_mid = get_ST_mid(a_, b_);
+
+		// Use a soft minimum function, instead of a sharp triangle shape to get a smooth value for chroma.
+		float C_a = L * ST_mid.S;
+		float C_b = (1.f - L) * ST_mid.T;
+		C_mid = 0.9f * k * sqrtf(sqrtf(1.f / (1.f / (C_a * C_a * C_a * C_a) + 1.f / (C_b * C_b * C_b * C_b))));
+	}
+
+	float C_0;
+	{
+		// for C_0, the shape is independent of hue, so ST are constant. Values picked to roughly be the average values of ST.
+		float C_a = L * 0.4f;
+		float C_b = (1.f - L) * 0.8f;
+
+		// Use a soft minimum function, instead of a sharp triangle shape to get a smooth value for chroma.
+		C_0 = sqrtf(1.f / (1.f / (C_a * C_a) + 1.f / (C_b * C_b)));
+	}
+
+	return { C_0, C_mid, C_max };
+}
+
+RGB okhsl_to_srgb(HSL hsl)
+{
+	float h = hsl.h;
+	float s = hsl.s;
+	float l = hsl.l;
+
+	if (l == 1.0f)
+	{
+		return { 1.f, 1.f, 1.f };
+	}
+
+	else if (l == 0.f)
+	{
+		return { 0.f, 0.f, 0.f };
+	}
+
+	float a_ = cosf(2.f * pi * h);
+	float b_ = sinf(2.f * pi * h);
+	float L = toe_inv(l);
+
+	Cs cs = get_Cs(L, a_, b_);
+	float C_0 = cs.C_0;
+	float C_mid = cs.C_mid;
+	float C_max = cs.C_max;
+
+	float mid = 0.8f;
+	float mid_inv = 1.25f;
+
+	float C, t, k_0, k_1, k_2;
+
+	if (s < mid)
+	{
+		t = mid_inv * s;
+
+		k_1 = mid * C_0;
+		k_2 = (1.f - k_1 / C_mid);
+
+		C = t * k_1 / (1.f - k_2 * t);
+	}
+	else
+	{
+		t = (s - mid)/ (1 - mid);
+
+		k_0 = C_mid;
+		k_1 = (1.f - mid) * C_mid * C_mid * mid_inv * mid_inv / C_0;
+		k_2 = (1.f - (k_1) / (C_max - C_mid));
+
+		C = k_0 + t * k_1 / (1.f - k_2 * t);
+	}
+
+	RGB rgb = oklab_to_linear_srgb({ L, C * a_, C * b_ });
+	return {
+		srgb_transfer_function(rgb.r),
+		srgb_transfer_function(rgb.g),
+		srgb_transfer_function(rgb.b),
+	};
+}
+
+HSL srgb_to_okhsl(RGB rgb)
+{
+	Lab lab = linear_srgb_to_oklab({
+		srgb_transfer_function_inv(rgb.r),
+		srgb_transfer_function_inv(rgb.g),
+		srgb_transfer_function_inv(rgb.b)
+		});
+
+	float C = sqrtf(lab.a * lab.a + lab.b * lab.b);
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	float L = lab.L;
+	float h = 0.5f + 0.5f * atan2f(-lab.b, -lab.a) / pi;
+
+	Cs cs = get_Cs(L, a_, b_);
+	float C_0 = cs.C_0;
+	float C_mid = cs.C_mid;
+	float C_max = cs.C_max;
+
+	// Inverse of the interpolation in okhsl_to_srgb:
+
+	float mid = 0.8f;
+	float mid_inv = 1.25f;
+
+	float s;
+	if (C < C_mid)
+	{
+		float k_1 = mid * C_0;
+		float k_2 = (1.f - k_1 / C_mid);
+
+		float t = C / (k_1 + k_2 * C);
+		s = t * mid;
+	}
+	else
+	{
+		float k_0 = C_mid;
+		float k_1 = (1.f - mid) * C_mid * C_mid * mid_inv * mid_inv / C_0;
+		float k_2 = (1.f - (k_1) / (C_max - C_mid));
+
+		float t = (C - k_0) / (k_1 + k_2 * (C - k_0));
+		s = mid + (1.f - mid) * t;
+	}
+
+	float l = toe(L);
+	return { h, s, l };
+}
+
+
+RGB okhsv_to_srgb(HSV hsv)
+{
+	float h = hsv.h;
+	float s = hsv.s;
+	float v = hsv.v;
+
+	float a_ = cosf(2.f * pi * h);
+	float b_ = sinf(2.f * pi * h);
+	
+	LC cusp = find_cusp(a_, b_);
+	ST ST_max = to_ST(cusp);
+	float S_max = ST_max.S;
+	float T_max = ST_max.T;
+	float S_0 = 0.5f;
+	float k = 1 - S_0 / S_max;
+
+	// first we compute L and V as if the gamut is a perfect triangle:
+
+	// L, C when v==1:
+	float L_v = 1     - s * S_0 / (S_0 + T_max - T_max * k * s);
+	float C_v = s * T_max * S_0 / (S_0 + T_max - T_max * k * s);
+
+	float L = v * L_v;
+	float C = v * C_v;
+
+	// then we compensate for both toe and the curved top part of the triang
