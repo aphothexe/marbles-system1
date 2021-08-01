@@ -610,4 +610,75 @@ RGB okhsv_to_srgb(HSV hsv)
 	float L = v * L_v;
 	float C = v * C_v;
 
-	// then we compensate for both toe and the curved top part of the triang
+	// then we compensate for both toe and the curved top part of the triangle:
+	float L_vt = toe_inv(L_v);
+	float C_vt = C_v * L_vt / L_v;
+
+	float L_new = toe_inv(L);
+	C = C * L_new / L;
+	L = L_new;
+
+	RGB rgb_scale = oklab_to_linear_srgb({ L_vt, a_ * C_vt, b_ * C_vt });
+	float scale_L = cbrtf(1.f / fmax(fmax(rgb_scale.r, rgb_scale.g), fmax(rgb_scale.b, 0.f)));
+
+	L = L * scale_L;
+	C = C * scale_L;
+
+	RGB rgb = oklab_to_linear_srgb({ L, C * a_, C * b_ });
+	return {
+		srgb_transfer_function(rgb.r),
+		srgb_transfer_function(rgb.g),
+		srgb_transfer_function(rgb.b),
+	};
+}
+
+HSV srgb_to_okhsv(RGB rgb)
+{
+	Lab lab = linear_srgb_to_oklab({
+		srgb_transfer_function_inv(rgb.r),
+		srgb_transfer_function_inv(rgb.g),
+		srgb_transfer_function_inv(rgb.b)
+		});
+
+	float C = sqrtf(lab.a * lab.a + lab.b * lab.b);
+	float a_ = lab.a / C;
+	float b_ = lab.b / C;
+
+	float L = lab.L;
+	float h = 0.5f + 0.5f * atan2f(-lab.b, -lab.a) / pi;
+
+	LC cusp = find_cusp(a_, b_);
+	ST ST_max = to_ST(cusp);
+	float S_max = ST_max.S;
+	float T_max = ST_max.T;
+	float S_0 = 0.5f;
+	float k = 1 - S_0 / S_max;
+
+	// first we find L_v, C_v, L_vt and C_vt
+
+	float t = T_max / (C + L * T_max);
+	float L_v = t * L;
+	float C_v = t * C;
+
+	float L_vt = toe_inv(L_v);
+	float C_vt = C_v * L_vt / L_v;
+
+	// we can then use these to invert the step that compensates for the toe and the curved top part of the triangle:
+	RGB rgb_scale = oklab_to_linear_srgb({ L_vt, a_ * C_vt, b_ * C_vt });
+	float scale_L = cbrtf(1.f / fmax(fmax(rgb_scale.r, rgb_scale.g), fmax(rgb_scale.b, 0.f)));
+
+	L = L / scale_L;
+	C = C / scale_L;
+
+	C = C * toe(L) / L;
+	L = toe(L);
+
+	// we can now compute v and s:
+
+	float v = L / L_v;
+	float s = (S_0 + T_max) * C_v / ((T_max * S_0) + T_max * k * C_v);
+
+	return { h, s, v };
+}
+
+} // namespace ok_color
