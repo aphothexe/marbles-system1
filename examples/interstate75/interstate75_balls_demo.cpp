@@ -112,4 +112,13 @@ int main() {
 
     }
 
-   
+    graphics.set_pen(WHITE);
+    graphics.text("Hello World", text_location, false, 1.0f);
+
+    // update screen
+    hub75.update(&graphics);
+    sleep_ms(1000 / 30);
+  }
+
+  return 0;
+}
