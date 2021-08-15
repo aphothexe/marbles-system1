@@ -46,4 +46,21 @@ int main() {
         // Set the neighbouring LED to a colour based on
         // the input, with Green for high and Blue for low
         if(value)
-          board.leds.set_hsv(i, 0.33
+          board.leds.set_hsv(i, 0.333, 1.0, BRIGHTNESS);
+        else
+          board.leds.set_hsv(i, 0.666, 1.0, BRIGHTNESS);
+      }
+
+      // Print a new line
+      printf("\n");
+
+      sleep_ms(0.1);
+    }
+
+    // Turn off the LED bars
+    board.leds.clear();
+
+    // Sleep a short time so the clear takes effect
+    sleep_ms(100);
+  }
+}
