@@ -79,3 +79,86 @@ int main() {
     m.speed_scale(SPEED_SCALE);
 
     // Set the motor and encoder's direction
+    m.direction(DIRECTION);
+    enc.direction(DIRECTION);
+
+    // Enable the motor
+    m.enable();
+
+
+    uint update = 0;
+    uint print_count = 0;
+
+    // Set the initial value and create a random end value between the extents
+    float start_value = 0.0f;
+    float end_value = (((float)rand() / (float)RAND_MAX) * (POSITION_EXTENT * 2.0f)) - POSITION_EXTENT;
+
+    // Continually move the motor until the user button is pressed
+    while(!board.switch_pressed()) {
+
+      // Capture the state of the encoder
+      Encoder::Capture capture = enc.capture();
+
+      // Calculate how far along this movement to be
+      float percent_along = (float)update / (float)UPDATES_PER_MOVE;
+
+      switch(INTERP_MODE) {
+      case 0:
+        // Move the motor instantly to the end value
+        pos_pid.setpoint = end_value;
+        break;
+
+      case 2:
+        // Move the motor between values using cosine
+        pos_pid.setpoint = (((-cosf(percent_along * (float)M_PI) + 1.0) / 2.0) * (end_value - start_value)) + start_value;
+        break;
+
+      case 1:
+      default:
+        // Move the motor linearly between values
+        pos_pid.setpoint = (percent_along * (end_value - start_value)) + start_value;
+      }
+
+      // Calculate the velocity to move the motor closer to the position setpoint
+      float vel = pos_pid.calculate(capture.degrees(), capture.degrees_per_second());
+
+      // Limit the velocity between user defined limits, and set it as the new setpoint of the velocity PID
+      vel_pid.setpoint = CLAMP(vel, -MAX_SPEED, MAX_SPEED);
+
+      // Calculate the acceleration to apply to the motor to move it closer to the velocity setpoint
+      float accel = vel_pid.calculate(capture.revolutions_per_second());
+
+      // Accelerate or decelerate the motor
+      m.speed(m.speed() + (accel * UPDATE_RATE));
+
+      // Print out the current motor values and their setpoints, but only on every multiple
+      if(print_count == 0) {
+        printf("Pos = %f, ", capture.degrees());
+        printf("Pos SP = %f, ", pos_pid.setpoint);
+        printf("Vel = %f, ", capture.revolutions_per_second() * SPD_PRINT_SCALE);
+        printf("Vel SP = %f, ", vel_pid.setpoint * SPD_PRINT_SCALE);
+        printf("Accel = %f, ", accel * ACC_PRINT_SCALE);
+        printf("Speed = %f\n", m.speed());
+      }
+
+      // Increment the print count, and wrap it
+      print_count = (print_count + 1) % PRINT_DIVIDER;
+
+      update++;   // Move along in time
+
+      // Have we reached the end of this movement?
+      if(update >= UPDATES_PER_MOVE) {
+        update = 0;  // Reset the counter
+
+        // Set the start as the last end and create a new random end value
+        start_value = end_value;
+        end_value = (((float)rand() / (float)RAND_MAX) * (POSITION_EXTENT * 2.0f)) - POSITION_EXTENT;
+      }
+
+      sleep_ms(UPDATE_RATE * 1000.0f);
+    }
+
+    // Disable the motor
+    m.disable();
+  }
+}
