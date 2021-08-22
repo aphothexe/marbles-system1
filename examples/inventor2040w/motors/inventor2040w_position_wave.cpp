@@ -117,4 +117,28 @@ int main() {
 
       update++;   // Move along in time
 
-      // Have we reached the end of this 
+      // Have we reached the end of this movement?
+      if(update >= UPDATES_PER_MOVE) {
+        update = 0;  // Reset the counter
+
+        // Swap the start and end values
+        float temp = start_value;
+        start_value = end_value;
+        end_value = temp;
+      }
+
+      sleep_ms(UPDATE_RATE * 1000.0f);
+    }
+
+    // Stop all the motors
+    for(auto m = 0u; m < NUM_MOTORS; m++) {
+      board.motors[m].disable();
+    }
+
+    // Turn off the LED
+    board.leds.clear();
+
+    // Sleep a short time so the clear takes effect
+    sleep_ms(100);
+  }
+}
