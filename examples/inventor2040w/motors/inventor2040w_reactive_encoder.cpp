@@ -107,3 +107,51 @@ int main() {
     detent_change(0);
 
     // Continually move the motor until the user button is pressed
+    while(!board.switch_pressed()) {
+
+      // Capture the state of the encoder
+      Encoder::Capture capture = enc.capture();
+
+      // Get the current detent's centre angle
+      float detent_angle = ((float)current_detent * DETENT_SIZE);
+
+      // Is the current angle above the region of this detent?
+      if(capture.degrees() > detent_angle + (DETENT_SIZE / 2)) {
+        // Is there another detent we can move to?
+        if(current_detent < MAX_DETENT) {
+          detent_change(1);   // Increment to the next detent
+        }
+      }
+      // Is the current angle below the region of this detent?
+      else if(capture.degrees() < detent_angle - (DETENT_SIZE / 2)) {
+        // Is there another detent we can move to?
+        if(current_detent > MIN_DETENT) {
+          detent_change(-1);  // Decrement to the next detent
+        }
+      }
+
+      // Calculate the velocity to move the motor closer to the position setpoint
+      float vel = pos_pid.calculate(capture.degrees(), capture.degrees_per_second());
+
+      // If the current angle is within the detent range, limit the max vel
+      // (aka feedback force) that the user will feel when turning the motor between detents
+      if((capture.degrees() >= MIN_DETENT * DETENT_SIZE) && (capture.degrees() <= MAX_DETENT * DETENT_SIZE)) {
+        vel = CLAMP(vel, -MAX_DRIVE_PERCENT, MAX_DRIVE_PERCENT);
+      }
+
+      // Set the new motor driving speed
+      m.speed(vel);
+
+      sleep_ms(UPDATE_RATE * 1000.0f);
+    }
+
+    // Disable the motor
+    m.disable();
+
+    // Turn off the LEDs
+    board.leds.clear();
+
+    // Sleep a short time so the clear takes effect
+    sleep_ms(100);
+  }
+}
