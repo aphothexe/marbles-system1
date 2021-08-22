@@ -117,4 +117,12 @@ int main() {
     // Give it a range of -45 to 45 degrees, corresponding to pulses of 1000 and 2000 microseconds
     ecal.apply_two_pairs(1000, 2000, -45, 45);
 
-    // Turn off the lower and 
+    // Turn off the lower and upper limits, so the servo can go beyond 45 degrees
+    ecal.limit_to_calibration(false, false);
+
+    // Create a servo on pin 3 using the custom calibration and confirmed it worked
+    custom_servo.calibration() = ecal;
+    printf("Custom Servo: ");
+    print_calibration(custom_servo.calibration());
+  }
+}
