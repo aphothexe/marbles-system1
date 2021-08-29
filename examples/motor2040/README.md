@@ -68,4 +68,68 @@ Demonstrates how to read the angles of Motor 2040's four encoders.
 [motor2040_motor_profiler.cpp](motor2040_motor_profiler.cpp)
 
 A program that profiles the speed of a motor across its PWM
-duty cycle range using the attached enc
+duty cycle range using the attached encoder for feedback.
+
+
+### LED Rainbow
+[motor2040_led_rainbow.cpp](motor2040_led_rainbow.cpp)
+
+Displays a rotating rainbow pattern on the Motor 2040's onboard LED.
+
+
+## Control Examples
+
+### Position Control
+[motor2040_position_control.cpp](motor2040_position_control.cpp)
+
+An example of how to move a motor smoothly between random positions, with the help of it's attached encoder and PID control.
+
+
+### Velocity Control
+[motor2040_velocity_control.cpp](motor2040_velocity_control.cpp)
+
+An example of how to drive a motor smoothly between random speeds, with the help of it's attached encoder and PID control.
+
+
+### Position on Velocity Control
+[motor2040_position_on_velocity_control.cpp](motor2040_position_on_velocity_control.cpp)
+
+An example of how to move a motor smoothly between random positions, with velocity limits, with the help of it's attached encoder and PID control.
+
+
+### Reactive Encoder
+[motor2040_reactive_encoder.cpp](motor2040_reactive_encoder.cpp)
+
+A demonstration of how a motor with an encoder can be used as a programmable rotary encoder for user input, with force-feedback for arbitrary detents and end stops.
+
+
+### Quad Position Wave
+[motor2040_quad_position_wave.cpp](motor2040_quad_position_wave.cpp)
+
+A demonstration of driving all four of Motor 2040's motor outputs between positions, with the help of their attached encoders and PID control.
+
+
+### Quad Velocity Sequence
+[motor2040_quad_velocity_sequence.cpp](motor2040_quad_velocity_sequence.cpp)
+
+A demonstration of driving all four of Motor 2040's motor outputs through a sequence of velocities, with the help of their attached encoders and PID control.
+
+
+## Tuning Examples
+
+### Position Tuning
+[motor2040_position_tuning.cpp](motor2040_position_tuning.cpp)
+
+A program to aid in the discovery and tuning of motor PID values for position control. It does this by commanding the motor to move repeatedly between two setpoint angles and plots the measured response.
+
+
+### Velocity Tuning
+[motor2040_velocity_tuning.cpp](motor2040_velocity_tuning.cpp)
+
+A program to aid in the discovery and tuning of motor PID values for velocity control. It does this by commanding the motor to drive repeatedly between two setpoint speeds and plots the measured response.
+
+
+### Position on Velocity Tuning
+[motor2040_position_on_velocity_tuning.cpp](motor2040_position_on_velocity_tuning.cpp)
+
+A program to aid in the discovery and tuning of motor PID values for position on velocity control. It does this by commanding the motor to move repeatedly between two setpoint angles and plots the measured response.
