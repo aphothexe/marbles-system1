@@ -77,4 +77,6 @@ int main() {
   // Turn off the LED
   led.clear();
 
-  // Sleep a short time so the clear
+  // Sleep a short time so the clear takes effect
+  sleep_ms(100);
+}
