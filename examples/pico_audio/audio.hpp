@@ -54,4 +54,11 @@ struct audio_buffer_pool *init_audio(uint32_t sample_rate, uint8_t pin_data, uin
 }
 
 void update_buffer(struct audio_buffer_pool *ap, buffer_callback cb) {
-  struct audio_buffer *b
+  struct audio_buffer *buffer = take_audio_buffer(ap, true);
+  int16_t *samples = (int16_t *) buffer->buffer->bytes;
+  for (uint i = 0; i < buffer->max_sample_count; i++) {
+      samples[i] = cb();
+  }
+  buffer->sample_count = buffer->max_sample_count;
+  give_audio_buffer(ap, buffer);
+}
