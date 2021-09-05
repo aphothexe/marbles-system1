@@ -1,5 +1,5 @@
-set(OUTPUT_NAME motor2040_position_tuning)
-add_executable(${OUTPUT_NAME} motor2040_position_tuning.cpp)
+set(OUTPUT_NAME motor2040_quad_velocity_sequence)
+add_executable(${OUTPUT_NAME} motor2040_quad_velocity_sequence.cpp)
 
 target_link_libraries(${OUTPUT_NAME}
         pico_stdlib
