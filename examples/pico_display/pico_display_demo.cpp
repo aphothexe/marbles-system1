@@ -99,4 +99,10 @@ int main() {
     }
 
     // update screen
-    st7789.update(&graphi
+    st7789.update(&graphics);
+    sleep_ms(1000 / 60);
+    i++;
+  }
+
+    return 0;
+}
