@@ -220,4 +220,128 @@ void MandelbrotView::createPalettes(int aPaletteSize) {
 
 void MandelbrotView::nextPalette(void) {
     ++paletteIndex;
-    if (palett
+    if (paletteIndex >= PALETTE_COUNT) {
+        paletteIndex = 0;
+    }
+    pPalette = pPalettes[paletteIndex];
+}
+
+MandelbrotView g_view0;
+
+#if defined(MULTICORE)
+MandelbrotView g_view1;
+
+// Note no mutual exclusion required for start and stop
+static inline void core1_start(void) {
+    g_view1.start();
+}
+
+static inline void core1_stop(void) {
+    g_view1.stop();
+}
+
+void core1_main(void) {
+    while (true) {
+        //uint32_t command = multicore_fifo_pop_blocking();
+        while (!g_view1.isRunning()) {
+            //tight_loop_contents();
+            sleep_ms(1);
+        }
+        g_view1.render();
+    }
+}
+#endif // MULTICORE
+
+int main() {
+    st7789.set_backlight(100);
+    graphics.set_pen(0, 0, 0);
+    graphics.clear();
+    st7789.update(&graphics);
+
+    const int iterationLimitV0 = 40;
+    const int iterationLimitV1 = 128;
+    g_view0.init(DISPLAY_WIDTH, DISPLAY_HEIGHT, (uint16_t *)graphics.frame_buffer, iterationLimitV1, 4, iterationLimitV0, 0);
+
+#if defined(MULTICORE)
+    g_view1.init(g_view0, 1, iterationLimitV1, 1);
+    // Launch core1, it won't start rendering until core1_start() is called
+    multicore_launch_core1(core1_main);
+#endif
+
+    const fixed_t fxdInitialRangeR = float_to_fixed(3.2);
+    const complex_fixed_t fxdInitialCenter(float_to_fixed(-0.75), float_to_fixed(0.0));
+    fixed_t fxdRangeR = fxdInitialRangeR;
+    complex_fixed_t fxdCenter = fxdInitialCenter;
+
+    while (true) {
+        g_view0.setRange(fxdRangeR, fxdCenter);
+#if defined(MULTICORE)
+        g_view1.setRange(fxdRangeR, fxdCenter);
+#endif
+        led.set_rgb(64, 0, 0);
+
+        g_view0.render();
+
+        led.set_rgb(0, 0, 64);
+#if defined(MULTICORE)
+        core1_start();
+#endif
+
+        led.set_rgb(0, 0, 0);
+
+        // Loop, waiting for key presses
+        bool keyPressed = false;
+        while (keyPressed == false) {
+            sleep_ms(1);
+
+            if (button_a.raw()) {
+                // Hold A to move left/right
+                if (button_x.read() && fxdCenter.r > FXD_FROM_INT(-3)) {
+                    fxdCenter.r -= fxdRangeR / 8;
+                    keyPressed = true;
+                } else if (button_y.read() && fxdCenter.r < FXD_FROM_INT(3)) {
+                    fxdCenter.r += fxdRangeR / 8;
+                    keyPressed = true;
+                } else if (button_b.read()) {
+                    // Press A and B together to switch palette
+                    g_view0.nextPalette();
+#if defined(MULTICORE)
+                    g_view1.nextPalette();
+#endif
+                    keyPressed = true;
+                }
+            } else if (button_b.raw()) {
+                // Hold B to move up/down
+                if (button_x.read() && fxdCenter.i > FXD_FROM_INT(-2)) {
+                    fxdCenter.i -= fxdRangeR / 8;
+                    keyPressed = true;
+                } else if (button_y.read() && fxdCenter.i < FXD_FROM_INT(2)) {
+                    fxdCenter.i += fxdRangeR / 8;
+                    keyPressed = true;
+                }
+            } else {
+                // Otherwise zoom in/out
+                if (button_x.read()) {
+                    if (button_y.read()) {
+                        // Press X and Y together to reset to initial position
+                        fxdRangeR = fxdInitialRangeR;
+                        fxdCenter = fxdInitialCenter;
+                    } else {
+                        fxdRangeR /= 4;
+                        fxdRangeR *= 3;
+                    }
+                    keyPressed = true;
+                } else if (button_y.read() && fxdRangeR < FXD_FROM_INT(3)) {
+                    fxdRangeR *= 4;
+                    fxdRangeR /= 3;
+                    keyPressed = true;
+                }
+            }
+        }
+#if defined(MULTICORE)
+        // key pressed, so stop core1
+        core1_stop();
+#endif
+    }
+    return 0;
+}
