@@ -378,3 +378,21 @@ int main() {
         std::stringstream sstream;
         sstream << std::fixed << std::setprecision(1) << capture.frequency() << "hz";
         graphics.set_pen(WHITE);                               graphics.text("Freq: ",      Point(10, 180), 220, 3);
+        graphics.set_pen(graphics.create_pen(128, 255, 255));  graphics.text(sstream.str(), Point(90, 180), 220, 3);
+      }
+
+      {
+        std::stringstream sstream;
+        sstream << std::fixed << std::setprecision(1) << capture.revolutions_per_minute();
+        graphics.set_pen(WHITE);                               graphics.text("RPM: ",       Point(10, 210), 220, 3);
+        graphics.set_pen(graphics.create_pen(255, 255, 128));  graphics.text(sstream.str(), Point(80, 210), 220, 3);
+      }
+
+      st7789.update(&graphics);                 // Refresh the screen
+
+#ifdef PICO_DEFAULT_LED_PIN
+      gpio_put(PICO_DEFAULT_LED_PIN, false);  // Show the screen refresh has ended
+#endif
+    }
+  }
+}
