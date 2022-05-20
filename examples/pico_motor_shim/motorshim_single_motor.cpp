@@ -64,4 +64,15 @@ int main() {
   // Do a stepped speed sweep
   for(auto j = 0u; j < SWEEPS; j++) {
     for(auto i = 0u; i < STEPS; i++) {
-      m.to_percent(i, 0, STEPS
+      m.to_percent(i, 0, STEPS, 0.0 - SPEED_EXTENT, SPEED_EXTENT);
+      sleep_ms(STEPS_INTERVAL_MS);
+    }
+    for(auto i = 0u; i < STEPS; i++) {
+      m.to_percent(i, STEPS, 0, 0.0 - SPEED_EXTENT, SPEED_EXTENT);
+      sleep_ms(STEPS_INTERVAL_MS);
+    }
+  }
+
+  // Disable the motor
+  m.disable();
+}
