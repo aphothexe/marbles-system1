@@ -191,4 +191,99 @@ int main() {
       x_pressed = 0;
     }
 
-    if(y_pressed == 0 &
+    if(y_pressed == 0 && button_y.read()) {
+      y_pressed = 1;
+      if(display_mode == MODE_SET_TIMER) {
+        // Setting timer - Decrement count
+        if (timer_count >= 1) timer_count--;
+      }
+    }
+    else if(y_pressed >= 1 && button_y.read()) {
+      // Button still pressed - check if has reached repeat count
+      if(repeat_count_reached(y_pressed++)) {
+        if(timer_count >= 1)
+          timer_count--;
+      }
+    }
+    else if(y_pressed >= 1 && !button_y.read()) {
+      y_pressed = 0;
+    }
+
+    Rect text_box(5, 5, screen_width-10, screen_height-10);
+    graphics.set_pen(BG);
+    graphics.rectangle(text_box);
+    // text_box.deflate(10);
+    graphics.set_clip(text_box);
+    graphics.set_pen(WHITE);
+    switch(display_mode) {
+      case MODE_DISP_CLOCK:
+        // Show the clock face
+        flash_led(0);
+        if(rtc.update_time()) {
+          graphics.text("Set Timer",
+              Point(text_box.x, text_box.y+2), 230, 1);
+          graphics.set_pen(GREEN);
+          graphics.text(rtc.string_date(),
+              Point(text_box.x, text_box.y+20), 230, 4);
+          graphics.set_pen(RED);
+          graphics.text(rtc.string_time(),
+              Point(text_box.x, text_box.y+60), 230, 6);
+          graphics.set_pen(WHITE);
+          graphics.text("Clock",
+              Point(text_box.x, text_box.y+screen_height-20), 230, 1);
+        }
+        else {
+          sprintf(buf, "Time: rtc.updateTime() ret err");
+          graphics.text(buf,
+              Point(text_box.x, text_box.y), 30, 2);
+        }
+        break;
+
+      case MODE_DISP_TIMER:
+        graphics.text("Set Timer",
+            Point(text_box.x, text_box.y+2), 230, 1);
+        if(rtc.read_timer_interrupt_flag()) {
+          // Go periodic time interupt - say loop ended
+          graphics.set_pen(RED);
+          sprintf(buf, "%s", "Timer complete");
+          graphics.text(buf,
+              Point(text_box.x, text_box.y+30), 230, 4);
+          graphics.set_pen(WHITE);
+          flash_led(i);
+        }
+        else {
+          sprintf(buf, "%s %d", "Timer running", rtc.get_timer_count());
+          graphics.text(buf,
+              Point(text_box.x, text_box.y+30), 230, 3);
+        }
+        graphics.text("Clock",
+            Point(text_box.x, text_box.y+screen_height-20), 230, 1);
+        break;
+
+      case MODE_SET_TIMER:
+        flash_led(0);
+        graphics.text("Run Timer",
+            Point(text_box.x, text_box.y+2), 230, 1);
+        graphics.text("+ Time",
+            Point(text_box.x+screen_width-42, text_box.y+2), 230, 1);
+        sprintf(buf, "Time %d secs", timer_count);
+        graphics.text(buf,
+            Point(text_box.x, text_box.y+30), 230, 3);
+        graphics.text("Clock",
+            Point(text_box.x, text_box.y+screen_height-20), 230, 1);
+        graphics.text("- Time",
+            Point(text_box.x+screen_width-42,
+              text_box.y+screen_height-20), 230, 1);
+        break;
+    }
+
+    graphics.remove_clip();
+
+    // update screen
+    st7789.update(&graphics);
+
+    i++;
+  }
+
+  return 0;
+}
