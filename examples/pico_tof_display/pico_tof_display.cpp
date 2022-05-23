@@ -140,4 +140,77 @@ int main() {
     // bool a_pressed = button_a.read();
     bool b_pressed = button_b.read();
     bool x_pressed = button_x.read();
-    bool y_pressed = 
+    bool y_pressed = button_y.read();
+
+    if (b_pressed) {
+      dist_held = !dist_held;
+    }
+
+    if (x_pressed) {
+      units_metric = !units_metric;
+    }
+
+    if (y_pressed) {
+      if (vl53_present) {
+        vl53_mode++;
+        if (vl53_mode > 3) vl53_mode = 1;
+        vl53l1x.setDistanceModeInt(vl53_mode);
+      }
+    }
+
+    Rect text_box(5, 5, screen_width-10, screen_height-10);
+    graphics.set_pen(BG);
+    graphics.rectangle(text_box);
+    // text_box.deflate(10);
+    graphics.set_clip(text_box);
+    graphics.set_pen(WHITE);
+    // Show the current distance
+    flash_led(0);
+    if (vl53_present) {
+      graphics.text("Units",
+          Point(text_box.x+disptext_x_reminder_xoff,
+            text_box.y+disptext_x_reminder_yoff), 230, disptext_reminder_size);
+      graphics.text("+Mode",
+          Point(text_box.x+disptext_y_reminder_xoff,
+            text_box.y+disptext_y_reminder_yoff), 230, disptext_reminder_size);
+      if(dist_held) {
+        graphics.set_pen(REDDISH);
+      }
+      graphics.text("Hold",
+          Point(text_box.x+disptext_b_reminder_xoff,
+            text_box.y+disptext_b_reminder_yoff), 230, disptext_reminder_size);
+      graphics.set_pen(WHITE);
+
+      sprintf(buf, "Mode: %s", mode_to_text[vl53_mode]);
+      graphics.text(buf,
+          Point(text_box.x+disptext_mode_xoff,
+            text_box.y+disptext_mode_yoff), 230, disptext_mode_size);
+
+      // Get the distance (use previous distance if number is held)
+      if (!dist_held) dist = vl53l1x.read(false);
+      if (units_metric) {
+        sprintf(buf, "%dmm", dist);
+      } else {
+        uint16_t ft = ((uint16_t)(dist/MM_TO_INCH))/12;
+        sprintf(buf, "%dft %.1fin", ft,
+            ((float)dist/MM_TO_INCH)-ft*12.0);
+      }
+      graphics.text(buf,
+          Point(text_box.x+disptext_dist_xoff,
+            text_box.y+disptext_dist_yoff), 120, disptext_dist_size);
+    } else {
+      graphics.text("VL53L1X Missing",
+          Point(text_box.x+disptext_dist_xoff,
+            text_box.y+disptext_dist_yoff), 230, disptext_dist_size);
+    }
+
+    graphics.remove_clip();
+
+    // update screen
+    st7789.update(&graphics);
+
+    i++;
+  }
+
+    return 0;
+}
