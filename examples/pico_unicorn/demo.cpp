@@ -41,3 +41,59 @@ int main() {
       float pulse = fmod(float(i) / 20.0f, M_PI * 2.0f);
       int v = int((sin(pulse) * 50.0f) + 50.0f);
       if(a_pressed) {
+      }else{
+        pico_unicorn.set_pixel(0, 0, v);
+        pico_unicorn.set_pixel(0, 1, v);
+        pico_unicorn.set_pixel(1, 0, v);
+        pico_unicorn.set_pixel(1, 1, v);
+        pico_unicorn.set_pixel(1, 2, v / 2);
+        pico_unicorn.set_pixel(0, 2, v / 2);
+        pico_unicorn.set_pixel(2, 0, v / 2);
+        pico_unicorn.set_pixel(2, 1, v / 2);
+      }
+
+      if(b_pressed) {
+      }else{
+        pico_unicorn.set_pixel(0, 6, v);
+        pico_unicorn.set_pixel(0, 5, v);
+        pico_unicorn.set_pixel(1, 6, v);
+        pico_unicorn.set_pixel(1, 5, v);
+        pico_unicorn.set_pixel(1, 4, v / 2);
+        pico_unicorn.set_pixel(0, 4, v / 2);
+        pico_unicorn.set_pixel(2, 6, v / 2);
+        pico_unicorn.set_pixel(2, 5, v / 2);
+      }
+
+      if(x_pressed) {
+      }else{
+        pico_unicorn.set_pixel(15, 0, v);
+        pico_unicorn.set_pixel(15, 1, v);
+        pico_unicorn.set_pixel(14, 0, v);
+        pico_unicorn.set_pixel(14, 1, v);
+        pico_unicorn.set_pixel(14, 2, v / 2);
+        pico_unicorn.set_pixel(15, 2, v / 2);
+        pico_unicorn.set_pixel(13, 0, v / 2);
+        pico_unicorn.set_pixel(13, 1, v / 2);
+      }
+
+      if(y_pressed) {
+      }else{
+        pico_unicorn.set_pixel(15, 6, v);
+        pico_unicorn.set_pixel(15, 5, v);
+        pico_unicorn.set_pixel(14, 6, v);
+        pico_unicorn.set_pixel(14, 5, v);
+        pico_unicorn.set_pixel(14, 4, v / 2);
+        pico_unicorn.set_pixel(15, 4, v / 2);
+        pico_unicorn.set_pixel(13, 6, v / 2);
+        pico_unicorn.set_pixel(13, 5, v / 2);
+      }
+    }
+
+    sleep_ms(10);
+
+  }
+
+  printf("done\n");
+
+  return 0;
+}
