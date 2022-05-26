@@ -61,4 +61,92 @@ static const int8_t sinetab[256] = {
 };
 
 
-// We have four objects with radius and cen
+// We have four objects with radius and centre points as configured for the 16x7 display
+const float radius1 =8.2, radius2 =11.5, radius3 =20.4, radius4 =22.1,
+            centerx1=8.0, centerx2=5.8, centerx3=12.7, centerx4= 2.0,
+            centery1= 2.1, centery2= 1.5, centery3=3.2, centery4=-0.5;
+float       angle1  = 0.0, angle2  = 0.0, angle3  = 0.0, angle4  = 0.0;
+long        hueShift= 0;
+
+#define FPS 30         // Maximum frames-per-second
+
+
+// HSV Conversion expects float inputs in the range of 0.00-1.00 for each channel
+// Outputs are rgb in the range 0-255 for each channel
+void from_hsv(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
+  float i = floor(h * 6.0f);
+  float f = h * 6.0f - i;
+  v *= 255.0f;
+  uint8_t p = v * (1.0f - s);
+  uint8_t q = v * (1.0f - f * s);
+  uint8_t t = v * (1.0f - (1.0f - f) * s);
+
+  switch (int(i) % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+}
+
+
+
+int main() {
+  stdio_init_all();
+  pico_unicorn.init();
+  pico_unicorn.clear();
+
+
+  while(true) {
+    int           x1, x2, x3, x4, y1, y2, y3, y4, sx1, sx2, sx3, sx4;
+    unsigned char x, y;
+    int8_t        value;
+    uint8_t       r = 0, g = 0, b = 0;
+    uint8_t       j, k, l, m;
+
+    // Setup a delay to slow the framerate. 
+    // Would be better to read from a timer as some math operations take variable time
+    sleep_ms(1000 / FPS);
+
+    sx1 = (int)(cos(angle1) * radius1 + centerx1);
+    sx2 = (int)(cos(angle2) * radius2 + centerx2);
+    sx3 = (int)(cos(angle3) * radius3 + centerx3);
+    sx4 = (int)(cos(angle4) * radius4 + centerx4);
+    y1  = (int)(sin(angle1) * radius1 + centery1);
+    y2  = (int)(sin(angle2) * radius2 + centery2);
+    y3  = (int)(sin(angle3) * radius3 + centery3);
+    y4  = (int)(sin(angle4) * radius4 + centery4);
+
+    for(y=0; y<7; y++) {
+      x1 = sx1; x2 = sx2; x3 = sx3; x4 = sx4;
+      for(x=0; x<16; x++) {
+        j = (x1 * x1 + y1 * y1) >> 2;
+        k = (x2 * x2 + y2 * y2) >> 2;
+        l = (x3 * x3 + y3 * y3) >> 3;
+        m = (x4 * x4 + y4 * y4) >> 3;
+        //printf("X: %i, Y: %i, \t%i, %i, %i, %i\n",x,y,j,k,l,m);
+        value = (int8_t)(hueShift
+          + (int8_t)*(sinetab + j)
+          + (int8_t)*(sinetab + k)
+          + (int8_t)*(sinetab + l)
+          + (int8_t)*(sinetab + m));
+        //printf("X: %i, Y: %i, H: %i\n",x,y,value);
+        from_hsv(((value+128.0f)/256.0f), 1, 1, r, g, b);
+        pico_unicorn.set_pixel(x, y, r, g, b);
+        x1--; x2--; x3--; x4--;
+      }
+      y1--; y2--; y3--; y4--;
+    }
+
+    angle1 += 0.03;
+    angle2 -= 0.07;
+    angle3 += 0.13;
+    angle4 -= 0.15;
+    hueShift += 2;
+  }
+  
+
+  return 0;
+}
