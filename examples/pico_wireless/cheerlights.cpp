@@ -141,3 +141,118 @@ Connection: close\r\n\r\n";
     // Sometimes the bytes read is less than the bytes we request, so loop until we get the data we expect
     while(response_length < avail_length) {
         uint16_t read_length = avail_length; // Request the full buffer
+        wireless.get_data_buf(client_sock, response_buf + response_length, &read_length);
+        response_length += read_length; // Increment the response_length by the amount we actually read
+
+        // Also check for timeouts here, too
+        if(millis() - t_start >= timeout) break;
+    }
+
+    // Explicitly stop our client, and don't leave it dangling!
+    wireless.stop_client(client_sock);
+
+    // Bail if we timed out.
+    if(millis() - t_start >= timeout) return HTTP_REQUEST_TIMEOUT;
+
+    if(response_length > 0) {
+        std::vector<std::string_view> response = split(std::string_view((char *)response_buf, response_length));
+        std::vector<std::string_view> response_body;
+        uint32_t status_code = 0;
+
+        // Bail early on an invalid HTTP request
+        if(response[0].compare(0, 8, "HTTP/1.1") != 0) return HTTP_REQUEST_RESPONSE_INVALID;
+
+        // Scan for the blank line indicating content start
+        auto body_start = std::find(response.begin(), response.end(), "");
+
+        // Split the body from the head (ow!)
+        if(body_start != response.end()) {
+            response_body = std::vector<std::string_view>(body_start + 1, response.end());
+            response = std::vector<std::string_view>(response.begin(), body_start);
+        }
+
+        // Parse out the HTTP status code
+        status_code = std::stoul(std::string(response[0].substr(9, 12)), nullptr);
+
+        if(status_code != 0) {
+            handler(status_code, response, response_body);
+            return HTTP_REQUEST_OK;
+        }
+
+        return HTTP_REQUEST_RESPONSE_UNHANDLED;
+    }
+
+    return HTTP_REQUEST_NO_RESPONSE;
+}
+
+/* As above, but does DNS resolving for us, probably don't use this... */
+int http_request(uint8_t client_sock, std::string request_host, uint16_t port, std::string request_path, http_handler handler, uint32_t timeout = 1000) {
+    IPAddress host_address = dns_lookup(request_host);
+    return http_request(client_sock, host_address, port, request_host, request_path, handler, timeout);
+}
+
+int main() {
+    stdio_init_all(); 
+
+    wireless.init();
+    sleep_ms(500);
+
+    printf("Firmware version Nina %s\n", wireless.get_fw_version());
+
+    if(!wifi_connect(NETWORK, PASSWORD, USE_DNS)) {
+        return 0;
+    }
+
+    g = 255;
+    wireless.set_led(r, g, b);
+
+    // Get a free client socket
+    uint8_t client_sock = wireless.get_socket();
+
+    // Be a good DNS citizen and cache our lookup
+    IPAddress host_address = dns_lookup(HTTP_REQUEST_HOST);
+
+    while(1) {
+        printf("Requesting: %s\n", HTTP_REQUEST_PATH);
+
+        HTTP_REQUEST_STATUS status = http_request(client_sock, host_address, HTTP_PORT, HTTP_REQUEST_HOST, HTTP_REQUEST_PATH, []( 
+            unsigned int status_code,
+            std::vector<std::string_view> response_head,
+            std::vector<std::string_view> response_body) {
+            // Check for valid status
+            if(status_code != 200) return;
+            // Check for empty body
+            if(response_body.size() == 0) return;
+            // Check for our 7 chars "#000000"
+            if(response_body[0].length() != 7) return;
+            // Check for at least a *hopefully* valid hex colour
+            if(response_body[0].compare(0, 1, "#") != 0) return;
+
+            // Convert the hex colour to an unsigned int
+            uint32_t rgb = std::stoul(std::string(response_body[0].substr(1)), nullptr, 16);
+
+            // Unpack to RGB
+            r = (rgb >> 16) & 0xff;
+            g = (rgb >> 8) & 0xff;
+            b = (rgb >> 0) & 0xff;
+            printf("RGB: %i %i %i\n", r, g, b);
+            wireless.set_led(r, g, b);
+        });
+
+        if(status == HTTP_REQUEST_NO_RESPONSE) {
+            printf("No response :(\n");
+        }
+
+        if(status == HTTP_REQUEST_TIMEOUT) {
+            printf("Request timed out :(\n");
+        }
+
+        if(status == HTTP_REQUEST_RESPONSE_UNHANDLED) {
+            // Something unexpected happened!
+        }
+
+        sleep_ms(HTTP_REQUEST_DELAY * 1000); // Sensible delay
+    }
+
+    return 0;
+}
