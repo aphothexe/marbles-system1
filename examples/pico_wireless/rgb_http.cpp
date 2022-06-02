@@ -121,4 +121,124 @@ bool poll_http_requests(uint8_t server_sock, http_request_handler request_handle
     wireless.get_data_buf(client_sock, request_buf + request_length, &read_length);
     request_length += read_length; // Increment the response_length by the amount we actually read
 
-    // Also check for timeout
+    // Also check for timeouts here, too
+    if(millis() - t_start >= timeout) break;
+  }
+
+  // Bail if we timed out.
+  if(millis() - t_start >= timeout) {
+    wireless.stop_client(client_sock);
+  };
+
+  if(request_length > 0) {
+    std::vector<std::string_view> request = split(std::string_view((char *)request_buf, request_length));
+    std::vector<std::string_view> request_body;
+    std::vector<std::string_view> request_detail = split(request[0], " ");
+    http_request_method_t method;
+
+    // Bail early on an invalid HTTP request
+    if(request_detail[0].compare("POST") == 0) {
+      method = POST;
+    } else if (request_detail[0].compare("GET") == 0) {
+      method = GET;
+    } else { // PUT, DELETE, HEAD?
+      // Return a 501 unimplemented
+      wireless.send_data(client_sock, (const uint8_t *)response_501.data(), response_501.length());
+      wireless.stop_client(client_sock);
+      return false;
+    }
+
+    // Get the request path so we can handle routes
+    std::string_view path = request_detail[1];
+
+    // Scan for the blank line indicating content start for form post data
+    auto body_start = std::find(request.begin(), request.end(), "");
+
+    // Split the body from the head (ow!)
+    if(body_start != request.end()) {
+      request_body = std::vector<std::string_view>(body_start + 1, request.end());
+      request = std::vector<std::string_view>(request.begin(), body_start);
+    }
+
+    std::string_view response_body = request_handler(method, path, request, request_body);
+    std::string response_head = "HTTP/1.1 200 OK\nContent-Length: " + std::to_string(response_body.length()) + "\nContent-Type: text/html\n\n";
+    wireless.send_data(client_sock, (const uint8_t *)response_head.data(), response_head.length());
+    wireless.send_data(client_sock, (const uint8_t *)response_body.data(), response_body.length());
+    wireless.stop_client(client_sock);
+
+    return true;
+  }
+
+  return false;
+}
+
+int main() {
+  stdio_init_all();
+
+  wireless.init();
+  sleep_ms(500);
+
+  printf("Firmware version Nina %s\n", wireless.get_fw_version());
+
+  if(!wifi_connect(NETWORK, PASSWORD, USE_DNS)) {
+    return 0;
+  }
+
+  uint8_t server_sock = start_server(HTTP_PORT);
+
+  g = 255;
+  wireless.set_led(r, g, b);
+
+  while(1) {
+    // Handle any incoming HTTP requests
+    poll_http_requests(server_sock, [](
+      http_request_method_t request_method,
+      std::string_view request_path,
+      std::vector<std::string_view> request_head,
+      std::vector<std::string_view> request_body) -> std::string_view {
+
+      if(request_method == POST) {
+        // Split the URL-encoded POST data and parse the RGB values
+        std::vector<std::string_view> post_data = split(request_body[0], "&");
+        for(auto &data : post_data) {
+          // Must be at least 3 chars for "x=y"
+          if(data.length() < 3) continue;
+          // Must be in the form "x=y"
+          if(data[1] != '=') continue;
+          // "v" will be 0 on a parse failure, which isn't so bad.
+          int v = atoi((const char *)(data.data() + 2));
+          switch(data[0]) {
+            case 'r':
+              r = v;
+              printf("Got R: %i\n", r);
+              break;
+            case 'g':
+              g = v;
+              printf("Got G: %i\n", g);
+              break;
+            case 'b':
+              b = v;
+              printf("Got B: %i\n", b);
+              break;
+          }
+          wireless.set_led(r, g, b);
+        }
+      } else { // GET
+        if(request_path.compare("/hello") == 0) {
+          return "Hello World!";
+        }
+      }
+
+      return "\
+      <form method=\"post\" action=\"/\">\
+        <input id=\"r\" name=\"r\" type=\"number\" value=\"" + std::to_string(r) + "\" />\
+        <input name=\"g\" type=\"number\" value=\"" + std::to_string(g) + "\"  />\
+        <input name=\"b\" type=\"number\" value=\"" + std::to_string(b) + "\"  />\
+        <input type=\"submit\" value=\"Set LED\" />\
+      </form>";
+    });
+    sleep_ms(10);
+  }
+
+  return 0;
+}
