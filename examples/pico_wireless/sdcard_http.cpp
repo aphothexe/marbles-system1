@@ -139,4 +139,126 @@ bool poll_http_requests(uint8_t server_sock, http_request_handler request_handle
   printf("Got request: %i bytes\n",  avail_length);
 
   // Read the full response
-  // Sometimes the bytes read is less than the bytes we req
+  // Sometimes the bytes read is less than the bytes we request, so loop until we get the data we expect
+  while(request_length < avail_length) {
+    uint16_t read_length = avail_length; // Request the full buffer
+    wireless.get_data_buf(client_sock, request_buf + request_length, &read_length);
+    request_length += read_length; // Increment the response_length by the amount we actually read
+
+    // Also check for timeouts here, too
+    if(millis() - t_start >= timeout) break;
+  }
+
+  // Bail if we timed out.
+  if(millis() - t_start >= timeout) {
+    wireless.stop_client(client_sock);
+  };
+
+  if(request_length > 0) {
+    std::vector<std::string_view> request = split(std::string_view((char *)request_buf, request_length));
+    std::vector<std::string_view> request_body;
+    std::vector<std::string_view> request_detail = split(request[0], " ");
+    http_request_method_t method;
+
+    // Bail early on an invalid HTTP request
+    if(request_detail[0].compare("POST") == 0) {
+      method = POST;
+    } else if (request_detail[0].compare("GET") == 0) {
+      method = GET;
+    } else { // PUT, DELETE, HEAD?
+      // Return a 501 unimplemented
+      wireless.send_data(client_sock, (const uint8_t *)response_501.data(), response_501.length());
+      wireless.stop_client(client_sock);
+      return false;
+    }
+
+    // Get the request path so we can handle routes
+    std::string_view path = request_detail[1];
+
+    // Scan for the blank line indicating content start for form post data
+    auto body_start = std::find(request.begin(), request.end(), "");
+
+    // Split the body from the head (ow!)
+    if(body_start != request.end()) {
+      request_body = std::vector<std::string_view>(body_start + 1, request.end());
+      request = std::vector<std::string_view>(request.begin(), body_start);
+    }
+
+    std::string response_head;
+    std::string content_type = "text/html";
+
+    http_response_t response = request_handler(method, path, request, request_body);
+
+    switch(response.content_type) {
+      case TEXT_HTML:
+        content_type = "text/html";
+        break;
+      case IMAGE_SVG:
+        content_type = "image/svg+xml";
+        break;
+    }
+
+    if(response.response_code == 200) {
+      response_head = "HTTP/1.1 200 OK\nContent-Length: " + std::to_string(response.response_body.length()) + "\nContent-Type: " + content_type + "\n\n";
+    } else { // Assume 404
+      response_head = "HTTP/1.1 404 File Not Found\nContent-Length: 22\nContent-Type: " + content_type + "\n\n";
+    }
+
+    wireless.send_data(client_sock, (const uint8_t *)response_head.data(), response_head.length());
+
+    uint16_t chunks = (response.response_body.length() / HTTP_RESPONSE_CHUNK_SIZE) + 1;
+    for(auto chunk = 0u; chunk < chunks; chunk++) {
+      uint16_t offset = chunk * HTTP_RESPONSE_CHUNK_SIZE;
+      uint16_t length = std::min(response.response_body.length() - offset, HTTP_RESPONSE_CHUNK_SIZE);
+      if(length == 0) break;
+      wireless.send_data(client_sock, (const uint8_t *)response.response_body.data() + offset, length);
+      sleep_ms(1);
+    }
+
+    wireless.stop_client(client_sock);
+
+    return true;
+  }
+
+  return false;
+}
+
+int main() {
+  stdio_init_all();
+
+  fr = f_mount(&fs, "", 1);
+  if (fr != FR_OK) {
+      printf("Failed to mount SD card, error: %d\n", fr);
+      return 0;
+  }
+
+  FILINFO file;
+  auto dir = new DIR();
+  printf("Listing /\n");
+  f_opendir(dir, "/");
+  while(f_readdir(dir, &file) == FR_OK && file.fname[0]) {
+      printf("%s %lld\n", file.fname, file.fsize);
+  }
+  f_closedir(dir);
+
+  wireless.init();
+  sleep_ms(500);
+
+  printf("Firmware version Nina %s\n", wireless.get_fw_version());
+
+  if(!wifi_connect(NETWORK, PASSWORD, USE_DNS)) {
+    return 0;
+  }
+
+  uint8_t server_sock = start_server(HTTP_PORT);
+
+  g = 255;
+  wireless.set_led(r, g, b);
+
+  while(1) {
+    // Handle any incoming HTTP requests
+    poll_http_requests(server_sock, [](
+      http_request_method_t request_method,
+      std::string_view request_path,
+      std::vector<std::string_view> request_head,
+      std::vector<std
