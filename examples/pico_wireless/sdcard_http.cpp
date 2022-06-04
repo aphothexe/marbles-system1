@@ -261,4 +261,59 @@ int main() {
       http_request_method_t request_method,
       std::string_view request_path,
       std::vector<std::string_view> request_head,
-      std::vector<std
+      std::vector<std::string_view> request_body) -> http_response_t {
+
+      http_response_t response;
+      response.response_body = "Nothing to see here...";
+      response.response_code = 404;
+
+      printf("Request path: \"%s\"\n", std::string(request_path).c_str());
+
+      // Only serve HTML files!
+      if (has_suffix(request_path, ".html")) {
+        fr = f_open(&fil, std::string(request_path).c_str(), FA_READ);
+        if(fr == FR_OK) {
+          size_t read = 0;
+          f_read(&fil, response_buf, HTTP_RESPONSE_BUF_SIZE, &read);
+          f_close(&fil);
+          response.response_body = std::string_view((char*)response_buf, read);
+          response.response_code = 200;
+        }
+      // And, maybe SVG!?
+      } else if (has_suffix(request_path, ".svg")) {
+        fr = f_open(&fil, std::string(request_path).c_str(), FA_READ);
+        if(fr == FR_OK) {
+          size_t read = 0;
+          f_read(&fil, response_buf, HTTP_RESPONSE_BUF_SIZE, &read);
+          f_close(&fil);
+          response.response_body = std::string_view((char*)response_buf, read);
+          response.response_code = 200;
+          response.content_type = IMAGE_SVG;
+        }
+      /// Oooh! Directory listings...
+      } else if (has_suffix(request_path, "/")) {
+        FILINFO file;
+        auto dir = new DIR();
+        printf("Listing directory: %s\n", std::string(request_path).c_str());
+        f_opendir(dir, std::string(request_path).c_str());
+        uint16_t offset = 0u;
+        while(f_readdir(dir, &file) == FR_OK && file.fname[0]) {
+          std::string filename = std::string(file.fname);
+          if(!has_suffix(filename, ".svg")  && !has_suffix(filename, ".html")) continue;
+          snprintf((char *)response_buf + offset, (size_t)HTTP_RESPONSE_BUF_SIZE - offset, "<li><a href=\"%s%s\">%s</a>", std::string(request_path).c_str(), file.fname, file.fname);
+          offset += filename.length() * 2 + 20 + request_path.length(); // Ugh
+        }
+        f_closedir(dir);
+        response.response_body = std::string_view((char*)response_buf, offset);
+        response.response_code = 200;
+      }
+
+      return response;
+
+
+    });
+    sleep_ms(10);
+  }
+
+  return 0;
+}
