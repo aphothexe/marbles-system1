@@ -113,4 +113,106 @@ void brightness_gauge(uint v, uint vmax = 100) {
 }
 
 int main() {
-  st
+  stdio_init_all();
+
+  led_strip.start(UPDATES);
+
+  bool encoder_detected = enc.init();
+  enc.clear_interrupt_flag();
+
+  //Initialise the default values
+  int16_t speed = DEFAULT_SPEED;
+  int16_t hue = DEFAULT_HUE;
+  int16_t angle = DEFAULT_ANGLE;
+  int16_t brightness = DEFAULT_BRIGHTNESS;
+
+  bool cycle = true;
+  ENCODER_MODE mode = ENCODER_MODE::COLOUR;
+  uint32_t start_time = millis();
+  while(true) {
+    uint32_t t = millis() - start_time;
+    if(encoder_detected) {
+      if(enc.get_interrupt_flag()) {
+        int16_t count = enc.read();
+        enc.clear_interrupt_flag();
+        enc.clear();
+
+        cycle = false;
+        switch(mode) {
+          case ENCODER_MODE::COLOUR:
+            hue += count;
+            hue = std::min((int16_t)359, std::max((int16_t)0, hue));
+            colour_cycle((float)hue, 0, (float)angle);
+            break;
+
+          case ENCODER_MODE::ANGLE:
+            angle += count;
+            angle = std::min((int16_t)359, std::max((int16_t)0, angle));
+            colour_cycle((float)hue, 0, (float)angle);
+            break;
+
+          case ENCODER_MODE::BRIGHTNESS:
+            brightness += count;
+            brightness = std::min((int16_t)31, std::max((int16_t)0, brightness));
+            led_strip.set_brightness((uint8_t)brightness);
+            brightness_gauge(brightness, 31);
+            break;
+
+          case ENCODER_MODE::SPEED:
+            speed += count;
+            speed = std::min((int16_t)100, std::max((int16_t)0, speed));
+            speed_gauge(speed, 100);
+            break;
+        }
+      }
+    }
+    bool sw_pressed = user_sw.read();
+    bool a_pressed = button_a.read();
+    bool b_pressed = button_b.read();
+
+    if(sw_pressed) {
+      speed = DEFAULT_SPEED;
+      hue = DEFAULT_HUE;
+      angle = DEFAULT_ANGLE;
+      brightness = DEFAULT_BRIGHTNESS;
+    }
+
+    if(b_pressed) {
+      if(!cycle)
+        start_time = millis();
+      cycle = true;
+    }
+
+    switch(mode) {
+      case ENCODER_MODE::COLOUR:
+        led.set_rgb(255, 0, 0);
+        if(a_pressed) mode = ENCODER_MODE::ANGLE;
+        break;
+
+      case ENCODER_MODE::ANGLE:
+        led.set_rgb(255, 255, 0);
+        if(a_pressed) mode = ENCODER_MODE::BRIGHTNESS;
+        break;
+
+      case ENCODER_MODE::BRIGHTNESS:
+        led.set_rgb(0, 255, 0);
+        if(a_pressed) mode = ENCODER_MODE::SPEED;
+        break;
+
+      case ENCODER_MODE::SPEED:
+        led.set_rgb(0, 0, 255);
+        if(a_pressed) mode = ENCODER_MODE::COLOUR;
+        break;
+    }
+
+    if(cycle)
+      colour_cycle(hue, (float)(t * speed) / 100.0f, (float)angle);
+
+    auto mid_led = led_strip.get(led_strip.num_leds / 2);
+    enc.set_led(mid_led.r, mid_led.g, mid_led.b);
+
+    // Sleep time controls the rate at which the LED buffer is updated
+    // but *not* the actual framerate at which the buffer is sent to the LEDs
+    sleep_ms(1000 / UPDATES);
+  }
+}
