@@ -201,4 +201,143 @@ void StackerGame::game_step(){
         if (a){
             if (player.position == target.position)
             {
-            advance_
+            advance_round();
+            }
+            else if (player.position < target.position ){
+                if (player.position + player.length >= target.position){
+                    target.length = target.length - (target.position - player.position);
+                    player.length = target.length;
+                    sleep_ms(200);
+                    advance_round();
+
+                }
+                else{
+                    stop();
+                }
+            }
+            
+            else if (player.position > target.position){
+                if(player.position < target.position + target.length){
+                    
+                    target.length = target.length - (player.position - target.position);
+                    target.position = player.position;
+                    player.length = target.length;
+                    sleep_ms(200);
+                    advance_round();
+
+                }
+                else{
+                    stop();
+                }
+            }
+        }
+            
+    
+        
+            
+            // aminate player and target ingame
+            if (player.position + player.length >= right_wall.position){
+                player.move_direction = -1;
+            }
+            if (player.position <= left_wall.position + left_wall.length){
+                player.move_direction = 1;
+            }
+            if (current_step % (254 - player.speed) == 0){
+                player.position += player.move_direction;
+            }
+
+
+            if (begining_level.moving_target){
+                if (target.position + target.length >= right_wall.position){
+                    target.move_direction = -1;
+                }
+                if (target.position <= left_wall.position + left_wall.length){
+                    target.move_direction = 1;
+                }
+                if (current_step % (254 - target.speed) == 0){
+                    target.position += target.move_direction;
+                }
+            }
+        
+    }
+
+    else if (game_state == ATTRACT_MODE){
+
+        if (a){
+            game_state = GAME_STARTED;
+            reset(begining_level);
+            sleep_ms(2000);
+        }
+        
+        // aminate player and target attract mode
+        if (player.position + player.length >= right_wall.position){
+            player.move_direction = -1;
+        }
+        if (player.position <= left_wall.position + left_wall.length){
+            player.move_direction = 1;
+        }
+        if (current_step % (254 - 150) == 0){
+            player.position += player.move_direction;
+        }
+
+
+        
+        if (target.position + target.length >= right_wall.position){
+            target.move_direction = -1;
+        }
+        if (target.position <= left_wall.position + left_wall.length){
+            target.move_direction = 1;
+        }
+        if (current_step % (254 - 50) == 0){
+            target.position += target.move_direction;
+        }
+
+
+    
+
+    }
+    
+
+}
+
+int main() {
+    stdio_init_all();
+
+    led_strip.start(60);
+
+    
+    StackerGame stacker; // create instance of stacker game
+
+    //create level instance this is where you can adjust beginning dificulty
+    levels level_1;
+    level_1.player_speed = 70;
+    level_1.player_speed_increase_rate = 10;
+    level_1.moving_target = false;
+    level_1.target_speed = 20;
+    level_1.target_speed_increase_rate = 10;
+
+    stacker.start(level_1);
+
+    
+
+
+    while (true) {
+        //do game loop
+        stacker.game_step();
+
+        if (stacker.game_state == stacker.ATTRACT_MODE){
+            bool a = button_a.read();
+            if (a){
+                
+                stacker.game_state = stacker.GAME_STARTED;
+                stacker.start(level_1);
+                sleep_ms(2000);
+            }
+        }
+        
+        
+        // leds update routine 
+        for(auto i = 0u; i < led_strip.num_leds; ++i) {
+
+            if (stacker.target.is_present_at(i)){
+                led_strip.set_rgb(i, stacker.
