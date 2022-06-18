@@ -340,4 +340,33 @@ int main() {
         for(auto i = 0u; i < led_strip.num_leds; ++i) {
 
             if (stacker.target.is_present_at(i)){
-                led_strip.set_rgb(i, stacker.
+                led_strip.set_rgb(i, stacker.target.colour_R, stacker.target.colour_G, stacker.target.colour_B);
+                
+                if (stacker.player.is_present_at(i)){
+                    led_strip.set_rgb(i, stacker.target.colour_R - stacker.player.colour_R, 
+                                         stacker.target.colour_G - stacker.player.colour_G,
+                                         stacker.target.colour_B - stacker.player.colour_B);
+                }
+            }
+            else if (stacker.player.is_present_at(i)){
+                led_strip.set_rgb(i, stacker.player.colour_R, stacker.player.colour_G, stacker.player.colour_B);
+            }
+            else if (stacker.left_wall.is_present_at(i)){
+                led_strip.set_rgb(i, stacker.left_wall.colour_R, stacker.left_wall.colour_G, stacker.left_wall.colour_B);
+            }
+
+            else if (stacker.right_wall.is_present_at(i)){
+                led_strip.set_rgb(i, stacker.right_wall.colour_R, stacker.right_wall.colour_G, stacker.right_wall.colour_B);
+            }
+            else{
+                led_strip.set_rgb(i, 0, 0, 0);
+            }
+            
+            
+        }
+            
+        // Sleep time controls the rate at which the LED buffer is updated
+        // but *not* the actual framerate at which the buffer is sent to the LEDs
+        sleep_ms(1);
+    }
+}
