@@ -75,4 +75,48 @@ int main() {
   Calibration &lcal = linear_servo.calibration();
   lcal.last_value(LINEAR_RANGE);
 
-  // As the calibration was a reference, the servo 
+  // As the calibration was a reference, the servo has already
+  // been updated, but lets access it again to confirm it worked
+  printf("Linear Servo: ");
+  print_calibration(linear_servo.calibration());
+
+
+  // ----------------------------------------------------------------
+  // Create and modify the calibration of a continuous rotation servo
+  // ----------------------------------------------------------------
+
+  // The speed we want the continuous servo to cover
+  constexpr float CONTINUOUS_SPEED = 10.0f;
+
+  // Create a continous rotation servo on pin 2. By default its value ranges from -1.0 to +1.0
+  Servo continuous_servo = Servo(servo2040::SERVO_3, CONTINUOUS);
+
+  // Update the continuous rotation servo so its value matches its real speed
+  Calibration &ccal = continuous_servo.calibration();
+  ccal.first_value(-CONTINUOUS_SPEED);
+  ccal.last_value(CONTINUOUS_SPEED);
+
+  // As the calibration was a reference, the servo has already
+  // been updated, but lets access it again to confirm it worked
+  printf("Continuous Servo: ");
+  print_calibration(continuous_servo.calibration());
+
+
+  // ------------------------------------------------------
+  // Create a custom calibration and build a servo using it
+  // ------------------------------------------------------
+
+  // Create an empty calibration
+  Calibration ecal = Calibration();
+
+  // Give it a range of -45 to 45 degrees, corresponding to pulses of 1000 and 2000 microseconds
+  ecal.apply_two_pairs(1000, 2000, -45, 45);
+
+  // Turn off the lower and upper limits, so the servo can go beyond 45 degrees
+  ecal.limit_to_calibration(false, false);
+
+  // Create a servo on pin 3 using the custom calibration and confirmed it worked
+  Servo custom_servo = Servo(servo2040::SERVO_4, ecal);
+  printf("Custom Servo: ");
+  print_calibration(custom_servo.calibration());
+}
