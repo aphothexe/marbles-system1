@@ -73,4 +73,39 @@ int main() {
 
     // Read the current sense several times and average the result
     float current = 0.0f;
-    for(auto i
+    for(auto i = 0u; i < SAMPLES; i++) {
+        current += cur_adc.read_current();
+        sleep_ms(TIME_BETWEEN_MS);
+    }
+    current /= SAMPLES;
+
+    // Print out the current sense value
+    printf("Current = %f\n", current);
+
+    // Convert the current to a percentage of the maximum we want to show
+    float percent = (current / MAX_CURRENT);
+
+    // Update all the LEDs
+    for(auto i = 0u; i < servo2040::NUM_LEDS; i++) {
+      // Calculate the LED's hue, with Red for high currents and Green for low
+      float hue = (1.0f - (float)i / (float)(servo2040::NUM_LEDS - 1)) * 0.333f;
+
+      // Calculate the current level the LED represents
+      float level = (i + 0.5f) / servo2040::NUM_LEDS;
+      // If the percent is above the level, light the LED, otherwise turn it off
+      if(percent >= level)
+        led_bar.set_hsv(i, hue, 1.0f, BRIGHTNESS);
+      else
+        led_bar.set_hsv(i, hue, 1.0f, 0.0f);
+    }
+  }
+
+  // Stop all the servos
+  servos.disable_all();
+
+  // Turn off the LED bar
+  led_bar.clear();
+
+  // Sleep a short time so the clear takes effect
+  sleep_ms(100);
+}
