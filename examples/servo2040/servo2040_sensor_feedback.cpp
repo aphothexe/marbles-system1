@@ -7,23 +7,30 @@
 #include "button.hpp"
 
 /*
-Shows how to initialise and read the 6 external
-and 2 internal sensors of Servo 2040.
+Show how to read the 6 external sensors and
+display their values on the neighbouring LEDs.
 
 Press "Boot" to exit the program.
 */
 
+using namespace plasma;
 using namespace servo;
+
+// The brightness of the LEDs
+constexpr float BRIGHTNESS = 0.4f;
+
+// How many times to update LEDs and Servos per second
+const uint UPDATES = 50;
 
 // Set up the shared analog inputs
 Analog sen_adc = Analog(servo2040::SHARED_ADC);
-Analog vol_adc = Analog(servo2040::SHARED_ADC, servo2040::VOLTAGE_GAIN);
-Analog cur_adc = Analog(servo2040::SHARED_ADC, servo2040::CURRENT_GAIN,
-                        servo2040::SHUNT_RESISTOR, servo2040::CURRENT_OFFSET);
 
 // Set up the analog multiplexer, including the pin for controlling pull-up/pull-down
 AnalogMux mux = AnalogMux(servo2040::ADC_ADDR_0, servo2040::ADC_ADDR_1, servo2040::ADC_ADDR_2,
                           PIN_UNUSED, servo2040::SHARED_ADC);
+
+// Create the LED bar, using PIO 1 and State Machine 0
+WS2812 led_bar = WS2812(servo2040::NUM_LEDS, pio1, 0, servo2040::LED_DATA);
 
 // Create the user button
 Button user_sw(servo2040::USER_SW);
@@ -37,23 +44,31 @@ int main() {
     mux.configure_pulls(servo2040::SENSOR_1_ADDR + i, false, true);
   }
 
+  // Start updating the LED bar
+  led_bar.start();
+
   // Read sensors until the user button is pressed
   while(!user_sw.raw()) {
 
     // Read each sensor in turn and print its voltage
     for(auto i = 0u; i < servo2040::NUM_SENSORS; i++) {
       mux.select(servo2040::SENSOR_1_ADDR + i);
-      printf("S%d = %f, ", i + 1, sen_adc.read_voltage());
+      float sensor_voltage = sen_adc.read_voltage();
+
+      // Calculate the LED's hue, with Green for high voltages and Blue for low
+      float hue = (2.0f - (sensor_voltage / 3.3f)) * 0.333f;
+      led_bar.set_hsv(i, hue, 1.0f, BRIGHTNESS);
+
+      printf("S%d = %f,", i + 1, sensor_voltage);
     }
+    printf("\n");
 
-    // Read the voltage sense and print the value
-    mux.select(servo2040::VOLTAGE_SENSE_ADDR);
-    printf("Voltage = %f, ", vol_adc.read_voltage());
-
-    // Read the current sense and print the value
-    mux.select(servo2040::CURRENT_SENSE_ADDR);
-    printf("Current = %f\n", cur_adc.read_current());
-
-    sleep_ms(500);
+    sleep_ms(1000 / UPDATES);
   }
+
+  // Turn off the LED bar
+  led_bar.clear();
+
+  // Sleep a short time so the clear takes effect
+  sleep_ms(100);
 }
