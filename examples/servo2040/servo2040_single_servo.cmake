@@ -1,10 +1,9 @@
-set(OUTPUT_NAME servo2040_servo_wave)
-add_executable(${OUTPUT_NAME} servo2040_servo_wave.cpp)
+set(OUTPUT_NAME servo2040_single_servo)
+add_executable(${OUTPUT_NAME} servo2040_single_servo.cpp)
 
 target_link_libraries(${OUTPUT_NAME}
         pico_stdlib
         servo2040
-        button
         )
 
 # enable usb output, disable uart output (so it doesn't confuse any connected servos)
