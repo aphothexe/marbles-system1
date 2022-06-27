@@ -69,4 +69,7 @@ If you're running a Windows computer, you should be able to see what COM ports y
 
 ### Device is busy?
 
-This error suggests your board is in the middle of doing something and you'll nee
+This error suggests your board is in the middle of doing something and you'll need to interrupt it by pressing the stop button in Thonny. If that doesn't get it talking, try resetting the board or disconnecting and reconnecting the USB cable. Restarting Thonny can also sometimes help!
+
+If none of that helps, you might have a malfunctioning `main.py` - you can clear everything that's in the board's flash memory by following [these instructions](#how-do-i-get-micropython-onto-my-device). Note that this will delete the all the code saved on your device, so you should only do it as a last resort!
+
