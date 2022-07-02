@@ -1,4 +1,4 @@
-set(LIB_NAME breakout_ioexpander)
+set(LIB_NAME breakout_potentiometer)
 add_library(${LIB_NAME} INTERFACE)
 
 target_sources(${LIB_NAME} INTERFACE

@@ -1,4 +1,5 @@
-set(LIB_NAME breakout_ioexpander)
+
+set(LIB_NAME breakout_mics6814)
 add_library(${LIB_NAME} INTERFACE)
 
 target_sources(${LIB_NAME} INTERFACE
