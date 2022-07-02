@@ -39,4 +39,42 @@ pixels:
     out x, 1       side 0  [1]    ; pull in blue bit from OSR into register x, clear clock
     set pins, 0b100               ; clear data bit, blank high
     jmp !x endb                   ; if bit was zero jump
-    set 
+    set pins, 0b101               ; set data bit, blank high
+  endb:                      
+    nop            side 1 [2]     ; clock in bit
+
+    ; green bit
+    out x, 1       side 0 [1]        ; pull in green bit from OSR into register X, clear clock
+    set pins, 0b100               ; clear data bit, blank high
+    jmp !x endg                   ; if bit was zero jump
+    set pins, 0b101               ; set data bit, blank high
+  endg:                      
+    nop            side 1 [2]     ; clock in bit
+
+    ; blue bit
+    out x, 1       side 0  [1]       ; pull in red bit from OSR into register X, clear clock
+    set pins, 0b100               ; clear data bit, blank high
+    jmp !x endr                   ; if bit was zero jump
+    set pins, 0b101               ; set data bit, blank high
+  endr:                      
+    out null, 5             side 1 [2]     ; clock in bit
+
+    ;out null, 5    side 0         ; discard the five dummy bits for this pixel
+
+  jmp y-- pixels
+
+  out null, 24                    ; discard dummy bytes
+
+  out pins, 8                     ; output row select
+
+  set pins, 0b110 [5]             ; latch high, blank high
+  set pins, 0b000                 ; blank low (enable output)
+
+; loop over bcd delay period
+  out y, 24                       ; get bcd delay counter value
+bcd_delay:
+  jmp y-- bcd_delay         
+
+  set pins 0b100                  ; blank high (disable output)
+
+.wrap
