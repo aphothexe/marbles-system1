@@ -162,4 +162,90 @@ Returns the current volume as a value between `0.0` and `1.0`.
 
 ### `void adjust_volume(float delta)`
 
-Adjust the volume - `delta` is supplied as a
+Adjust the volume - `delta` is supplied as a floating point value and will be added to the current volume (and then clamped to the range `0.0` to `1.0`).
+
+For example:
+
+```c++
+galactic.set_volume(0.5f);
+galactic.adjust_volume(0.1f); // volume is now 0.6
+galactic.adjust_volume(0.7f); // volume is now 1.0
+galactic.adjust_volume(-0.2f); // volume is now 0.8
+```
+
+### `uint16_t light()`
+
+Get the current value seen by the onboard light sensor as a value between `0` and `4095`.
+
+### `bool is_pressed(uint8_t button)`
+
+Returns true if the requested `button` is currently pressed.
+
+There are a set of constants on the GalacticUnicorn class that represent each of the buttons. The brightness, sleep, and volume buttons are not tied to hardware functions (they are implemented entirely in software) so can also be used for user functions if preferred.
+
+```c++
+static const uint8_t SWITCH_A               =  0;
+static const uint8_t SWITCH_B               =  1;
+static const uint8_t SWITCH_C               =  3;
+static const uint8_t SWITCH_D               =  6;
+static const uint8_t SWITCH_SLEEP           = 27;
+static const uint8_t SWITCH_VOLUME_UP       =  7;
+static const uint8_t SWITCH_VOLUME_DOWN     =  8;
+static const uint8_t SWITCH_BRIGHTNESS_UP   = 21;
+static const uint8_t SWITCH_BRIGHTNESS_DOWN = 26;
+```
+
+For example:
+
+```c++
+while(!galactic.is_pressed(GalacticUnicorn::SWITCH_A)) {
+  // wait for switch A to be pressed
+}
+printf("We did it! We pressed switch A! Heck yeah!");
+```
+
+## Drawing
+
+### `void update(PicoGraphics *graphics)`
+
+**This is our recommended way to update the image on Galactic Unicorn.** The PicoGraphics library provides a collection of powerful drawing methods to make things simple.
+
+The image on the PicoGraphics object provided is copied to the interleaved framebuffer with gamma correction applied. This lets you have multiple PicoGraphics objects on the go at once and switch between them by changing which gets passed into this function.
+
+If however you'd rather twiddle individual pixels (for example you're producing some sort of algorithmic output) then you can simply use the `clear()` and `set_pixel()` methods mentioned below.
+
+### `void clear()`
+
+Clear the contents of the interleaved framebuffer. This will make your Galactic Unicorn display turn off when the next frame is displayed.
+
+If you're using PicoGraphics to build your image (recommended!) then you won't need to call this method as you'll overwrite the entire display when you call `update()` anyway.
+
+### `void set_pixel(int x, int y, uint8_t r, uint8_t g, uint8_t b)`
+
+Set a single pixel to the specified colour. The newly set colour will be shown at the next frame. Pixel coordinates go from `0` to `52` along the `x` axis and from `0` to `10` on the `y` axis. Colour values are specified as a `0` to `255` RGB triplet - the supplied colour will be gamma corrected automatically.
+
+ When drawing a full image it's recommended that you keep the time between each `set_pixel` call short to ensure your image gets displayed on the next frame. Otherwise you can get scanning-like visual artefacts (unless that is your intention of course!)
+
+## Audio
+
+Audio functionality is supported by our [PicoSynth library](https://github.com/pimoroni/pimoroni-pico/tree/main/libraries/pico_synth) which allows you to create multiple voice channels with ADSR (attack decay sustain release) envelopes. It provides a similar set of functionality to the classic SID chip in the Commodore 64.
+
+### `void play_sample(uint8_t *data, uint32_t length)`
+
+Play the provided 16-bit audio sample. `data` must point to a buffer that contains 16-bit PCM data and `length` must be the number of samples.
+
+### `AudioChannel& synth_channel(uint channel)`
+
+Gets an `AudioChannel` object which can then be configured with voice, ADSR envelope, etc.
+
+### `void play_synth()`
+
+Start the synth playing.
+
+### `void stop_playing()`
+
+Stops any currently playing audio.
+
+## Constants
+
+##
