@@ -248,4 +248,12 @@ Stops any currently playing audio.
 
 ## Constants
 
-##
+### `WIDTH` & `HEIGHT`
+
+The width and height of Galactic Unicorn are available in constants `WIDTH` and `HEIGHT`.
+
+For example:
+
+```c++
+int num_pixels = GalacticUnicorn::WIDTH * GalacticUnicorn::HEIGHT;
+```
