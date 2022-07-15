@@ -10,4 +10,7 @@ namespace pimoroni {
     static const uint8_t A = 14;
     static const uint8_t B = 15;
     static const uint8_t LED_R = 16;
-    stat
+    static const uint8_t LED_G = 17;
+    static const uint8_t LED_B = 18;
+  };
+}
