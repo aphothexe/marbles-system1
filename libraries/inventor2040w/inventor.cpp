@@ -131,4 +131,23 @@ void Inventor2040W::play_silence() {
 }
 
 void Inventor2040W::stop_playing() {
-  pwm_set_gpio_level(PWM_AUDIO_PIN, 0
+  pwm_set_gpio_level(PWM_AUDIO_PIN, 0);
+  mute_audio();
+}
+
+float Inventor2040W::volume() const {
+  return audio_volume;
+}
+
+void Inventor2040W::volume(float volume) {
+  audio_volume = MIN(MAX(volume, 0.0f), 1.0f);
+}
+
+void Inventor2040W::mute_audio() {
+  gpio_put(AMP_EN_PIN, false);
+}
+
+void Inventor2040W::unmute_audio() {
+  gpio_put(AMP_EN_PIN, true);
+}
+}
