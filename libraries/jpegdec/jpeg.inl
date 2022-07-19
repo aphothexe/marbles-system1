@@ -494,4 +494,149 @@ int JPEG_openRAM(JPEGIMAGE *pJPEG, uint8_t *pData, int iDataSize, JPEG_DRAW_CALL
     pJPEG->pfnOpen = NULL;
     pJPEG->pfnClose = NULL;
     pJPEG->JPEGFile.iSize = iDataSize;
-    pJPEG
+    pJPEG->JPEGFile.pData = pData;
+    pJPEG->iMaxMCUs = 1000; // set to an unnaturally high value to start
+    return JPEGInit(pJPEG);
+} /* JPEG_openRAM() */
+//
+// File initialization
+//
+int JPEG_openFile(JPEGIMAGE *pJPEG, const char *szFilename, JPEG_DRAW_CALLBACK *pfnDraw)
+{
+    memset(pJPEG, 0, sizeof(JPEGIMAGE));
+    pJPEG->ucMemType = JPEG_MEM_RAM;
+    pJPEG->pfnRead = readFile;
+    pJPEG->pfnSeek = seekFile;
+    pJPEG->pfnDraw = pfnDraw;
+    pJPEG->pfnOpen = NULL;
+    pJPEG->pfnClose = closeFile;
+    pJPEG->iMaxMCUs = 1000; // set to an unnaturally high value to start
+    pJPEG->JPEGFile.fHandle = fopen(szFilename, "r+b");
+    if (pJPEG->JPEGFile.fHandle == NULL)
+       return 0;
+    fseek((FILE *)pJPEG->JPEGFile.fHandle, 0, SEEK_END);
+    pJPEG->JPEGFile.iSize = (int)ftell((FILE *)pJPEG->JPEGFile.fHandle);
+    fseek((FILE *)pJPEG->JPEGFile.fHandle, 0, SEEK_SET);
+    return JPEGInit(pJPEG);
+} /* JPEG_openFile() */
+
+int JPEG_getLastError(JPEGIMAGE *pJPEG)
+{
+    return pJPEG->iError;
+} /* JPEG_getLastError() */
+
+int JPEG_getWidth(JPEGIMAGE *pJPEG)
+{
+    return pJPEG->iWidth;
+} /* JPEG_getWidth() */
+
+int JPEG_getHeight(JPEGIMAGE *pJPEG)
+{
+    return pJPEG->iHeight;
+} /* JPEG_getHeight() */
+
+int JPEG_getOrientation(JPEGIMAGE *pJPEG)
+{
+    return (int)pJPEG->ucOrientation;
+} /* JPEG_getOrientation() */
+
+int JPEG_getBpp(JPEGIMAGE *pJPEG)
+{
+    return (int)pJPEG->ucBpp;
+} /* JPEG_getBpp() */
+int JPEG_getSubSample(JPEGIMAGE *pJPEG)
+{
+    return (int)pJPEG->ucSubSample;
+} /* JPEG_getSubSample() */
+int JPEG_hasThumb(JPEGIMAGE *pJPEG)
+{
+    return (int)pJPEG->ucHasThumb;
+} /* JPEG_hasThumb() */
+int JPEG_getThumbWidth(JPEGIMAGE *pJPEG)
+{
+    return pJPEG->iThumbWidth;
+} /* JPEG_getThumbWidth() */
+int JPEG_getThumbHeight(JPEGIMAGE *pJPEG)
+{
+    return pJPEG->iThumbHeight;
+} /* JPEG_getThumbHeight() */
+void JPEG_setPixelType(JPEGIMAGE *pJPEG, int iType)
+{
+    pJPEG->ucPixelType = (uint8_t)iType;
+} /* JPEG_setPixelType() */
+void JPEG_setMaxOutputSize(JPEGIMAGE *pJPEG, int iMaxMCUs)
+{
+    if (iMaxMCUs < 1)
+        iMaxMCUs = 1; // don't allow invalid value
+    pJPEG->iMaxMCUs = iMaxMCUs;
+} /* JPEG_setMaxOutputSize() */
+
+int JPEG_decode(JPEGIMAGE *pJPEG, int x, int y, int iOptions)
+{
+    pJPEG->iXOffset = x;
+    pJPEG->iYOffset = y;
+    pJPEG->iOptions = iOptions;
+    return DecodeJPEG(pJPEG);
+} /* JPEG_decode() */
+
+int JPEG_decodeDither(JPEGIMAGE *pJPEG, uint8_t *pDither, int iOptions)
+{
+    pJPEG->iOptions = iOptions;
+    pJPEG->pDitherBuffer = pDither;
+    return DecodeJPEG(pJPEG);
+} /* JPEG_decodeDither() */
+
+void JPEG_close(JPEGIMAGE *pJPEG)
+{
+    if (pJPEG->pfnClose)
+        (*pJPEG->pfnClose)(pJPEG->JPEGFile.fHandle);
+} /* JPEG_close() */
+
+#endif // !__cplusplus
+//
+// Helper functions for memory based images
+//
+static int32_t readRAM(JPEGFILE *pFile, uint8_t *pBuf, int32_t iLen)
+{
+    int32_t iBytesRead;
+
+    iBytesRead = iLen;
+    if ((pFile->iSize - pFile->iPos) < iLen)
+       iBytesRead = pFile->iSize - pFile->iPos;
+    if (iBytesRead <= 0)
+       return 0;
+    memcpy(pBuf, &pFile->pData[pFile->iPos], iBytesRead);
+    pFile->iPos += iBytesRead;
+    return iBytesRead;
+} /* readRAM() */
+
+static int32_t readFLASH(JPEGFILE *pFile, uint8_t *pBuf, int32_t iLen)
+{
+    int32_t iBytesRead;
+
+    iBytesRead = iLen;
+    if ((pFile->iSize - pFile->iPos) < iLen)
+       iBytesRead = pFile->iSize - pFile->iPos;
+    if (iBytesRead <= 0)
+       return 0;
+    memcpy_P(pBuf, &pFile->pData[pFile->iPos], iBytesRead);
+    pFile->iPos += iBytesRead;
+    return iBytesRead;
+} /* readFLASH() */
+
+static int32_t seekMem(JPEGFILE *pFile, int32_t iPosition)
+{
+    if (iPosition < 0) iPosition = 0;
+    else if (iPosition >= pFile->iSize) iPosition = pFile->iSize-1;
+    pFile->iPos = iPosition;
+    return iPosition;
+} /* seekMem() */
+
+#if defined (__MACH__) || defined( __LINUX__ ) || defined( __MCUXPRESSO )
+
+static void closeFile(void *handle)
+{
+    fclose((FILE *)handle);
+} /* closeFile() */
+
+static int32_t seekFile(JPEGFILE *pFile, int32_t iPos
