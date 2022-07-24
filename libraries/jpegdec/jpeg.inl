@@ -639,4 +639,117 @@ static void closeFile(void *handle)
     fclose((FILE *)handle);
 } /* closeFile() */
 
-static int32_t seekFile(JPEGFILE *pFile, int32_t iPos
+static int32_t seekFile(JPEGFILE *pFile, int32_t iPosition)
+{
+    if (iPosition < 0) iPosition = 0;
+    else if (iPosition >= pFile->iSize) iPosition = pFile->iSize-1;
+    pFile->iPos = iPosition;
+    fseek((FILE *)pFile->fHandle, iPosition, SEEK_SET);
+    return iPosition;
+} /* seekFile() */
+
+static int32_t readFile(JPEGFILE *pFile, uint8_t *pBuf, int32_t iLen)
+{
+    int32_t iBytesRead;
+
+    iBytesRead = iLen;
+    if ((pFile->iSize - pFile->iPos) < iLen)
+       iBytesRead = pFile->iSize - pFile->iPos;
+    if (iBytesRead <= 0)
+       return 0;
+    iBytesRead = (int)fread(pBuf, 1, iBytesRead, (FILE *)pFile->fHandle);
+    pFile->iPos += iBytesRead;
+    return iBytesRead;
+} /* readFile() */
+
+#endif // __LINUX__
+//
+// The following functions are written in plain C and have no
+// 3rd party dependencies, not even the C runtime library
+//
+//
+// Initialize a JPEG file and callback access from a file on SD or memory
+// returns 1 for success, 0 for failure
+// Fills in the basic image info fields of the JPEGIMAGE structure
+//
+static int JPEGInit(JPEGIMAGE *pJPEG)
+{
+    return JPEGParseInfo(pJPEG, 0); // gather info for image
+} /* JPEGInit() */
+//
+// Unpack the Huffman tables
+//
+static int JPEGGetHuffTables(uint8_t *pBuf, int iLen, JPEGIMAGE *pJPEG)
+{
+    int i, j, iOffset, iTableOffset;
+    uint8_t ucTable, *pHuffVals;
+    
+    iOffset = 0;
+    pHuffVals = (uint8_t *)pJPEG->usPixels; // temp holding area to save RAM
+    while (iLen > 17)  // while there are tables to copy (we may have combined more than 1 table together)
+    {
+        ucTable = pBuf[iOffset++]; // get table index
+        if (ucTable & 0x10) // convert AC offset of 0x10 into offset of 4
+            ucTable ^= 0x14;
+        pJPEG->ucHuffTableUsed |= (1 << ucTable); // mark this table as being defined
+        if (ucTable <= 7) // tables are 0-3, AC+DC
+        {
+            iTableOffset = ucTable * HUFF_TABLEN;
+            j = 0; // total bits
+            for (i=0; i<16; i++)
+            {
+                j += pBuf[iOffset];
+                pHuffVals[iTableOffset+i] = pBuf[iOffset++];
+            }
+            iLen -= 17; // subtract length of bit lengths
+            if (j == 0 || j > 256 || j > iLen) // bogus bit lengths
+            {
+                return -1;
+            }
+            iTableOffset += 16;
+            for (i=0; i<j; i++)
+            {  // copy huffman table
+                pHuffVals[iTableOffset+i] = pBuf[iOffset++];
+            }
+            iLen -= j;
+        }
+    }
+    return 0;
+} /* JPEGGetHuffTables() */
+#ifdef FUTURE
+//
+// Create 11-bit lookup tables for some images where it doesn't work
+// for 10-bit tables
+//
+static int JPEGMakeHuffTables_Slow(JPEGIMAGE *pJPEG, int bThumbnail)
+{
+    int code, repeat, count, codestart;
+    int j;
+    int iLen, iTable;
+    unsigned short *pTable, *pShort, *pLong;
+    unsigned char *pucTable, *pucShort, *pucLong;
+    uint32_t ul, *pLongTable;
+    int iBitNum; // current code bit length
+    int cc; // code
+    unsigned char *p, *pBits, ucCode;
+    int iMaxLength, iMaxMask;
+
+    pJPEG->b11Bit = 1; // indicate we're using the bigger A/C decode tables
+    // first do DC components (up to 4 tables of 12-bit codes)
+    // we can save time and memory for the DC codes by knowing that there exist short codes (<= 6 bits)
+    // and long codes (>6 bits, but the first 5 bits are 1's).  This allows us to create 2 tables: a 6-bit and 7 or 8-bit
+    // to handle any DC codes
+    iMaxLength = 12; // assume DC codes can be 12-bits
+    iMaxMask = 0x7f; // lower 7 bits after truncate 5 leading 1's
+    if (pJPEG->ucMode == 0xc3) // create 13-bit tables for lossless mode
+    {
+        iMaxLength = 13;
+        iMaxMask = 0xff;
+    }
+    for (iTable = 0; iTable < 2; iTable++)
+    {
+        if (pJPEG->ucHuffTableUsed & (1<<iTable))
+        {
+            //         pJPEG->huffdcFast[iTable] = (int *)PILIOAlloc(0x180); // short table = 128 bytes, long table = 256 bytes
+            pucShort = (unsigned char *)&pJPEG->ucHuffDC[iTable*DC_TABLE_SIZE];
+            //         pJPEG->huffdc[iTable] = pJPEG->huffdcFas
