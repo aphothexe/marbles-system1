@@ -836,4 +836,102 @@ static int JPEGMakeHuffTables_Slow(JPEGIMAGE *pJPEG, int bThumbnail)
                 }
                 cc <<= 1;
             }
-        
+        } // if table defined
+    }
+    // now do AC components (up to 2 tables of 16-bit codes)
+    // We split the codes into a short table (9 bits or less) and a long table (first 5 bits are 1)
+    for (iTable = 0; iTable < 2; iTable++)
+    {
+        if (pJPEG->ucHuffTableUsed & (1<<(iTable+4)))  // if this table is defined
+        {
+            pBits = &pJPEG->ucHuffVals[(iTable+4) * HUFF_TABLEN];
+            p = pBits;
+            p += 16; // point to bit data
+            pShort = &pJPEG->usHuffAC[iTable*HUFF11SIZE];
+            pLong = &pJPEG->usHuffAC[iTable*HUFF11SIZE + 1024]; // long codes start here
+            cc = 0; // start with a code of 0
+            // construct the decode table
+            for (iBitNum = 1; iBitNum <= 16; iBitNum++)
+            {
+                iLen = *pBits++; // get number of codes for this bit length
+                while (iLen)
+                {
+                    if ((cc >> (iBitNum-4)) == 0xf) // first 4 bits are 1 - use long table
+                    {
+                        count = 16 - iBitNum;
+                        codestart = cc << count;
+                        pTable = &pLong[codestart & 0xfff]; // use lower 12 bits of code
+                    }
+                    else
+                    {
+                        count = 12 - iBitNum;
+                        if (count < 0) // a 13-bit? code - that doesn't fit our optimized scheme, see if we can do a bigger table version
+                        {
+                            return -1; // DEBUG - fatal error, we currently don't support it
+                        }
+                        codestart = cc << count;
+                        pTable = &pShort[codestart]; // 11 bits or shorter
+                    }
+                    code = *p++;  // get actual huffman code
+                    if (bThumbnail && code != 0) // add "extra" bits to code length since we skip these codes
+                    {
+                        // get rid of extra bits in code and add increment (1) for AC index
+                        code = ((iBitNum+(code & 0xf)) << 8) | ((code >> 4)+1);
+                    }
+                    else
+                    {
+                        code |= (iBitNum << 8);
+                    }
+                    if (count) // do it as dwords to save time
+                    {
+                        repeat = 1 << (count-1); // store as dwords (/2)
+                        ul = code | (code << 16);
+                        pLongTable = (uint32_t *)pTable;
+                        for (j=0; j<repeat; j++)
+                            *pLongTable++ = ul;
+                    }
+                    else
+                    {
+                        pTable[0] = (unsigned short)code;
+                    }
+                    cc++;
+                    iLen--;
+                }
+                cc <<= 1;
+            } // for each bit length
+        } // if table defined
+    }
+    return 0;
+} /* JPEGMakeHuffTables_Slow() */
+#endif // FUTURE
+//
+// Expand the Huffman tables for fast decoding
+// returns 1 for success, 0 for failure
+//
+static int JPEGMakeHuffTables(JPEGIMAGE *pJPEG, int bThumbnail)
+{
+    int code, repeat, count, codestart;
+    int j;
+    int iLen, iTable;
+    uint16_t *pTable, *pShort, *pLong;
+    uint8_t *pHuffVals, *pucTable, *pucShort, *pucLong;
+    uint32_t ul, *pLongTable;
+    int iBitNum; // current code bit length
+    int cc; // code
+    uint8_t *p, *pBits, ucCode;
+    int iMaxLength, iMaxMask;
+    int iTablesUsed;
+    
+    iTablesUsed = 0;
+    pHuffVals = (uint8_t *)pJPEG->usPixels;
+    for (j=0; j<4; j++)
+    {
+        if (pJPEG->ucHuffTableUsed & (1 << j))
+            iTablesUsed++;
+    }
+    // first do DC components (up to 4 tables of 12-bit codes)
+    // we can save time and memory for the DC codes by knowing that there exist short codes (<= 6 bits)
+    // and long codes (>6 bits, but the first 5 bits are 1's).  This allows us to create 2 tables: a 6-bit and 7 or 8-bit
+    // to handle any DC codes
+    iMaxLength = 12; // assume DC codes can be 12-bits
+    i
