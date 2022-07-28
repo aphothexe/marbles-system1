@@ -1017,4 +1017,81 @@ static int JPEGMakeHuffTables(JPEGIMAGE *pJPEG, int bThumbnail)
                     cc++;
                     iLen--;
                 }
-                cc 
+                cc <<= 1;
+            }
+        } // if table defined
+    }
+    // now do AC components (up to 4 tables of 16-bit codes)
+    // We split the codes into a short table (9 bits or less) and a long table (first 5 bits are 1)
+    for (iTable = 0; iTable < 4; iTable++)
+    {
+        if (pJPEG->ucHuffTableUsed & (1 << (iTable+4)))  // if this table is defined
+        {
+            pBits = &pHuffVals[(iTable+4) * HUFF_TABLEN];
+            p = pBits;
+            p += 16; // point to bit data
+            pShort = &pJPEG->usHuffAC[iTable*HUFF11SIZE];
+            pLong = &pJPEG->usHuffAC[iTable*HUFF11SIZE + 1024];
+            cc = 0; // start with a code of 0
+            // construct the decode table
+            for (iBitNum = 1; iBitNum <= 16; iBitNum++)
+            {
+                iLen = *pBits++; // get number of codes for this bit length
+                while (iLen)
+                {
+                    if ((cc >> (iBitNum-6)) == 0x3f) // first 6 bits are 1 - use long table
+                    {
+                        count = 16 - iBitNum;
+                        codestart = cc << count;
+                        pTable = &pLong[codestart & 0x3ff]; // use lower 10 bits of code
+                    }
+                    else
+                    {
+                        count = 10 - iBitNum;
+                        if (count < 0) // an 11/12-bit? code - that doesn't fit our optimized scheme, see if we can do a bigger table version
+                        {
+                            if (count == -1 && iTablesUsed <= 4) // we need to create "slow" tables
+                            { // DEBUG
+//                                j = JPEGMakeHuffTables_Slow(pJPEG, bThumbnail);
+                                return 0;
+                            }
+                            else
+                                return 0; // DEBUG - fatal error, more than 2 big tables we currently don't support
+                        }
+                        codestart = cc << count;
+                        pTable = &pShort[codestart]; // 10 bits or shorter
+                    }
+                    code = *p++;  // get actual huffman code
+                    if (bThumbnail && code != 0) // add "extra" bits to code length since we skip these codes
+                    {
+                        // get rid of extra bits in code and add increment (1) for AC index
+                        code = ((iBitNum+(code & 0xf)) << 8) | ((code >> 4)+1);
+                    }
+#ifdef BOGUS // precalculating the AC coeff makes it run slightly slower
+                    else if ((code & 0xf) != 0 && (code + iBitNum) <= 10) // we can fit the magnitude value + huffman code in a single read
+                    {
+                        int k, iLoop;
+                        unsigned short usCoeff;
+                        unsigned short *d = &pTable[4096]; // use unused table slots 2+3 for extra coeff data
+                        unsigned char ucMag = (unsigned char)(code & 0xf);
+                        code |= ((iBitNum + (code & 0xf)) << 8); // add magnitude bits to length
+                        repeat = 1<<ucMag;
+                        iLoop = 1<<(count-ucMag);
+                        for (j=0; j<repeat; j++)
+                        { // calcuate the magnitude coeff already
+                            if (j & 1<<(ucMag-1)) // positive number
+                                usCoeff = (unsigned short)j;
+                            else // negative number
+                                usCoeff = (unsigned short)(j - ((1<<ucMag)-1));
+                            for (k=0; k<iLoop; k++)
+                            {
+                                *d++ = usCoeff;
+                            } // for k
+                        } // for j
+                    }
+#endif
+                    else
+                    {
+                        code |= (iBitNum << 8);
+                    }
+                    if (count) // do it as dwords to
