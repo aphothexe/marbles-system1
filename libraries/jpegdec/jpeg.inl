@@ -934,4 +934,87 @@ static int JPEGMakeHuffTables(JPEGIMAGE *pJPEG, int bThumbnail)
     // and long codes (>6 bits, but the first 5 bits are 1's).  This allows us to create 2 tables: a 6-bit and 7 or 8-bit
     // to handle any DC codes
     iMaxLength = 12; // assume DC codes can be 12-bits
-    i
+    iMaxMask = 0x7f; // lower 7 bits after truncate 5 leading 1's
+    for (iTable = 0; iTable < 4; iTable++)
+    {
+        if (pJPEG->ucHuffTableUsed & (1 << iTable))
+        {
+            //         pJPEG->huffdcFast[iTable] = (int *)PILIOAlloc(0x180); // short table = 128 bytes, long table = 256 bytes
+            pucShort = &pJPEG->ucHuffDC[iTable*DC_TABLE_SIZE];
+            //         pJPEG->huffdc[iTable] = pJPEG->huffdcFast[iTable] + 0x20; // 0x20 longs = 128 bytes
+            pucLong = &pJPEG->ucHuffDC[iTable*DC_TABLE_SIZE + 128];
+            pBits = &pHuffVals[iTable * HUFF_TABLEN];
+            p = pBits;
+            p += 16; // point to bit data
+            cc = 0; // start with a code of 0
+            for (iBitNum = 1; iBitNum <= 16; iBitNum++)
+            {
+                iLen = *pBits++; // get number of codes for this bit length
+                if (iBitNum > iMaxLength && iLen > 0) // we can't handle codes longer a certain length
+                {
+                    return 0;
+                }
+                while (iLen)
+                {
+                    //               if (iBitNum > 6) // do long table
+                    if ((cc >> (iBitNum-5)) == 0x1f) // first 5 bits are 1 - use long table
+                    {
+                        count = iMaxLength - iBitNum;
+                        codestart = cc << count;
+                        pucTable = &pucLong[codestart & iMaxMask]; // use lower 7/8 bits of code
+                    }
+                    else // do short table
+                    {
+                        count = 6 - iBitNum;
+                        if (count < 0)
+                            return 0; // DEBUG - something went wrong
+                        codestart = cc << count;
+                        pucTable = &pucShort[codestart];
+                    }
+                    ucCode = *p++;  // get actual huffman code
+                    // does precalculating the DC value save time on ARM?
+#ifndef USE_ARM_ASM
+                    if (ucCode != 0 && (ucCode + iBitNum) <= 6 && pJPEG->ucMode != 0xc2) // we can fit the magnitude value in the code lookup (not for progressive)
+                    {
+                        int k, iLoop;
+                        unsigned char ucCoeff;
+                        unsigned char *d = &pucTable[512];
+                        unsigned char ucMag = ucCode;
+                        ucCode |= ((iBitNum+ucCode) << 4); // add magnitude bits to length
+                        repeat = 1<<ucMag;
+                        iLoop = 1<<(count-ucMag);
+                        for (j=0; j<repeat; j++)
+                        { // calcuate the magnitude coeff already
+                            if (j & 1<<(ucMag-1)) // positive number
+                                ucCoeff = (unsigned char)j;
+                            else // negative number
+                                ucCoeff = (unsigned char)(j - ((1<<ucMag)-1));
+                            for (k=0; k<iLoop; k++)
+                            {
+                                *d++ = ucCoeff;
+                            } // for k
+                        } // for j
+                    }
+#endif
+                    else
+                    {
+                        ucCode |= (iBitNum << 4);
+                    }
+                    if (count) // do it as dwords to save time
+                    {
+                        repeat = (1<<count);
+                        memset(pucTable, ucCode, repeat);
+                        //                  pLongTable = (uint32_t *)pTable;
+                        //                  repeat = 1 << (count-2); // store as dwords (/4)
+                        //                  ul = code | (code << 16);
+                        //                  for (j=0; j<repeat; j++)
+                        //                     *pLongTable++ = ul;
+                    }
+                    else
+                    {
+                        pucTable[0] = ucCode;
+                    }
+                    cc++;
+                    iLen--;
+                }
+                cc 
