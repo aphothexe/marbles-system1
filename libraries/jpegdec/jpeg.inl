@@ -1094,4 +1094,140 @@ static int JPEGMakeHuffTables(JPEGIMAGE *pJPEG, int bThumbnail)
                     {
                         code |= (iBitNum << 8);
                     }
-                    if (count) // do it as dwords to
+                    if (count) // do it as dwords to save time
+                    {
+                        repeat = 1 << (count-1); // store as dwords (/2)
+                        ul = code | (code << 16);
+                        pLongTable = (uint32_t *)pTable;
+                        for (j=0; j<repeat; j++)
+                            *pLongTable++ = ul;
+                    }
+                    else
+                    {
+                        pTable[0] = (unsigned short)code;
+                    }
+                    cc++;
+                    iLen--;
+                }
+                cc <<= 1;
+            } // for each bit length
+        } // if table defined
+    }
+    return 1;
+} /* JPEGMakeHuffTables() */
+
+//
+// TIFFSHORT
+// read a 16-bit unsigned integer from the given pointer
+// and interpret the data as big endian (Motorola) or little endian (Intel)
+//
+static uint16_t TIFFSHORT(unsigned char *p, int bMotorola)
+{
+    unsigned short s;
+
+    if (bMotorola)
+        s = *p * 0x100 + *(p+1); // big endian (AKA Motorola byte order)
+    else
+        s = *p + *(p+1)*0x100; // little endian (AKA Intel byte order)
+    return s;
+} /* TIFFSHORT() */
+//
+// TIFFLONG
+// read a 32-bit unsigned integer from the given pointer
+// and interpret the data as big endian (Motorola) or little endian (Intel)
+//
+static uint32_t TIFFLONG(unsigned char *p, int bMotorola)
+{
+    uint32_t l;
+
+    if (bMotorola)
+        l = *p * 0x1000000 + *(p+1) * 0x10000 + *(p+2) * 0x100 + *(p+3); // big endian
+    else
+        l = *p + *(p+1) * 0x100 + *(p+2) * 0x10000 + *(p+3) * 0x1000000; // little endian
+    return l;
+} /* TIFFLONG() */
+//
+// TIFFVALUE
+// read an integer value encoded in a TIFF TAG (12-byte structure)
+// and interpret the data as big endian (Motorola) or little endian (Intel)
+//
+static int TIFFVALUE(unsigned char *p, int bMotorola)
+{
+    int i, iType;
+    
+    iType = TIFFSHORT(p+2, bMotorola);
+    /* If pointer to a list of items, must be a long */
+    if (TIFFSHORT(p+4, bMotorola) > 1)
+    {
+        iType = 4;
+    }
+    switch (iType)
+    {
+        case 3: /* Short */
+            i = TIFFSHORT(p+8, bMotorola);
+            break;
+        case 4: /* Long */
+        case 7: // undefined (treat it as a long since it's usually a multibyte buffer)
+            i = TIFFLONG(p+8, bMotorola);
+            break;
+        case 6: // signed byte
+            i = (signed char)p[8];
+            break;
+        case 2: /* ASCII */
+        case 5: /* Unsigned Rational */
+        case 10: /* Signed Rational */
+            i = TIFFLONG(p+8, bMotorola);
+            break;
+        default: /* to suppress compiler warning */
+            i = 0;
+            break;
+    }
+    return i;
+    
+} /* TIFFVALUE() */
+static void GetTIFFInfo(JPEGIMAGE *pPage, int bMotorola, int iOffset)
+{
+    int iTag, iTagCount, i;
+    uint8_t *cBuf = pPage->ucFileBuf;
+    
+    iTagCount = TIFFSHORT(&cBuf[iOffset], bMotorola);  /* Number of tags in this dir */
+    if (iTagCount < 1 || iTagCount > 256) // invalid tag count
+        return; /* Bad header info */
+    /*--- Search the TIFF tags ---*/
+    for (i=0; i<iTagCount; i++)
+    {
+        unsigned char *p = &cBuf[iOffset + (i*12) +2];
+        iTag = TIFFSHORT(p, bMotorola);  /* current tag value */
+        if (iTag == 274) // orientation tag
+        {
+            pPage->ucOrientation = TIFFVALUE(p, bMotorola);
+        }
+        else if (iTag == 256) // width of thumbnail
+        {
+            pPage->iThumbWidth = TIFFVALUE(p, bMotorola);
+        }
+        else if (iTag == 257) // height of thumbnail
+        {
+            pPage->iThumbHeight = TIFFVALUE(p, bMotorola);
+        }
+        else if (iTag == 513) // offset to JPEG data
+        {
+            pPage->iThumbData = TIFFVALUE(p, bMotorola);
+        }
+    }
+} /* GetTIFFInfo() */
+
+static int JPEGGetSOS(JPEGIMAGE *pJPEG, int *iOff)
+{
+    int16_t sLen;
+    int iOffset = *iOff;
+    int i, j;
+    uint8_t uc,c,cc;
+    uint8_t *buf = pJPEG->ucFileBuf;
+    
+    sLen = MOTOSHORT(&buf[iOffset]);
+    iOffset += 2;
+    
+    // Assume no components in this scan
+    for (i=0; i<4; i++)
+        pJPEG->J
