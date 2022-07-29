@@ -1523,4 +1523,119 @@ static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
         // Now the offset points to the start of compressed data
         i = JPEGFilter(&pPage->ucFileBuf[iOffset], pPage->ucFileBuf, iBytesRead-iOffset, &pPage->ucFF);
         pPage->iVLCOff = 0;
-        pPag
+        pPage->iVLCSize = i;
+        JPEGGetMoreData(pPage); // read more VLC data
+        return 1;
+    }
+    pPage->iError = JPEG_DECODE_ERROR;
+    return 0;
+} /* JPEGParseInfo() */
+//
+// Fix and reorder the quantization table for faster decoding.*
+//
+static void JPEGFixQuantD(JPEGIMAGE *pJPEG)
+{
+    int iTable, iTableOffset;
+    signed short sTemp[DCTSIZE];
+    int i;
+    uint16_t *p;
+    
+    for (iTable=0; iTable<pJPEG->ucNumComponents; iTable++)
+    {
+        iTableOffset = iTable * DCTSIZE;
+        p = (uint16_t *)&pJPEG->sQuantTable[iTableOffset];
+        for (i=0; i<DCTSIZE; i++)
+            sTemp[i] = p[cZigZag[i]];
+        memcpy(&pJPEG->sQuantTable[iTableOffset], sTemp, DCTSIZE*sizeof(short)); // copy back to original spot
+        
+        // Prescale for DCT multiplication
+        p = (uint16_t *)&pJPEG->sQuantTable[iTableOffset];
+        for (i=0; i<DCTSIZE; i++)
+        {
+            p[i] = (uint16_t)((p[i] * iScaleBits[i]) >> 12);
+        }
+    }
+} /* JPEGFixQuantD() */
+//
+// Decode the 64 coefficients of the current DCT block
+//
+static int JPEGDecodeMCU(JPEGIMAGE *pJPEG, int iMCU, int *iDCPredictor)
+{
+    uint32_t ulCode, ulTemp;
+    uint8_t *pZig;
+    signed char cCoeff;
+    unsigned short *pFast;
+    unsigned char ucHuff, *pucFast;
+    uint32_t usHuff; // this prevents an unnecessary & 65535 for shorts
+    uint32_t ulBitOff, ulBits; // local copies to allow compiler to use register vars
+    uint8_t *pBuf, *pEnd, *pEnd2;
+    signed short *pMCU = &pJPEG->sMCUs[iMCU];
+    uint8_t ucMaxACCol, ucMaxACRow;
+    
+    #define MIN_DCT_THRESHOLD 8
+        
+    ulBitOff = pJPEG->bb.ulBitOff;
+    ulBits = pJPEG->bb.ulBits;
+    pBuf = pJPEG->bb.pBuf;
+        
+    pZig = (unsigned char *)&cZigZag2[1];
+    pEnd = (unsigned char *)&cZigZag2[64];
+    
+    if (ulBitOff > (REGISTER_WIDTH-17)) // need to get more data
+    {
+        pBuf += (ulBitOff >> 3);
+        ulBitOff &= 7;
+        ulBits = MOTOLONG(pBuf);
+    }
+    if (pJPEG->iOptions & (JPEG_SCALE_QUARTER | JPEG_SCALE_EIGHTH)) // reduced size DCT
+    {
+        pMCU[1] = pMCU[8] = pMCU[9] = 0;
+        pEnd2 = (uint8_t *)&cZigZag2[5]; // we only need to store the 4 elements we care about
+    }
+    else
+    {
+        memset(pMCU, 0, 64*sizeof(short)); // pre-fill with zero since we may skip coefficients
+        pEnd2 = (uint8_t *)&cZigZag2[64];
+    }
+    ucMaxACCol = ucMaxACRow = 0;
+    pZig = (unsigned char *)&cZigZag2[1];
+    pEnd = (unsigned char *)&cZigZag2[64];
+
+    // get the DC component
+    pucFast = &pJPEG->ucHuffDC[pJPEG->ucDCTable * DC_TABLE_SIZE];
+    ulCode = (ulBits >> (REGISTER_WIDTH - 12 - ulBitOff)) & 0xfff; // get as lower 12 bits
+    if (ulCode >= 0xf80) // it's a long code
+        ulCode = (ulCode & 0xff); // point to long table and trim to 7-bits + 0x80 offset into long table
+    else
+        ulCode >>= 6; // it's a short code, use first 6 bits only
+    ucHuff = pucFast[ulCode];
+    cCoeff = (signed char)pucFast[ulCode+512]; // get pre-calculated extra bits for "small" values
+    if (ucHuff == 0) // invalid code
+        return -1;
+    ulBitOff += (ucHuff >> 4); // add the Huffman length
+    ucHuff &= 0xf; // get the actual code (SSSS)
+    if (ucHuff) // if there is a change to the DC value
+    { // get the 'extra' bits
+        if (cCoeff)
+        {
+            (*iDCPredictor) += cCoeff;
+        }
+        else
+        {
+            if (ulBitOff > (REGISTER_WIDTH - 17)) // need to get more data
+            {
+                pBuf += (ulBitOff >> 3);
+                ulBitOff &= 7;
+                ulBits = MOTOLONG(pBuf);
+            }
+            ulCode = ulBits << ulBitOff;
+            ulTemp = ~(uint32_t)(((int32_t)ulCode)>>31); // slide sign bit across other 31 bits
+            ulCode >>= (REGISTER_WIDTH - ucHuff);
+            ulCode -= ulTemp>>(REGISTER_WIDTH-ucHuff);
+            ulBitOff += ucHuff; // add bit length
+            (*iDCPredictor) += (int)ulCode;
+        }
+    }
+    pMCU[0] = (short)*iDCPredictor; // store in MCU[0]
+    // Now get the other 63 AC coefficients
+    pFast = &pJPEG->usHuffAC[p
