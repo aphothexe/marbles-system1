@@ -1433,4 +1433,94 @@ static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
             case 0xffc0: // SOFx - start of frame
                 pPage->ucMode = (uint8_t)usMarker;
                 pPage->ucBpp = s[iOffset+2]; // bits per sample
-                pPage->iHeigh
+                pPage->iHeight = MOTOSHORT(&s[iOffset+3]);
+                pPage->iWidth = MOTOSHORT(&s[iOffset+5]);
+                pPage->ucNumComponents = s[iOffset+7];
+                pPage->ucBpp = pPage->ucBpp * pPage->ucNumComponents; /* Bpp = number of components * bits per sample */
+                if (pPage->ucNumComponents == 1)
+                    pPage->ucSubSample = 0; // use this to differentiate from color 1:1
+                else
+                {
+                    usLen -= 8;
+                    iOffset += 8;
+//                    pPage->ucSubSample = s[iOffset+9]; // subsampling option for the second color component
+                    for (i=0; i<pPage->ucNumComponents; i++)
+                    {
+                        uint8_t ucSamp;
+                        pPage->JPCI[i].component_id = s[iOffset++];
+                        pPage->JPCI[i].component_index = (unsigned char)i;
+                        ucSamp = s[iOffset++]; // get the h+v sampling factor
+                        if (i == 0) // Y component?
+                            pPage->ucSubSample = ucSamp;
+//                        pPage->JPCI[i].h_samp_factor = ucSamp >> 4;
+//                        pPage->JPCI[i].v_samp_factor = ucSamp & 0xf;
+                        pPage->JPCI[i].quant_tbl_no = s[iOffset++]; // quantization table number
+                        usLen -= 3;
+                    }
+                }
+                break;
+            case 0xffdd: // Restart Interval
+                if (usLen == 4)
+                    pPage->iResInterval = MOTOSHORT(&s[iOffset+2]);
+                break;
+            case 0xffc4: /* M_DHT */ // get Huffman tables
+                iOffset += 2; // skip length
+                usLen -= 2; // subtract length length
+                if (JPEGGetHuffTables(&s[iOffset], usLen, pPage) != 0) // bad tables?
+                {
+                    pPage->iError = JPEG_DECODE_ERROR;
+                    return 0; // error
+                }
+                break;
+            case 0xffdb: /* M_DQT */
+                /* Get the quantization tables */
+                /* first byte has PPPPNNNN where P = precision and N = table number 0-3 */
+                iOffset += 2; // skip length
+                usLen -= 2; // subtract length length
+                while (usLen > 0)
+                {
+                    ucTable = s[iOffset++]; // table number
+                    if ((ucTable & 0xf) > 3) // invalid table number
+                    {
+                        pPage->iError = JPEG_DECODE_ERROR;
+                        return 0;
+                    }
+                    iTableOffset = (ucTable & 0xf) * DCTSIZE;
+                    if (ucTable & 0xf0) // if word precision
+                    {
+                        for (i=0; i<DCTSIZE; i++)
+                        {
+                            pPage->sQuantTable[i+iTableOffset] = MOTOSHORT(&s[iOffset]);
+                            iOffset += 2;
+                        }
+                        usLen -= (DCTSIZE*2 + 1);
+                    }
+                    else // byte precision
+                    {
+                        for (i=0; i<DCTSIZE; i++)
+                        {
+                            pPage->sQuantTable[i+iTableOffset] = (unsigned short)s[iOffset++];
+                        }
+                        usLen -= (DCTSIZE + 1);
+                    }
+                }
+                break;
+        } // switch on JPEG marker
+        iOffset += usLen;
+    } // while
+    if (usMarker == 0xffda) // start of image
+    {
+        if (pPage->ucBpp != 8) // need to match up table IDs
+        {
+            iOffset -= usLen;
+            JPEGGetSOS(pPage, &iOffset); // get Start-Of-Scan info for decoding
+        }
+        if (!JPEGMakeHuffTables(pPage, 0)) //int bThumbnail) DEBUG
+        {
+            pPage->iError = JPEG_UNSUPPORTED_FEATURE;
+            return 0;
+        }
+        // Now the offset points to the start of compressed data
+        i = JPEGFilter(&pPage->ucFileBuf[iOffset], pPage->ucFileBuf, iBytesRead-iOffset, &pPage->ucFF);
+        pPage->iVLCOff = 0;
+        pPag
