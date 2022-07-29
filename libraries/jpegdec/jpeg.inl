@@ -1230,4 +1230,114 @@ static int JPEGGetSOS(JPEGIMAGE *pJPEG, int *iOff)
     
     // Assume no components in this scan
     for (i=0; i<4; i++)
-        pJPEG->J
+        pJPEG->JPCI[i].component_needed = 0;
+    
+    uc = buf[iOffset++]; // get number of components
+    pJPEG->ucComponentsInScan = uc;
+    sLen -= 3;
+    if (uc < 1 || uc > MAX_COMPS_IN_SCAN || sLen != (uc*2+3)) // check length of data packet
+        return 1; // error
+    for (i=0; i<uc; i++)
+    {
+        cc = buf[iOffset++];
+        c = buf[iOffset++];
+        sLen -= 2;
+        for (j=0; j<4; j++) // search for component id
+        {
+            if (pJPEG->JPCI[j].component_id == cc)
+                break;
+        }
+        if (j == 4) // error, not found
+            return 1;
+        if ((c & 0xf) > 3 || (c & 0xf0) > 0x30)
+            return 1; // bogus table numbers
+        pJPEG->JPCI[j].dc_tbl_no = c >> 4;
+        pJPEG->JPCI[j].ac_tbl_no = c & 0xf;
+        pJPEG->JPCI[j].component_needed = 1; // mark this component as being included in the scan
+    }
+    pJPEG->iScanStart = buf[iOffset++]; // Get the scan start (or lossless predictor) for this scan
+    pJPEG->iScanEnd = buf[iOffset++]; // Get the scan end for this scan
+    c = buf[iOffset++]; // successive approximation bits
+    pJPEG->cApproxBitsLow = c & 0xf; // also point transform in lossless mode
+    pJPEG->cApproxBitsHigh = c >> 4;
+    
+    *iOff = iOffset;
+    return 0;
+    
+} /* JPEGGetSOS() */
+//
+// Remove markers from the data stream to allow faster decode
+// Stuffed zeros and restart interval markers aren't needed to properly decode
+// the data, but they make reading VLC data slower, so I pull them out first
+//
+static int JPEGFilter(uint8_t *pBuf, uint8_t *d, int iLen, uint8_t *bFF)
+{
+    // since we have the entire jpeg buffer in memory already, we can just change it in place
+    unsigned char c, *s, *pEnd, *pStart;
+    
+    pStart = d;
+    s = pBuf;
+    pEnd = &s[iLen-1]; // stop just shy of the end to not miss a final marker/stuffed 0
+    if (*bFF) // last byte was a FF, check the next one
+    {
+        if (s[0] == 0) // stuffed 0, keep the FF
+            *d++ = 0xff;
+        s++;
+        *bFF = 0;
+    }
+    while (s < pEnd)
+    {
+        c = *d++ = *s++;
+        if (c == 0xff) // marker or stuffed zeros?
+        {
+            if (s[0] != 0) // it's a marker, skip both
+            {
+                d--;
+            }
+            s++; // for stuffed 0's, store the FF, skip the 00
+        }
+    }
+    if (s == pEnd) // need to test the last byte
+    {
+        c = s[0];
+        if (c == 0xff) // last byte is FF, take care of it next time through
+            *bFF = 1; // take care of it next time through
+        else
+            *d++ = c; // nope, just store it
+    }
+    return (int)(d-pStart); // filtered output length
+} /* JPEGFilter() */
+//
+// Read and filter more VLC data for decoding
+//
+static void JPEGGetMoreData(JPEGIMAGE *pPage)
+{
+    int iDelta = pPage->iVLCSize - pPage->iVLCOff;
+//    printf("Getting more data...size=%d, off=%d\n", pPage->iVLCSize, pPage->iVLCOff);
+    // move any existing data down
+    if (iDelta >= (JPEG_FILE_BUF_SIZE-64) || iDelta < 0)
+        return; // buffer is already full; no need to read more data
+    if (pPage->iVLCOff != 0)
+    {
+        memcpy(pPage->ucFileBuf, &pPage->ucFileBuf[pPage->iVLCOff], pPage->iVLCSize - pPage->iVLCOff);
+        pPage->iVLCSize -= pPage->iVLCOff;
+        pPage->iVLCOff = 0;
+        pPage->bb.pBuf = pPage->ucFileBuf; // reset VLC source pointer too
+    }
+    if (pPage->JPEGFile.iPos < pPage->JPEGFile.iSize && pPage->iVLCSize < JPEG_FILE_BUF_SIZE-64)
+    {
+        int i;
+        // Try to read enough to fill the buffer
+        i = (*pPage->pfnRead)(&pPage->JPEGFile, &pPage->ucFileBuf[pPage->iVLCSize], JPEG_FILE_BUF_SIZE - pPage->iVLCSize); // max length we can read
+        // Filter out the markers
+        pPage->iVLCSize += JPEGFilter(&pPage->ucFileBuf[pPage->iVLCSize], &pPage->ucFileBuf[pPage->iVLCSize], i, &pPage->ucFF);
+    }
+} /* JPEGGetMoreData() */
+
+//
+// Parse the JPEG header, gather necessary info to decode the image
+// Returns 1 for success, 0 for failure
+//
+static int JPEGParseInfo(JPEGIMAGE *pPage, int bExtractThumb)
+{
+ 
