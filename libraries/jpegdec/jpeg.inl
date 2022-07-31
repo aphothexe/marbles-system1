@@ -1638,4 +1638,93 @@ static int JPEGDecodeMCU(JPEGIMAGE *pJPEG, int iMCU, int *iDCPredictor)
     }
     pMCU[0] = (short)*iDCPredictor; // store in MCU[0]
     // Now get the other 63 AC coefficients
-    pFast = &pJPEG->usHuffAC[p
+    pFast = &pJPEG->usHuffAC[pJPEG->ucACTable * HUFF11SIZE];
+    if (pJPEG->b11Bit) // 11-bit "slow" tables used
+    {
+//            if (pJPEG->pHuffACFast == pJPEG->huffacFast[1]) // second table
+//                pFast = &pJPEG->ucAltHuff[0];
+        while (pZig < pEnd)
+        {
+            if (ulBitOff >(REGISTER_WIDTH - 17)) // need to get more data
+            {
+                pBuf += (ulBitOff >> 3);
+                ulBitOff &= 7;
+                ulBits = MOTOLONG(pBuf);
+            }
+            ulCode = (ulBits >> (REGISTER_WIDTH - 16 - ulBitOff)) & 0xffff; // get as lower 16 bits
+            if (ulCode >= 0xf000) // first 4 bits = 1, use long table
+                ulCode = (ulCode & 0x1fff);
+            else
+                ulCode >>= 4; // use lower 12 bits (short table)
+            usHuff = pFast[ulCode];
+            if (usHuff == 0) // invalid code
+                return -1;
+            ulBitOff += (usHuff >> 8); // add length
+            usHuff &= 0xff; // get code (RRRR/SSSS)
+            if (usHuff == 0) // no more AC components
+            {
+                goto mcu_done;
+            }
+            if (ulBitOff > (REGISTER_WIDTH - 17)) // need to get more data
+            {
+                pBuf += (ulBitOff >> 3);
+                ulBitOff &= 7;
+                ulBits = MOTOLONG(pBuf);
+            }
+            pZig += (usHuff >> 4);  // get the skip amount (RRRR)
+            usHuff &= 0xf; // get (SSSS) - extra length
+            if (pZig < pEnd && usHuff) // && piHisto)
+            {
+                ulCode = ulBits << ulBitOff;
+                ulTemp = ~(uint32_t) (((int32_t) ulCode) >> (REGISTER_WIDTH-1)); // slide sign bit across other 63 bits
+                ulCode >>= (REGISTER_WIDTH - usHuff);
+                ulCode -= ulTemp >> (REGISTER_WIDTH - usHuff);
+                ucMaxACCol |= 1<<(*pZig & 7); // keep track of occupied columns
+                if (*pZig >= 0x20) // if more than 4 rows used in a col, mark it
+                    ucMaxACRow |= 1<<(*pZig & 7); // keep track of the max AC term row
+                pMCU[*pZig] = (signed short)ulCode; // store AC coefficient (already reordered)
+            }
+            ulBitOff += usHuff; // add (SSSS) extra length
+            pZig++;
+        } // while
+    }
+    else // 10-bit "fast" tables used
+    {
+        while (pZig < pEnd)
+        {
+            if (ulBitOff >(REGISTER_WIDTH - 17)) // need to get more data
+            {
+                pBuf += (ulBitOff >> 3);
+                ulBitOff &= 7;
+                ulBits = MOTOLONG(pBuf);
+            }
+            ulCode = (ulBits >> (REGISTER_WIDTH - 16 - ulBitOff)) & 0xffff; // get as lower 16 bits
+            if (ulCode >= 0xfc00) // first 6 bits = 1, use long table
+                ulCode = (ulCode & 0x7ff); // (ulCode & 0x3ff) + 0x400;
+            else
+                ulCode >>= 6; // use lower 10 bits (short table)
+            usHuff = pFast[ulCode];
+            if (usHuff == 0) // invalid code
+                return -1;
+            ulBitOff += (usHuff >> 8); // add length
+            usHuff &= 0xff; // get code (RRRR/SSSS)
+            if (usHuff == 0) // no more AC components
+            {
+                goto mcu_done;
+            }
+            if (ulBitOff >(REGISTER_WIDTH - 17)) // need to get more data
+            {
+                pBuf += (ulBitOff >> 3);
+                ulBitOff &= 7;
+                ulBits = MOTOLONG(pBuf);
+            }
+            pZig += (usHuff >> 4);  // get the skip amount (RRRR)
+            usHuff &= 0xf; // get (SSSS) - extra length
+            if (pZig < pEnd2 && usHuff)
+            {
+                ulCode = ulBits << ulBitOff;
+                ulTemp = ~(uint32_t) (((int32_t) ulCode) >> (REGISTER_WIDTH-1)); // slide sign bit across other 63 bits
+                ulCode >>= (REGISTER_WIDTH - usHuff);
+                ulCode -= ulTemp >> (REGISTER_WIDTH - usHuff);
+                ucMaxACCol |= 1<<(*pZig & 7); // keep track of occupied columns
+                if (*p
