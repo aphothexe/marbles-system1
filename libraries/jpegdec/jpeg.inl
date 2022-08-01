@@ -1727,4 +1727,100 @@ static int JPEGDecodeMCU(JPEGIMAGE *pJPEG, int iMCU, int *iDCPredictor)
                 ulCode >>= (REGISTER_WIDTH - usHuff);
                 ulCode -= ulTemp >> (REGISTER_WIDTH - usHuff);
                 ucMaxACCol |= 1<<(*pZig & 7); // keep track of occupied columns
-                if (*p
+                if (*pZig >= 0x20) // if more than 4 rows used in a col, mark it
+                    ucMaxACRow |= 1<<(*pZig & 7); // keep track of the max AC term row
+                pMCU[*pZig] = (signed short)ulCode; // store AC coefficient (already reordered)
+            }
+            ulBitOff += usHuff; // add (SSSS) extra length
+            pZig++;
+        } // while
+    } // 10-bit tables
+mcu_done:
+    pJPEG->bb.pBuf = pBuf;
+    pJPEG->iVLCOff = (int)(pBuf - pJPEG->ucFileBuf);
+    pJPEG->bb.ulBitOff = ulBitOff;
+    pJPEG->bb.ulBits = ulBits;
+    pJPEG->ucMaxACCol = ucMaxACCol;
+    pJPEG->ucMaxACRow = ucMaxACRow; // DEBUG
+    return 0;
+} /* JPEGDecodeMCU() */
+//
+// Inverse DCT
+//
+static void JPEGIDCT(JPEGIMAGE *pJPEG, int iMCUOffset, int iQuantTable, int iACFlags)
+{
+    int iRow;
+    unsigned char ucColMask;
+    int iCol;
+    signed int tmp6,tmp7,tmp10,tmp11,tmp12,tmp13;
+    signed int z5,z10,z11,z12,z13;
+    signed int tmp0,tmp1,tmp2,tmp3,tmp4,tmp5;
+    signed short *pQuant;
+    unsigned char *pOutput;
+    unsigned char ucMaxACRow, ucMaxACCol;
+    int16_t *pMCUSrc = &pJPEG->sMCUs[iMCUOffset];
+    
+    ucMaxACRow = (unsigned char)(iACFlags >> 8);
+    ucMaxACCol = iACFlags & 0xff;
+        
+    // my shortcut method appears to violate patent 20020080052
+    // but the patent is invalidated by prior art:
+    // http://netilium.org/~mad/dtj/DTJ/DTJK04/
+    pQuant = &pJPEG->sQuantTable[iQuantTable * DCTSIZE];
+    if (pJPEG->iOptions & JPEG_SCALE_QUARTER) // special case
+    {
+        /* Column 0 */
+        tmp4 = pMCUSrc[0] * pQuant[0];
+        tmp5 = pMCUSrc[8] * pQuant[8];
+        tmp0 = tmp4 + tmp5;
+        tmp2 = tmp4 - tmp5;
+        /* Column 1 */
+        tmp4 = pMCUSrc[1] * pQuant[1];
+        tmp5 = pMCUSrc[9] * pQuant[9];
+        tmp1 = tmp4 + tmp5;
+        tmp3 = tmp4 - tmp5;
+        /* Pass 2: process 2 rows, store into output array. */
+        /* Row 0 */
+        pOutput = (unsigned char *)pMCUSrc; // store output pixels back into MCU
+        pOutput[0] = ucRangeTable[(((tmp0 + tmp1)>>5) & 0x3ff)];
+        pOutput[1] = ucRangeTable[(((tmp0 - tmp1)>>5) & 0x3ff)];
+        /* Row 1 */
+        pOutput[2] = ucRangeTable[(((tmp2 + tmp3)>>5) & 0x3ff)];
+        pOutput[3] = ucRangeTable[(((tmp2 - tmp3)>>5) & 0x3ff)];
+        return;
+    }
+    // do columns first
+    ucColMask = ucMaxACCol | 1; // column 0 must always be calculated
+    for (iCol = 0; iCol < 8 && ucColMask; iCol++)
+    {
+        if (ucColMask & (1<<iCol)) // column has data in it
+        {
+            ucColMask &= ~(1<<iCol); // unmark this col after use
+            if (!(ucMaxACRow & (1<<iCol))) // simpler calculations if only half populated
+            {
+                // even part
+                tmp10 = pMCUSrc[iCol] * pQuant[iCol];
+                tmp1 = pMCUSrc[iCol+16] * pQuant[iCol+16]; // get 2nd row
+                tmp12 = ((tmp1*106)>>8); // used to be 362 - 1 (256)
+                tmp0 = tmp10 + tmp1;
+                tmp3 = tmp10 - tmp1;
+                tmp1 = tmp10 + tmp12;
+                tmp2 = tmp10 - tmp12;
+                // odd part
+                tmp4 = pMCUSrc[iCol+8] * pQuant[iCol+8]; // get 1st row
+                tmp5 = pMCUSrc[iCol+24];
+                if (tmp5) // this value is usually 0
+                {
+                    tmp5 *= pQuant[iCol+24]; // get 3rd row
+                    tmp7 = tmp4 + tmp5;
+                    tmp11 = (((tmp4 - tmp5) * 362) >> 8);  // 362>>8 = 1.414213562
+                    z5 = (((tmp4-tmp5) * 473) >> 8);  // 473>>8 = 1.8477
+                    tmp12 = ((-tmp5 * -669)>>8) + z5; // -669>>8 = -2.6131259
+                    tmp6 = tmp12 - tmp7;
+                    tmp5 = tmp11 - tmp6;
+                    tmp10 = ((tmp4 * 277)>>8) - z5; // 277>>8 = 1.08239
+                    tmp4 = tmp10 + tmp5;
+                }
+                else // simpler case when we only have 1 odd row to calculate
+                {
+                   
