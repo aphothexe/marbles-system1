@@ -1823,4 +1823,96 @@ static void JPEGIDCT(JPEGIMAGE *pJPEG, int iMCUOffset, int iQuantTable, int iACF
                 }
                 else // simpler case when we only have 1 odd row to calculate
                 {
-                   
+                    tmp7 = tmp4;
+                    tmp5 = (145*tmp4) >> 8;
+                    tmp6 = (217*tmp4) >> 8;
+                    tmp4 = (-51*tmp4) >> 8;
+                }
+                pMCUSrc[iCol] = (short)(tmp0 + tmp7);    // row0
+                pMCUSrc[iCol+8] = (short)(tmp1 + tmp6);  // row 1
+                pMCUSrc[iCol+16] = (short)(tmp2 + tmp5); // row 2
+                pMCUSrc[iCol+24] = (short)(tmp3 - tmp4); // row 3
+                pMCUSrc[iCol+32] = (short)(tmp3 + tmp4); // row 4
+                pMCUSrc[iCol+40] = (short)(tmp2 - tmp5); // row 5
+                pMCUSrc[iCol+48] = (short)(tmp1 - tmp6); // row 6
+                pMCUSrc[iCol+56] = (short)(tmp0 - tmp7); // row 7
+            }
+            else // need to do full column calculation
+            {
+                // even part
+                tmp0 = pMCUSrc[iCol] * pQuant[iCol];
+                tmp2 = pMCUSrc[iCol+32]; // get 4th row
+                if (tmp2) // 4th row is most likely 0
+                {
+                    tmp2 = tmp2 * pQuant[iCol+32];
+                    tmp10 = tmp0 + tmp2;
+                    tmp11 = tmp0 - tmp2;
+                }
+                else
+                {
+                    tmp10 = tmp11 = tmp0;
+                }
+                tmp1 = pMCUSrc[iCol+16] * pQuant[iCol+16]; // get 2nd row
+                tmp3 = pMCUSrc[iCol+48]; // get 6th row
+                if (tmp3) // 6th row is most likely 0
+                {
+                    tmp3 = tmp3 * pQuant[iCol+48];
+                    tmp13 = tmp1 + tmp3;
+                    tmp12 = (((tmp1 - tmp3) * 362) >> 8) - tmp13;  // 362>>8 = 1.414213562
+                }
+                else
+                {
+                    tmp13 = tmp1;
+                    tmp12 = ((tmp1*362)>>8) - tmp1;
+                }
+                tmp0 = tmp10 + tmp13;
+                tmp3 = tmp10 - tmp13;
+                tmp1 = tmp11 + tmp12;
+                tmp2 = tmp11 - tmp12;
+                // odd part
+                tmp5 = pMCUSrc[iCol+24] * pQuant[iCol+24]; // get 3rd row
+                tmp6 = pMCUSrc[iCol+40]; // get 5th row
+                if (tmp6) // very likely that row 5 = 0
+                {
+                    tmp6 = tmp6 * pQuant[iCol+40];
+                    z13 = tmp6 + tmp5;
+                    z10 = tmp6 - tmp5;
+                }
+                else
+                {
+                    z13 = tmp5;
+                    z10 = -tmp5;
+                }
+                tmp4 = pMCUSrc[iCol+8] * pQuant[iCol+8]; // get 1st row
+                tmp7 = pMCUSrc[iCol+56]; // get 7th row
+                if (tmp7) // very likely that row 7 = 0
+                {
+                    tmp7 = tmp7 * pQuant[iCol+56];
+                    z11 = tmp4 + tmp7;
+                    z12 = tmp4 - tmp7;
+                }
+                else
+                {
+                    z11 = z12 = tmp4;
+                }
+                tmp7 = z11 + z13;
+                tmp11 = (((z11 - z13) * 362) >> 8);  // 362>>8 = 1.414213562
+                z5 = (((z10 + z12) * 473) >> 8);  // 473>>8 = 1.8477
+                tmp12 = ((z10 * -669)>>8) + z5; // -669>>8 = -2.6131259
+                tmp6 = tmp12 - tmp7;
+                tmp5 = tmp11 - tmp6;
+                tmp10 = ((z12 * 277)>>8) - z5; // 277>>8 = 1.08239
+                tmp4 = tmp10 + tmp5;
+                pMCUSrc[iCol] = (short)(tmp0 + tmp7);    // row0
+                pMCUSrc[iCol+8] = (short)(tmp1 + tmp6);  // row 1
+                pMCUSrc[iCol+16] = (short)(tmp2 + tmp5); // row 2
+                pMCUSrc[iCol+24] = (short)(tmp3 - tmp4); // row 3
+                pMCUSrc[iCol+32] = (short)(tmp3 + tmp4); // row 4
+                pMCUSrc[iCol+40] = (short)(tmp2 - tmp5); // row 5
+                pMCUSrc[iCol+48] = (short)(tmp1 - tmp6); // row 6
+                pMCUSrc[iCol+56] = (short)(tmp0 - tmp7); // row 7
+            } // full calculation needed
+        } // if column has data in it
+    } // for each column
+    // now do rows
+    pOutput = (unsigned char *)pMC
