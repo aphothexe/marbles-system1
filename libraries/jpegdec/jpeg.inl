@@ -2264,4 +2264,98 @@ static void JPEGPixelLE(uint16_t *pDest, int iY, int iCb, int iCr)
 {
 //
 // Cortex-M4/M7 has some SIMD instructions which can shave a few cycles
-// off of this 
+// off of this function (e.g. Teensy, Arduino Nano 33 BLE, Portenta, etc)
+//
+#ifdef HAS_SIMD
+    uint32_t ulPixel;
+    uint32_t ulCbCr = (iCb | (iCr << 16));
+    uint32_t ulTmp = -1409 | (-2925 << 16); // for green calc
+    ulCbCr = __SSUB16(ulCbCr, 0x00800080); // dual 16-bit subtraction
+    ulPixel = __SMLAD(ulCbCr, ulTmp, iY) >> 14; // G
+    ulPixel = __USAT16(ulPixel, 6) << 5; // range limit to 6 bits
+    ulTmp = __SMLAD(7258, ulCbCr, iY) >> 15; // Blue
+    ulTmp = __USAT16(ulTmp, 5); // range limit to 5 bits
+    ulPixel |= ulTmp; // now we have G + B
+    ulTmp = __SMLAD(5742, ulCbCr >> 16, iY) >> 15; // Red
+    ulTmp = __USAT16(ulTmp, 5); // range limit to 5 bits
+    ulPixel |= (ulTmp << 11); // now we have R + G + B
+    pDest[0] = (uint16_t)ulPixel;
+#else
+    int iCBB, iCBG, iCRG, iCRR;
+    unsigned short usPixel;
+
+    iCBB = 7258  * (iCb-0x80);
+    iCBG = -1409 * (iCb-0x80);
+    iCRG = -2925 * (iCr-0x80);
+    iCRR = 5742  * (iCr-0x80);
+    usPixel = usRangeTableB[((iCBB + iY) >> 12) & 0x3ff]; // blue pixel
+    usPixel |= usRangeTableG[((iCBG + iCRG + iY) >> 12) & 0x3ff]; // green pixel
+    usPixel |= usRangeTableR[((iCRR + iY) >> 12) & 0x3ff]; // red pixel
+    pDest[0] = usPixel;
+#endif
+} /* JPEGPixelLE() */
+
+static void JPEGPixelBE(uint16_t *pDest, int iY, int iCb, int iCr)
+{
+    int iCBB, iCBG, iCRG, iCRR;
+    unsigned short usPixel;
+    
+    iCBB = 7258  * (iCb-0x80);
+    iCBG = -1409 * (iCb-0x80);
+    iCRG = -2925 * (iCr-0x80);
+    iCRR = 5742  * (iCr-0x80);
+    usPixel = usRangeTableB[((iCBB + iY) >> 12) & 0x3ff]; // blue pixel
+    usPixel |= usRangeTableG[((iCBG + iCRG + iY) >> 12) & 0x3ff]; // green pixel
+    usPixel |= usRangeTableR[((iCRR + iY) >> 12) & 0x3ff]; // red pixel
+    pDest[0] = __builtin_bswap16(usPixel);
+} /* JPEGPixelBE() */
+
+static void JPEGPixel2LE(uint16_t *pDest, int iY1, int iY2, int iCb, int iCr)
+{
+    uint32_t ulPixel1, ulPixel2;
+//
+// Cortex-M4/M7 has some SIMD instructions which can shave a few cycles
+// off of this function (e.g. Teensy, Arduino Nano 33 BLE, Portenta, etc)
+//    
+#ifdef HAS_SIMD
+    uint32_t ulCbCr = (iCb | (iCr << 16));
+    uint32_t ulTmp2, ulTmp = -1409 | (-2925 << 16); // for green calc
+    ulCbCr = __SSUB16(ulCbCr, 0x00800080); // dual 16-bit subtraction
+    ulPixel1 = __SMLAD(ulCbCr, ulTmp, iY1) >> 14; // G for pixel 1
+    ulPixel2 = __SMLAD(ulCbCr, ulTmp, iY2) >> 14; // G for pixel 2
+    ulPixel1 |= (ulPixel2 << 16);
+    ulPixel1 = __USAT16(ulPixel1, 6) << 5; // range limit both to 6 bits
+    ulTmp = __SMLAD(7258, ulCbCr, iY1) >> 15; // Blue 1
+    ulTmp2 = __SMLAD(7258, ulCbCr, iY2) >> 15; // Blue 2
+    ulTmp = __USAT16(ulTmp | (ulTmp2 << 16), 5); // range limit both to 5 bits
+    ulPixel1 |= ulTmp; // now we have G + B
+    ulTmp = __SMLAD(5742, ulCbCr >> 16, iY1) >> 15; // Red 1
+    ulTmp2 = __SMLAD(5742, ulCbCr >> 16, iY2) >> 15; // Red 2
+    ulTmp = __USAT16(ulTmp | (ulTmp2 << 16), 5); // range limit both to 5 bits
+    ulPixel1 |= (ulTmp << 11); // now we have R + G + B
+    *(uint32_t *)&pDest[0] = ulPixel1;
+#else
+    int iCBB, iCBG, iCRG, iCRR;
+    iCBB = 7258  * (iCb-0x80);
+    iCBG = -1409 * (iCb-0x80);
+    iCRG = -2925 * (iCr-0x80);
+    iCRR = 5742  * (iCr-0x80);
+    ulPixel1 = usRangeTableB[((iCBB + iY1) >> 12) & 0x3ff]; // blue pixel
+    ulPixel1 |= usRangeTableG[((iCBG + iCRG + iY1) >> 12) & 0x3ff]; // green pixel
+    ulPixel1 |= usRangeTableR[((iCRR + iY1) >> 12) & 0x3ff]; // red pixel
+    
+    ulPixel2 = usRangeTableB[((iCBB + iY2) >> 12) & 0x3ff]; // blue pixel
+    ulPixel2 |= usRangeTableG[((iCBG + iCRG + iY2) >> 12) & 0x3ff]; // green pixel
+    ulPixel2 |= usRangeTableR[((iCRR + iY2) >> 12) & 0x3ff]; // red pixel
+    *(uint32_t *)&pDest[0] = (ulPixel1 | (ulPixel2<<16));
+#endif
+} /* JPEGPixel2LE() */
+
+static void JPEGPixel2BE(uint16_t *pDest, int32_t iY1, int32_t iY2, int32_t iCb, int32_t iCr)
+{
+    int32_t iCBB, iCBG, iCRG, iCRR;
+    uint32_t ulPixel1, ulPixel2;
+    
+    iCBB = 7258L  * (iCb-0x80);
+    iCBG = -1409L * (iCb-0x80);
+    iCRG = -2
