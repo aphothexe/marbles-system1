@@ -1915,4 +1915,101 @@ static void JPEGIDCT(JPEGIMAGE *pJPEG, int iMCUOffset, int iQuantTable, int iACF
         } // if column has data in it
     } // for each column
     // now do rows
-    pOutput = (unsigned char *)pMC
+    pOutput = (unsigned char *)pMCUSrc; // store output pixels back into MCU
+    for (iRow=0; iRow<64; iRow+=8) // all rows must be calculated
+    {
+        // even part
+        if (ucMaxACCol < 0x10) // quick and dirty calculation (right 4 columns are all 0's)
+        {
+            if (ucMaxACCol < 0x04) // very likely case (1 or 2 columns occupied)
+            {
+                // even part
+                tmp0 = tmp1 = tmp2 = tmp3 = pMCUSrc[iRow+0];
+                // odd part
+                tmp7 = pMCUSrc[iRow+1];
+                tmp6 = (tmp7 * 217)>>8; // * 0.8477
+                tmp5 = (tmp7 * 145)>>8; // * 0.5663
+                tmp4 = -((tmp7 * 51)>>8);  // * -0.199
+            }
+            else
+            {
+                tmp10 = pMCUSrc[iRow+0];
+                tmp13 = pMCUSrc[iRow+2];
+                tmp12 = ((tmp13 * 106)>>8); // 2-6 * 1.414
+                tmp0 = tmp10 + tmp13;
+                tmp3 = tmp10 - tmp13;
+                tmp1 = tmp10 + tmp12;
+                tmp2 = tmp10 - tmp12;
+                // odd part
+                z13 = pMCUSrc[iRow+3];
+                z11 = pMCUSrc[iRow+1];
+                tmp7 = z11 + z13;
+                tmp11 = ((z11 - z13)*362)>>8; // * 1.414
+                z5 = ((z11 - z13)*473)>>8; // * 1.8477
+                tmp10 = ((z11*277)>>8) - z5; // * 1.08239
+                tmp12 = ((z13*669)>>8) + z5; // * 2.61312
+                tmp6 = tmp12 - tmp7;
+                tmp5 = tmp11 - tmp6;
+                tmp4 = tmp10 + tmp5;
+            }
+        }
+        else // need to do the full calculation
+        {
+            tmp10 = pMCUSrc[iRow+0] + pMCUSrc[iRow+4];
+            tmp11 = pMCUSrc[iRow+0] - pMCUSrc[iRow+4];
+            tmp13 = pMCUSrc[iRow+2] + pMCUSrc[iRow+6];
+            tmp12 = (((pMCUSrc[iRow+2] - pMCUSrc[iRow+6]) * 362)>>8) - tmp13; // 2-6 * 1.414
+            tmp0 = tmp10 + tmp13;
+            tmp3 = tmp10 - tmp13;
+            tmp1 = tmp11 + tmp12;
+            tmp2 = tmp11 - tmp12;
+            // odd part
+            z13 = pMCUSrc[iRow+5] + pMCUSrc[iRow+3];
+            z10 = pMCUSrc[iRow+5] - pMCUSrc[iRow+3];
+            z11 = pMCUSrc[iRow+1] + pMCUSrc[iRow+7];
+            z12 = pMCUSrc[iRow+1] - pMCUSrc[iRow+7];
+            tmp7 = z11 + z13;
+            tmp11 = ((z11 - z13)*362)>>8; // * 1.414
+            z5 = ((z10 + z12)*473)>>8; // * 1.8477
+            tmp10 = ((z12*277)>>8) - z5; // * 1.08239
+            tmp12 = ((z10*-669)>>8) + z5; // * 2.61312
+            tmp6 = tmp12 - tmp7;
+            tmp5 = tmp11 - tmp6;
+            tmp4 = tmp10 + tmp5;
+        }
+        // final output stage - scale down and range limit
+        pOutput[0] = ucRangeTable[(((tmp0 + tmp7)>>5) & 0x3ff)];
+        pOutput[1] = ucRangeTable[(((tmp1 + tmp6)>>5) & 0x3ff)];
+        pOutput[2] = ucRangeTable[(((tmp2 + tmp5)>>5) & 0x3ff)];
+        pOutput[3] = ucRangeTable[(((tmp3 - tmp4)>>5) & 0x3ff)];
+        pOutput[4] = ucRangeTable[(((tmp3 + tmp4)>>5) & 0x3ff)];
+        pOutput[5] = ucRangeTable[(((tmp2 - tmp5)>>5) & 0x3ff)];
+        pOutput[6] = ucRangeTable[(((tmp1 - tmp6)>>5) & 0x3ff)];
+        pOutput[7] = ucRangeTable[(((tmp0 - tmp7)>>5) & 0x3ff)];
+        pOutput += 8;
+    } // for each row
+} /* JPEGIDCT() */
+static void JPEGPutMCU8BitGray(JPEGIMAGE *pJPEG, int x, int iPitch)
+{
+    int i, j, xcount, ycount;
+    uint8_t *pDest, *pSrc = (uint8_t *)&pJPEG->sMCUs[0];
+    
+    if (pJPEG->pDitherBuffer)
+        pDest = &pJPEG->pDitherBuffer[x];
+    else
+        pDest = (uint8_t *)&pJPEG->usPixels[x/2];
+    
+    if (pJPEG->ucSubSample <= 0x11) // single Y 
+    {
+        if (pJPEG->iOptions & JPEG_SCALE_HALF) // special handling of 1/2 size (pixel averaging)
+        {
+            int pix;
+            for (i=0; i<4; i++)
+            {
+                for (j=0; j<4; j++)
+                {
+                    pix = (pSrc[0] + pSrc[1] + pSrc[8] + pSrc[9] + 2) >> 2; // average 2x2 block
+                    pDest[j] = (uint8_t)pix;
+                    pSrc += 2;
+                }
+         
