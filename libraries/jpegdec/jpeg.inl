@@ -2358,4 +2358,122 @@ static void JPEGPixel2BE(uint16_t *pDest, int32_t iY1, int32_t iY2, int32_t iCb,
     
     iCBB = 7258L  * (iCb-0x80);
     iCBG = -1409L * (iCb-0x80);
-    iCRG = -2
+    iCRG = -2925L * (iCr-0x80);
+    iCRR = 5742L  * (iCr-0x80);
+    ulPixel1 = usRangeTableB[((iCBB + iY1) >> 12) & 0x3ff]; // blue pixel
+    ulPixel1 |= usRangeTableG[((iCBG + iCRG + iY1) >> 12) & 0x3ff]; // green pixel
+    ulPixel1 |= usRangeTableR[((iCRR + iY1) >> 12) & 0x3ff]; // red pixel
+    
+    ulPixel2 = usRangeTableB[((iCBB + iY2) >> 12) & 0x3ff]; // blue pixel
+    ulPixel2 |= usRangeTableG[((iCBG + iCRG + iY2) >> 12) & 0x3ff]; // green pixel
+    ulPixel2 |= usRangeTableR[((iCRR + iY2) >> 12) & 0x3ff]; // red pixel
+    *(uint32_t *)&pDest[0] = __builtin_bswap16(ulPixel1) | ((uint32_t)__builtin_bswap16(ulPixel2)<<16);
+} /* JPEGPixel2BE() */
+
+static void JPEGPutMCU11(JPEGIMAGE *pJPEG, int x, int iPitch)
+{
+    int iCr, iCb;
+    signed int Y;
+    int iCol;
+    int iRow;
+    uint8_t *pY, *pCr, *pCb;
+    uint16_t *pOutput = &pJPEG->usPixels[x];
+
+    pY  = (unsigned char *)&pJPEG->sMCUs[0*DCTSIZE];
+    pCb = (unsigned char *)&pJPEG->sMCUs[1*DCTSIZE];
+    pCr = (unsigned char *)&pJPEG->sMCUs[2*DCTSIZE];
+    
+    if (pJPEG->iOptions & JPEG_SCALE_HALF)
+    {
+        for (iRow=0; iRow<4; iRow++) // up to 8 rows to do
+        {
+            for (iCol=0; iCol<4; iCol++) // up to 4x2 cols to do
+            {
+                iCr = (pCr[0] + pCr[1] + pCr[8] + pCr[9] + 2) >> 2;
+                iCb = (pCb[0] + pCb[1] + pCb[8] + pCb[9] + 2) >> 2;
+                Y = (pY[0] + pY[1] + pY[8] + pY[9]) << 10;
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol, Y, iCb, iCr);
+                else
+                    JPEGPixelBE(pOutput+iCol, Y, iCb, iCr);
+                pCr += 2;
+                pCb += 2;
+                pY += 2;
+            } // for col
+            pCr += 8;
+            pCb += 8;
+            pY += 8;
+            pOutput += iPitch;
+        } // for row
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_EIGHTH) // special case for 1/8 scaling
+    {
+        // only 4 pixels to draw, so no looping needed
+        iCr = pCr[0];
+        iCb = pCb[0];
+        Y = (int)(pY[0]) << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixelLE(pOutput, Y, iCb, iCr);
+        else
+            JPEGPixelBE(pOutput, Y, iCb, iCr);
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_QUARTER) // special case for 1/4 scaling
+    {
+        // only 4 pixels to draw, so no looping needed
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelLE(pOutput, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelLE(pOutput+1, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelLE(pOutput+iPitch, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelLE(pOutput+1+iPitch, Y, iCb, iCr);
+        }
+        else
+        {
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelBE(pOutput, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelBE(pOutput+1, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelBE(pOutput+iPitch, Y, iCb, iCr);
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y = (int)(*pY++) << 12;
+            JPEGPixelBE(pOutput+1+iPitch, Y, iCb, iCr);
+        }
+        return;
+    }
+    for (iRow=0; iRow<8; iRow++) // up to 8 rows to do
+    {
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            for (iCol=0; iCol<8; iCol++) // up to 4x2 cols to do
+            {
+                iCr = *pCr++;
+                iCb = *pCb++;
+                Y = (int)(*pY++) << 12;
+                JPEGPixelLE(pOutput+iCol, Y, iCb, iCr);
+            } // for col
+        }
+        else
+        {
+        
