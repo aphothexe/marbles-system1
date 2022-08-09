@@ -2566,4 +2566,108 @@ static void JPEGPutMCU22(JPEGIMAGE *pJPEG, int x, int iPitch)
             JPEGPixelBE(pOutput+iPitch, Y1, Cb, Cr);
         // bottom right block
         Y1 =  pY[DCTSIZE*6] << 12; // scale to level of conversion table
-        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixelLE(pOutput+ 1 + iPitch, Y1, Cb, Cr);
+        else
+            JPEGPixelBE(pOutput+ 1 + iPitch, Y1, Cb, Cr);
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_QUARTER) // special case of 1/4
+    {
+        for (iRow=0; iRow<2; iRow++)
+        {
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            {
+                for (iCol=0; iCol<2; iCol++)
+                {
+                    // top left block
+                    Y1 =  pY[iCol] << 12; // scale to level of conversion table
+                    Cb  = pCb[0];
+                    Cr  = pCr[0];
+                    JPEGPixelLE(pOutput + iCol, Y1, Cb, Cr);
+                    // top right block
+                    Y1 =  pY[iCol+(DCTSIZE*2)] << 12; // scale to level of conversion table
+                    Cb = pCb[1];
+                    Cr = pCr[1];
+                    JPEGPixelLE(pOutput + 2+iCol, Y1, Cb, Cr);
+                    // bottom left block
+                    Y1 =  pY[iCol+DCTSIZE*4] << 12;  // scale to level of conversion table
+                    Cb = pCb[2];
+                    Cr = pCr[2];
+                    JPEGPixelLE(pOutput+iPitch*2 + iCol, Y1, Cb, Cr);
+                    // bottom right block
+                    Y1 =  pY[iCol+DCTSIZE*6] << 12; // scale to level of conversion table
+                    Cb  = pCb[3];
+                    Cr  = pCr[3];
+                    JPEGPixelLE(pOutput+iPitch*2 + 2+iCol, Y1, Cb, Cr);
+                } // for each column
+            }
+            else
+            {
+                for (iCol=0; iCol<2; iCol++)
+                {
+                    // top left block
+                    Y1 =  pY[iCol] << 12; // scale to level of conversion table
+                    Cb  = pCb[0];
+                    Cr  = pCr[0];
+                    JPEGPixelBE(pOutput + iCol, Y1, Cb, Cr);
+                    // top right block
+                    Y1 =  pY[iCol+(DCTSIZE*2)] << 12; // scale to level of conversion table
+                    Cb = pCb[1];
+                    Cr = pCr[1];
+                    JPEGPixelBE(pOutput + 2+iCol, Y1, Cb, Cr);
+                    // bottom left block
+                    Y1 =  pY[iCol+DCTSIZE*4] << 12;  // scale to level of conversion table
+                    Cb = pCb[2];
+                    Cr = pCr[2];
+                    JPEGPixelBE(pOutput+iPitch*2 + iCol, Y1, Cb, Cr);
+                    // bottom right block
+                    Y1 =  pY[iCol+DCTSIZE*6] << 12; // scale to level of conversion table
+                    Cb  = pCb[3];
+                    Cr  = pCr[3];
+                    JPEGPixelBE(pOutput+iPitch*2 + 2+iCol, Y1, Cb, Cr);
+                } // for each column
+            }
+            pY += 2; // skip 1 line of source pixels
+            pOutput += iPitch;
+        }
+        return;
+    }
+    /* Convert YCC pixels into RGB pixels and store in output image */
+    iYCount = 4;
+    bUseOdd1 = bUseOdd2 = 1; // assume odd column can be used
+    if ((x+15) >= pJPEG->iWidth)
+    {
+        iCol = (((pJPEG->iWidth & 15)+1) >> 1);
+        if (iCol >= 4)
+        {
+            iXCount1 = 4;
+            iXCount2 = iCol-4;
+            if (pJPEG->iWidth & 1 && (iXCount2 * 2) + 8 + (x * 16) > pJPEG->iWidth)
+                bUseOdd2 = 0;
+        }
+        else
+        {
+            iXCount1 = iCol;
+            iXCount2 = 0;
+            if (pJPEG->iWidth & 1 && (iXCount1 * 2) + (x * 16) > pJPEG->iWidth)
+                bUseOdd1 = 0;
+        }
+    }
+    else
+        iXCount1 = iXCount2 = 4;
+    for (iRow=0; iRow<iYCount; iRow++) // up to 4 rows to do
+    {
+        for (iCol=0; iCol<iXCount1; iCol++) // up to 4 cols to do
+        {
+            // for top left block
+            Y1 = pY[iCol*2];
+            Y2 = pY[iCol*2+1];
+            Y3 = pY[iCol*2+8];
+            Y4 = pY[iCol*2+9];
+            Y1 <<= 12;  // scale to level of conversion table
+            Y2 <<= 12;
+            Y3 <<= 12;
+            Y4 <<= 12;
+            Cb = pCb[iCol];
+            Cr = pCr[iCol];
