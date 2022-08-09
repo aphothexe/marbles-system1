@@ -2476,4 +2476,94 @@ static void JPEGPutMCU11(JPEGIMAGE *pJPEG, int x, int iPitch)
         }
         else
         {
-        
+            for (iCol=0; iCol<8; iCol++) // up to 4x2 cols to do
+            {
+                iCr = *pCr++;
+                iCb = *pCb++;
+                Y = (int)(*pY++) << 12;
+                JPEGPixelBE(pOutput+iCol, Y, iCb, iCr);
+            } // for col
+        }
+        pOutput += iPitch;
+    } // for row
+} /* JPEGPutMCU11() */
+
+static void JPEGPutMCU22(JPEGIMAGE *pJPEG, int x, int iPitch)
+{
+    uint32_t Cr,Cb;
+    signed int Y1, Y2, Y3, Y4;
+    int iRow, iCol, iXCount1, iXCount2, iYCount;
+    unsigned char *pY, *pCr, *pCb;
+    int bUseOdd1, bUseOdd2; // special case where 24bpp odd sized image can clobber first column
+    uint16_t *pOutput = &pJPEG->usPixels[x];
+
+    pY  = (unsigned char *)&pJPEG->sMCUs[0*DCTSIZE];
+    pCb = (unsigned char *)&pJPEG->sMCUs[4*DCTSIZE];
+    pCr = (unsigned char *)&pJPEG->sMCUs[5*DCTSIZE];
+    
+    if (pJPEG->iOptions & JPEG_SCALE_HALF) // special handling of 1/2 size (pixel averaging)
+    {
+        for (iRow=0; iRow<4; iRow++) // 16x16 becomes 8x8 of 2x2 pixels
+        {
+            for (iCol=0; iCol<4; iCol++)
+            {
+                Y1 = (pY[iCol*2] + pY[iCol*2+1] + pY[iCol*2+8] + pY[iCol*2+9]) << 10;
+                Cb = pCb[iCol];
+                Cr = pCr[iCol];
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol, Y1, Cb, Cr); // top left
+                else
+                    JPEGPixelBE(pOutput+iCol, Y1, Cb, Cr);
+                Y1 = (pY[iCol*2+(DCTSIZE*2)] + pY[iCol*2+1+(DCTSIZE*2)] + pY[iCol*2+8+(DCTSIZE*2)] + pY[iCol*2+9+(DCTSIZE*2)]) << 10;
+                Cb = pCb[iCol+4];
+                Cr = pCr[iCol+4];
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol+4, Y1, Cb, Cr); // top right
+                else
+                    JPEGPixelBE(pOutput+iCol+4, Y1, Cb, Cr);
+                Y1 = (pY[iCol*2+(DCTSIZE*4)] + pY[iCol*2+1+(DCTSIZE*4)] + pY[iCol*2+8+(DCTSIZE*4)] + pY[iCol*2+9+(DCTSIZE*4)]) << 10;
+                Cb = pCb[iCol+32];
+                Cr = pCr[iCol+32];
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol+iPitch*4, Y1, Cb, Cr); // bottom left
+                else
+                    JPEGPixelBE(pOutput+iCol+iPitch*4, Y1, Cb, Cr);
+                Y1 = (pY[iCol*2+(DCTSIZE*6)] + pY[iCol*2+1+(DCTSIZE*6)] + pY[iCol*2+8+(DCTSIZE*6)] + pY[iCol*2+9+(DCTSIZE*6)]) << 10;
+                Cb = pCb[iCol+32+4];
+                Cr = pCr[iCol+32+4];
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol+4+iPitch*4, Y1, Cb, Cr); // bottom right
+                else
+                    JPEGPixelBE(pOutput+iCol+4+iPitch*4, Y1, Cb, Cr);
+            }
+            pY += 16;
+            pCb += 8;
+            pCr += 8;
+            pOutput += iPitch;
+        }
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_EIGHTH)
+    {
+        Y1 =  pY[0] << 12; // scale to level of conversion table
+        Cb  = pCb[0];
+        Cr  = pCr[0];
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixelLE(pOutput, Y1, Cb, Cr);
+        else
+            JPEGPixelBE(pOutput, Y1, Cb, Cr);
+        // top right block
+        Y1 =  pY[DCTSIZE*2] << 12; // scale to level of conversion table
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixelLE(pOutput + 1, Y1, Cb, Cr);
+        else
+            JPEGPixelBE(pOutput + 1, Y1, Cb, Cr);
+        // bottom left block
+        Y1 =  pY[DCTSIZE*4] << 12;  // scale to level of conversion table
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixelLE(pOutput+iPitch, Y1, Cb, Cr);
+        else
+            JPEGPixelBE(pOutput+iPitch, Y1, Cb, Cr);
+        // bottom right block
+        Y1 =  pY[DCTSIZE*6] << 12; // scale to level of conversion table
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN
