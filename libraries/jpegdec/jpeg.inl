@@ -2671,3 +2671,98 @@ static void JPEGPutMCU22(JPEGIMAGE *pJPEG, int x, int iPitch)
             Y4 <<= 12;
             Cb = pCb[iCol];
             Cr = pCr[iCol];
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            {
+                if (bUseOdd1 || iCol != (iXCount1-1)) // only render if it won't go off the right edge
+                {
+                    JPEGPixel2LE(pOutput + (iCol<<1), Y1, Y2, Cb, Cr);
+                    JPEGPixel2LE(pOutput+iPitch + (iCol<<1), Y3, Y4, Cb, Cr);
+                }
+                else
+                {
+                    JPEGPixelLE(pOutput + (iCol<<1), Y1, Cb, Cr);
+                    JPEGPixelLE(pOutput+iPitch + (iCol<<1), Y3, Cb, Cr);
+                }
+            }
+            else
+            {
+                if (bUseOdd1 || iCol != (iXCount1-1)) // only render if it won't go off the right edge
+                {
+                    JPEGPixel2BE(pOutput + (iCol<<1), Y1, Y2, Cb, Cr);
+                    JPEGPixel2BE(pOutput+iPitch + (iCol<<1), Y3, Y4, Cb, Cr);
+                }
+                else
+                {
+                    JPEGPixelBE(pOutput + (iCol<<1), Y1, Cb, Cr);
+                    JPEGPixelBE(pOutput+iPitch + (iCol<<1), Y3, Cb, Cr);
+                }
+            }
+            // for top right block
+            if (iCol < iXCount2)
+            {
+                Y1 = pY[iCol*2+DCTSIZE*2];
+                Y2 = pY[iCol*2+1+DCTSIZE*2];
+                Y3 = pY[iCol*2+8+DCTSIZE*2];
+                Y4 = pY[iCol*2+9+DCTSIZE*2];
+                Y1 <<= 12;  // scale to level of conversion table
+                Y2 <<= 12;
+                Y3 <<= 12;
+                Y4 <<= 12;
+                Cb = pCb[iCol+4];
+                Cr = pCr[iCol+4];
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                {
+                    if (bUseOdd2 || iCol != (iXCount2-1)) // only render if it won't go off the right edge
+                    {
+                        JPEGPixel2LE(pOutput + 8+(iCol<<1), Y1, Y2, Cb, Cr);
+                        JPEGPixel2LE(pOutput+iPitch + 8+(iCol<<1), Y3, Y4, Cb, Cr);
+                    }
+                    else
+                    {
+                        JPEGPixelLE(pOutput+ 8+(iCol<<1), Y1, Cb, Cr);
+                        JPEGPixelLE(pOutput+iPitch+ 8+(iCol<<1), Y3, Cb, Cr);
+                    }
+                }
+                else
+                {
+                    if (bUseOdd2 || iCol != (iXCount2-1)) // only render if it won't go off the right edge
+                    {
+                        JPEGPixel2BE(pOutput + 8+(iCol<<1), Y1, Y2, Cb, Cr);
+                        JPEGPixel2BE(pOutput+iPitch + 8+(iCol<<1), Y3, Y4, Cb, Cr);
+                    }
+                    else
+                    {
+                        JPEGPixelBE(pOutput+ 8+(iCol<<1), Y1, Cb, Cr);
+                        JPEGPixelBE(pOutput+iPitch+ 8+(iCol<<1), Y3, Cb, Cr);
+                    }
+                }
+            }
+            // for bottom left block
+            Y1 = pY[iCol*2+DCTSIZE*4];
+            Y2 = pY[iCol*2+1+DCTSIZE*4];
+            Y3 = pY[iCol*2+8+DCTSIZE*4];
+            Y4 = pY[iCol*2+9+DCTSIZE*4];
+            Y1 <<= 12;  // scale to level of conversion table
+            Y2 <<= 12;
+            Y3 <<= 12;
+            Y4 <<= 12;
+            Cb = pCb[iCol+32];
+            Cr = pCr[iCol+32];
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            {
+                if (bUseOdd1 || iCol != (iXCount1-1)) // only render if it won't go off the right edge
+                {
+                    JPEGPixel2LE(pOutput+iPitch*8+ (iCol<<1), Y1, Y2, Cb, Cr);
+                    JPEGPixel2LE(pOutput+iPitch*9+ (iCol<<1), Y3, Y4, Cb, Cr);
+                }
+                else
+                {
+                    JPEGPixelLE(pOutput+iPitch*8+ (iCol<<1), Y1, Cb, Cr);
+                    JPEGPixelLE(pOutput+iPitch*9+ (iCol<<1), Y3, Cb, Cr);
+                }
+            }
+            else
+            {
+                if (bUseOdd1 || iCol != (iXCount1-1)) // only render if it won't go off the right edge
+                {
+         
