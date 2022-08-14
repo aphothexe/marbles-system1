@@ -2875,3 +2875,128 @@ static void JPEGPutMCU12(JPEGIMAGE *pJPEG, int x, int iPitch)
             JPEGPixelLE(pOutput + iPitch, Y2, Cb, Cr);
         }
         else
+        {
+            JPEGPixelBE(pOutput, Y1, Cb, Cr);
+            JPEGPixelBE(pOutput + iPitch, Y2, Cb, Cr);
+        }
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_QUARTER)
+    { // draw a 2x4 block
+        Y1 = pY[0] << 12;
+        Y2 = pY[2] << 12;
+        Cb = pCb[0];
+        Cr = pCr[0];
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            JPEGPixelLE(pOutput, Y1, Cb, Cr);
+            JPEGPixelLE(pOutput + iPitch, Y2, Cb, Cr);
+        }
+        else
+        {
+            JPEGPixelBE(pOutput, Y1, Cb, Cr);
+            JPEGPixelBE(pOutput + iPitch, Y2, Cb, Cr);
+        }
+        Y1 = pY[1] << 12;
+        Y2 = pY[3] << 12;
+        Cb = pCb[1];
+        Cr = pCr[1];
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            JPEGPixelLE(pOutput + 1, Y1, Cb, Cr);
+            JPEGPixelLE(pOutput + 1 + iPitch, Y2, Cb, Cr);
+        }
+        else
+        {
+            JPEGPixelBE(pOutput + 1, Y1, Cb, Cr);
+            JPEGPixelBE(pOutput + 1 + iPitch, Y2, Cb, Cr);
+        }
+        pY += DCTSIZE*2; // next Y block below
+        Y1 = pY[0] << 12;
+        Y2 = pY[2] << 12;
+        Cb = pCb[2];
+        Cr = pCr[2];
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            JPEGPixelLE(pOutput + iPitch*2, Y1, Cb, Cr);
+            JPEGPixelLE(pOutput + iPitch*3, Y2, Cb, Cr);
+        }
+        else
+        {
+            JPEGPixelBE(pOutput + iPitch*2, Y1, Cb, Cr);
+            JPEGPixelBE(pOutput + iPitch*3, Y2, Cb, Cr);
+        }
+        Y1 = pY[1] << 12;
+        Y2 = pY[3] << 12;
+        Cb = pCb[3];
+        Cr = pCr[3];
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+        {
+            JPEGPixelLE(pOutput + 1 + iPitch*2, Y1, Cb, Cr);
+            JPEGPixelLE(pOutput + 1 + iPitch*3, Y2, Cb, Cr);
+        }
+        else
+        {
+            JPEGPixelBE(pOutput + 1 + iPitch*2, Y1, Cb, Cr);
+            JPEGPixelBE(pOutput + 1 + iPitch*3, Y2, Cb, Cr);
+        }
+        return;
+    }
+    /* Convert YCC pixels into RGB pixels and store in output image */
+    iYCount = 16;
+    iXCount = 8;
+    for (iRow=0; iRow<iYCount; iRow+=2) // up to 16 rows to do
+    {
+        for (iCol=0; iCol<iXCount; iCol++) // up to 8 cols to do
+        {
+            Y1 = pY[iCol];
+            Y2 = pY[iCol+8];
+            Y1 <<= 12;  // scale to level of conversion table
+            Y2 <<= 12;
+            Cb = pCb[iCol];
+            Cr = pCr[iCol];
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            {
+                JPEGPixelLE(pOutput + iCol, Y1, Cb, Cr);
+                JPEGPixelLE(pOutput + iPitch + iCol, Y2, Cb, Cr);
+            }
+            else
+            {
+                JPEGPixelBE(pOutput + iCol, Y1, Cb, Cr);
+                JPEGPixelBE(pOutput + iPitch + iCol, Y2, Cb, Cr);
+            }
+        }
+        pY += 16; // skip to next 2 lines of source pixels
+        if (iRow == 6) // next MCU block, skip ahead to correct spot
+            pY += (128-64);
+        pCb += 8;
+        pCr += 8;
+        pOutput += iPitch*2; // next 2 lines of dest pixels
+    }
+} /* JPEGPutMCU12() */
+static void JPEGPutMCU21(JPEGIMAGE *pJPEG, int x, int iPitch)
+{
+    int iCr, iCb;
+    signed int Y1, Y2;
+    int iCol;
+    int iRow;
+    uint8_t *pY, *pCr, *pCb;
+    uint16_t *pOutput = &pJPEG->usPixels[x];
+    
+    pY  = (uint8_t *)&pJPEG->sMCUs[0*DCTSIZE];
+    pCb = (uint8_t *)&pJPEG->sMCUs[2*DCTSIZE];
+    pCr = (uint8_t *)&pJPEG->sMCUs[3*DCTSIZE];
+    
+    if (pJPEG->iOptions & JPEG_SCALE_HALF)
+    {
+        for (iRow=0; iRow<4; iRow++)
+        {
+            for (iCol=0; iCol<4; iCol++)
+            {   // left block
+                iCr = (pCr[0] + pCr[8] + 1) >> 1;
+                iCb = (pCb[0] + pCb[8] + 1) >> 1;
+                Y1 = (signed int)(pY[0] + pY[1] + pY[8] + pY[9]) << 10;
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol, Y1, iCb, iCr);
+                else
+                    JPEGPixelB
