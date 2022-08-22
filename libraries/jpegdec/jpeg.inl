@@ -2999,4 +2999,116 @@ static void JPEGPutMCU21(JPEGIMAGE *pJPEG, int x, int iPitch)
                 if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
                     JPEGPixelLE(pOutput+iCol, Y1, iCb, iCr);
                 else
-                    JPEGPixelB
+                    JPEGPixelBE(pOutput+iCol, Y1, iCb, iCr);
+                // right block
+                iCr = (pCr[4] + pCr[12] + 1) >> 1;
+                iCb = (pCb[4] + pCb[12] + 1) >> 1;
+                Y1 = (signed int)(pY[128] + pY[129] + pY[136] + pY[137]) << 10;
+                if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                    JPEGPixelLE(pOutput+iCol+4, Y1, iCb, iCr);
+                else
+                    JPEGPixelBE(pOutput+iCol+4, Y1, iCb, iCr);
+                pCb++;
+                pCr++;
+                pY += 2;
+            }
+            pCb += 12;
+            pCr += 12;
+            pY += 8;
+            pOutput += iPitch;
+        }
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_EIGHTH)
+    { // draw 2 pixels
+        iCr = pCr[0];
+        iCb = pCb[0];
+        Y1 = (signed int)(pY[0]) << 12;
+        Y2 = (signed int)(pY[DCTSIZE*2]) << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixel2LE(pOutput, Y1, Y2, iCb, iCr);
+        else
+            JPEGPixel2BE(pOutput, Y1, Y2, iCb, iCr);
+        return;
+    }
+    if (pJPEG->iOptions & JPEG_SCALE_QUARTER)
+    { // draw 4x2 pixels
+        // top left
+        iCr = pCr[0];
+        iCb = pCb[0];
+        Y1 = (signed int)(pY[0]) << 12;
+        Y2 = (signed int)(pY[1]) << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixel2LE(pOutput, Y1, Y2, iCb, iCr);
+        else
+            JPEGPixel2BE(pOutput, Y1, Y2, iCb, iCr);
+        // top right
+        iCr = pCr[1];
+        iCb = pCb[1];
+        Y1 = (signed int)pY[DCTSIZE*2] << 12;
+        Y2 = (signed int)pY[DCTSIZE*2+1] << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixel2LE(pOutput + 2, Y1, Y2, iCb, iCr);
+        else
+            JPEGPixel2BE(pOutput + 2, Y1, Y2, iCb, iCr);
+        // bottom left
+        iCr = pCr[2];
+        iCb = pCb[2];
+        Y1 = (signed int)(pY[2]) << 12;
+        Y2 = (signed int)(pY[3]) << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixel2LE(pOutput + iPitch, Y1, Y2, iCb, iCr);
+        else
+            JPEGPixel2BE(pOutput + iPitch, Y1, Y2, iCb, iCr);
+        // bottom right
+        iCr = pCr[3];
+        iCb = pCb[3];
+        Y1 = (signed int)pY[DCTSIZE*2+2] << 12;
+        Y2 = (signed int)pY[DCTSIZE*2+3] << 12;
+        if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+            JPEGPixel2LE(pOutput + iPitch + 2, Y1, Y2, iCb, iCr);
+        else
+            JPEGPixel2BE(pOutput + iPitch + 2, Y1, Y2, iCb, iCr);
+        return;
+    }
+    /* Convert YCC pixels into RGB pixels and store in output image */
+    for (iRow=0; iRow<8; iRow++) // up to 8 rows to do
+    {
+        for (iCol=0; iCol<4; iCol++) // up to 4x2 cols to do
+        { // left block
+            iCr = *pCr++;
+            iCb = *pCb++;
+            Y1 = (signed int)(*pY++) << 12;
+            Y2 = (signed int)(*pY++) << 12;
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                JPEGPixel2LE(pOutput + iCol*2, Y1, Y2, iCb, iCr);
+            else
+                JPEGPixel2BE(pOutput + iCol*2, Y1, Y2, iCb, iCr);
+            // right block
+            iCr = pCr[3];
+            iCb = pCb[3];
+            Y1 = (signed int)pY[126] << 12;
+            Y2 = (signed int)pY[127] << 12;
+            if (pJPEG->ucPixelType == RGB565_LITTLE_ENDIAN)
+                JPEGPixel2LE(pOutput + 8 + iCol*2, Y1, Y2, iCb, iCr);
+            else
+                JPEGPixel2BE(pOutput + 8 + iCol*2, Y1, Y2, iCb, iCr);
+        } // for col
+        pCb += 4;
+        pCr += 4;
+        pOutput += iPitch;
+    } // for row
+} /* JPEGPutMCU21() */
+
+// Dither the 8-bit gray pixels into 1, 2, or 4-bit gray
+static void JPEGDither(JPEGIMAGE *pJPEG, int iWidth, int iHeight)
+{
+int x, y, xmask=0, iDestPitch=0;
+int32_t cNew, lFErr, v=0, h;
+int32_t e1,e2,e3,e4;
+uint8_t cOut, ucPixelType; // forward errors for gray
+uint8_t *pSrc, *pDest, *errors, *pErrors=NULL, *d, *pPixels; // destination 8bpp image
+uint8_t pixelmask=0, shift=0;
+    
+    ucPixelType = pJPEG->ucPixelType;
+    errors 
