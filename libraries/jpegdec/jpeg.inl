@@ -3111,4 +3111,125 @@ uint8_t *pSrc, *pDest, *errors, *pErrors=NULL, *d, *pPixels; // destination 8bpp
 uint8_t pixelmask=0, shift=0;
     
     ucPixelType = pJPEG->ucPixelType;
-    errors 
+    errors = (uint8_t *)pJPEG->usPixels; // plenty of space here
+    errors[0] = errors[1] = errors[2] = 0;
+    pDest = pSrc = pJPEG->pDitherBuffer; // write the new pixels over the original
+    switch (ucPixelType)
+    {
+        case FOUR_BIT_DITHERED:
+            iDestPitch = (iWidth+1)/2;
+            pixelmask = 0xf0;
+            shift = 4;
+            xmask = 1;
+            break;
+        case TWO_BIT_DITHERED:
+            iDestPitch = (iWidth+3)/4;
+            pixelmask = 0xc0;
+            shift = 2;
+            xmask = 3;
+            break;
+        case ONE_BIT_DITHERED:
+            iDestPitch = (iWidth+7)/8;
+            pixelmask = 0x80;
+            shift = 1;
+            xmask = 7;
+            break;
+    }
+    for (y=0; y<iHeight; y++)
+    {
+        pPixels = &pSrc[y * iWidth];
+        d = &pDest[y * iDestPitch];
+        pErrors = &errors[1]; // point to second pixel to avoid boundary check
+        lFErr = 0;
+        cOut = 0;
+        for (x=0; x<iWidth; x++)
+        {
+            cNew = *pPixels++; // get grayscale uint8_t pixel
+            // add forward error
+            cNew += lFErr;
+            if (cNew > 255) cNew = 255;     // clip to uint8_t
+            cOut <<= shift;                 // pack new pixels into a byte
+            cOut |= (cNew >> (8-shift));    // keep top N bits
+            if ((x & xmask) == xmask)       // store it when the byte is full
+            {
+                *d++ = cOut;
+                cOut = 0;
+            }
+            // calculate the Floyd-Steinberg error for this pixel
+            v = cNew - (cNew & pixelmask); // new error for N-bit gray output (always positive)
+            h = v >> 1;
+            e1 = (7*h)>>3;  // 7/16
+            e2 = h - e1;  // 1/16
+            e3 = (5*h) >> 3;   // 5/16
+            e4 = h - e3;  // 3/16
+            // distribute error to neighbors
+            lFErr = e1 + pErrors[1];
+            pErrors[1] = (uint8_t)e2;
+            pErrors[0] += e3;
+            pErrors[-1] += e4;
+            pErrors++;
+        } // for x
+    } // for y
+} /* JPEGDither() */
+
+//
+// Decode the image
+// returns 0 for error, 1 for success
+//
+static int DecodeJPEG(JPEGIMAGE *pJPEG)
+{
+    int cx, cy, x, y, mcuCX, mcuCY;
+    int iLum0, iLum1, iLum2, iLum3, iCr, iCb;
+    signed int iDCPred0, iDCPred1, iDCPred2;
+    int i, iQuant1, iQuant2, iQuant3, iErr;
+    uint8_t c;
+    int iMCUCount, xoff, iPitch, bThumbnail = 0;
+    int bContinue = 1; // early exit if the DRAW callback wants to stop
+    uint32_t l, *pl;
+    unsigned char cDCTable0, cACTable0, cDCTable1, cACTable1, cDCTable2, cACTable2;
+    JPEGDRAW jd;
+    int iMaxFill = 16, iScaleShift = 0;
+
+    // Requested the Exif thumbnail
+    if (pJPEG->iOptions & JPEG_EXIF_THUMBNAIL)
+    {
+        if (pJPEG->iThumbData == 0 || pJPEG->iThumbWidth == 0) // doesn't exist
+        {
+            pJPEG->iError = JPEG_INVALID_PARAMETER;
+            return 0;
+        }
+        if (!JPEGParseInfo(pJPEG, 1)) // parse the embedded thumbnail file header
+            return 0; // something went wrong
+    }
+    // Fast downscaling options
+    if (pJPEG->iOptions & JPEG_SCALE_HALF)
+        iScaleShift = 1;
+    else if (pJPEG->iOptions & JPEG_SCALE_QUARTER)
+    {
+        iScaleShift = 2;
+        iMaxFill = 1;
+    }
+    else if (pJPEG->iOptions & JPEG_SCALE_EIGHTH)
+    {
+        iScaleShift = 3;
+        iMaxFill = 1;
+        bThumbnail = 1;
+    }
+    
+    // reorder and fix the quantization table for decoding
+    JPEGFixQuantD(pJPEG);
+    pJPEG->bb.ulBits = MOTOLONG(&pJPEG->ucFileBuf[0]); // preload first 4 bytes
+    pJPEG->bb.pBuf = pJPEG->ucFileBuf;
+    pJPEG->bb.ulBitOff = 0;
+    
+    cDCTable0 = pJPEG->JPCI[0].dc_tbl_no;
+    cACTable0 = pJPEG->JPCI[0].ac_tbl_no;
+    cDCTable1 = pJPEG->JPCI[1].dc_tbl_no;
+    cACTable1 = pJPEG->JPCI[1].ac_tbl_no;
+    cDCTable2 = pJPEG->JPCI[2].dc_tbl_no;
+    cACTable2 = pJPEG->JPCI[2].ac_tbl_no;
+    iDCPred0 = iDCPred1 = iDCPred2 = mcuCX = mcuCY = 0;
+    
+    switch (pJPEG->ucSubSample) // set up the parameters for the different subsampling options
+    {
+        case 0x00: // fake value to ha
