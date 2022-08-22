@@ -3232,4 +3232,111 @@ static int DecodeJPEG(JPEGIMAGE *pJPEG)
     
     switch (pJPEG->ucSubSample) // set up the parameters for the different subsampling options
     {
-        case 0x00: // fake value to ha
+        case 0x00: // fake value to handle grayscale
+        case 0x01: // fake value to handle sRGB/CMYK
+        case 0x11:
+            cx = (pJPEG->iWidth + 7) >> 3;  // number of MCU blocks
+            cy = (pJPEG->iHeight + 7) >> 3;
+            iCr = MCU1;
+            iCb = MCU2;
+            mcuCX = mcuCY = 8;
+            break;
+        case 0x12:
+            cx = (pJPEG->iWidth + 7) >> 3;  // number of MCU blocks
+            cy = (pJPEG->iHeight + 15) >> 4;
+            iCr = MCU2;
+            iCb = MCU3;
+            mcuCX = 8;
+            mcuCY = 16;
+            break;
+        case 0x21:
+            cx = (pJPEG->iWidth + 15) >> 4;  // number of MCU blocks
+            cy = (pJPEG->iHeight + 7) >> 3;
+            iCr = MCU2;
+            iCb = MCU3;
+            mcuCX = 16;
+            mcuCY = 8;
+            break;
+        case 0x22:
+            cx = (pJPEG->iWidth + 15) >> 4;  // number of MCU blocks
+            cy = (pJPEG->iHeight + 15) >> 4;
+            iCr = MCU4;
+            iCb = MCU5;
+            mcuCX = mcuCY = 16;
+            break;
+        default: // to suppress compiler warning
+            cx = cy = 0;
+            iCr = iCb = 0;
+            break;
+    }
+    // Scale down the MCUs by the requested amount
+    mcuCX >>= iScaleShift;
+    mcuCY >>= iScaleShift;
+    
+    iQuant1 = pJPEG->sQuantTable[pJPEG->JPCI[0].quant_tbl_no*DCTSIZE]; // DC quant values
+    iQuant2 = pJPEG->sQuantTable[pJPEG->JPCI[1].quant_tbl_no*DCTSIZE];
+    iQuant3 = pJPEG->sQuantTable[pJPEG->JPCI[2].quant_tbl_no*DCTSIZE];
+    // luminance values are always in these positions
+    iLum0 = MCU0;
+    iLum1 = MCU1;
+    iLum2 = MCU2;
+    iLum3 = MCU3;
+    iErr = 0;
+    pJPEG->iResCount = pJPEG->iResInterval;
+    // Calculate how many MCUs we can fit in the pixel buffer to maximize LCD drawing speed
+    iMCUCount = MAX_BUFFERED_PIXELS / (mcuCX * mcuCY);
+    if (pJPEG->ucPixelType == EIGHT_BIT_GRAYSCALE)
+        iMCUCount *= 2; // each pixel is only 1 byte
+    if (iMCUCount > cx)
+        iMCUCount = cx; // don't go wider than the image
+    if (iMCUCount > pJPEG->iMaxMCUs) // did the user set an upper bound on how many pixels per JPEGDraw callback?
+        iMCUCount = pJPEG->iMaxMCUs;
+    if (pJPEG->ucPixelType > EIGHT_BIT_GRAYSCALE) // dithered, override the max MCU count
+        iMCUCount = cx; // do the whole row
+    jd.iBpp = 16;
+    switch (pJPEG->ucPixelType)
+    {
+        case EIGHT_BIT_GRAYSCALE:
+            jd.iBpp = 8;
+            break;
+        case FOUR_BIT_DITHERED:
+            jd.iBpp = 4;
+            break;
+        case TWO_BIT_DITHERED:
+            jd.iBpp = 2;
+            break;
+        case ONE_BIT_DITHERED:
+            jd.iBpp = 1;
+            break;
+    }
+    if (pJPEG->ucPixelType > EIGHT_BIT_GRAYSCALE)
+        jd.pPixels = (uint16_t *)pJPEG->pDitherBuffer;
+    else
+        jd.pPixels = pJPEG->usPixels;
+    jd.iHeight = mcuCY;
+    jd.y = pJPEG->iYOffset;
+    for (y = 0; y < cy && bContinue && iErr == 0; y++, jd.y += mcuCY)
+    {
+        jd.x = pJPEG->iXOffset;
+        xoff = 0; // start of new LCD output group
+        iPitch = iMCUCount * mcuCX; // pixels per line of LCD buffer
+        for (x = 0; x < cx && bContinue && iErr == 0; x++)
+        {
+            pJPEG->ucACTable = cACTable0;
+            pJPEG->ucDCTable = cDCTable0;
+            // do the first luminance component
+            iErr = JPEGDecodeMCU(pJPEG, iLum0, &iDCPred0);
+            if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+            {
+                pl = (uint32_t *)&pJPEG->sMCUs[iLum0];
+                c = ucRangeTable[((iDCPred0 * iQuant1) >> 5) & 0x3ff];
+                l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                // dct stores byte values
+                for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                    pl[i] = l;
+            }
+            else
+            {
+                JPEGIDCT(pJPEG, iLum0, pJPEG->JPCI[0].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // first quantization table
+            }
+            // do the second luminance compone
