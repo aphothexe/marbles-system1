@@ -3339,4 +3339,79 @@ static int DecodeJPEG(JPEGIMAGE *pJPEG)
             {
                 JPEGIDCT(pJPEG, iLum0, pJPEG->JPCI[0].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // first quantization table
             }
-            // do the second luminance compone
+            // do the second luminance component
+            if (pJPEG->ucSubSample > 0x11) // subsampling
+            {
+                iErr |= JPEGDecodeMCU(pJPEG, iLum1, &iDCPred0);
+                if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+                {
+                    c = ucRangeTable[((iDCPred0 * iQuant1) >> 5) & 0x3ff];
+                    l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                    // dct stores byte values
+                    pl = (uint32_t *)&pJPEG->sMCUs[iLum1];
+                    for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                        pl[i] = l;
+                }
+                else
+                {
+                    JPEGIDCT(pJPEG, iLum1, pJPEG->JPCI[0].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // first quantization table
+                }
+                if (pJPEG->ucSubSample == 0x22)
+                {
+                    iErr |= JPEGDecodeMCU(pJPEG, iLum2, &iDCPred0);
+                    if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+                    {
+                        c = ucRangeTable[((iDCPred0 * iQuant1) >> 5) & 0x3ff];
+                        l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                        // dct stores byte values
+                        pl = (uint32_t *)&pJPEG->sMCUs[iLum2];
+                        for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                            pl[i] = l;
+                    }
+                    else
+                    {
+                        JPEGIDCT(pJPEG, iLum2, pJPEG->JPCI[0].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // first quantization table
+                    }
+                    iErr |= JPEGDecodeMCU(pJPEG, iLum3, &iDCPred0);
+                    if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+                    {
+                        c = ucRangeTable[((iDCPred0 * iQuant1) >> 5) & 0x3ff];
+                        l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                        // dct stores byte values
+                        pl = (uint32_t *)&pJPEG->sMCUs[iLum3];
+                        for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                            pl[i] = l;
+                    }
+                    else
+                    {
+                        JPEGIDCT(pJPEG, iLum3, pJPEG->JPCI[0].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // first quantization table
+                    }
+                } // if 2:2 subsampling
+            } // if subsampling used
+            if (pJPEG->ucSubSample && pJPEG->ucNumComponents == 3) // if color (not CMYK)
+            {
+                // first chroma
+                pJPEG->ucACTable = cACTable1;
+                pJPEG->ucDCTable = cDCTable1;
+                iErr |= JPEGDecodeMCU(pJPEG, iCr, &iDCPred1);
+                if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+                {
+                    c = ucRangeTable[((iDCPred1 * iQuant2) >> 5) & 0x3ff];
+                    l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                    // dct stores byte values
+                    pl = (uint32_t *)&pJPEG->sMCUs[iCr];
+                    for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                        pl[i] = l;
+                }
+                else
+                {
+                    JPEGIDCT(pJPEG, iCr, pJPEG->JPCI[1].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8))); // second quantization table
+                }
+                // second chroma
+                pJPEG->ucACTable = cACTable2;
+                pJPEG->ucDCTable = cDCTable2;
+                iErr |= JPEGDecodeMCU(pJPEG, iCb, &iDCPred2);
+                if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
+                {
+                    c = ucRangeTable[((iDCPred2 * iQuant3) >> 5) & 0x3ff];
+                    l = c
