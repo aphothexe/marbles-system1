@@ -3414,4 +3414,79 @@ static int DecodeJPEG(JPEGIMAGE *pJPEG)
                 if (pJPEG->ucMaxACCol == 0 || bThumbnail) // no AC components, save some time
                 {
                     c = ucRangeTable[((iDCPred2 * iQuant3) >> 5) & 0x3ff];
-                    l = c
+                    l = c | ((uint32_t) c << 8) | ((uint32_t) c << 16) | ((uint32_t) c << 24);
+                    // dct stores byte values
+                    pl = (uint32_t *)&pJPEG->sMCUs[iCb];
+                    for (i = 0; i<iMaxFill; i++) // 8x8 bytes = 16 longs
+                        pl[i] = l;
+                }
+                else
+                {
+                    JPEGIDCT(pJPEG, iCb, pJPEG->JPCI[2].quant_tbl_no, (pJPEG->ucMaxACCol | (pJPEG->ucMaxACRow << 8)));
+                }
+            } // if color components present
+            if (pJPEG->ucPixelType >= EIGHT_BIT_GRAYSCALE)
+            {
+                JPEGPutMCU8BitGray(pJPEG, xoff, iPitch);
+            }
+            else
+            {
+                switch (pJPEG->ucSubSample)
+                {
+                    case 0x00: // grayscale
+                        JPEGPutMCUGray(pJPEG, xoff, iPitch);
+                        break;
+                    case 0x11:
+                        JPEGPutMCU11(pJPEG, xoff, iPitch);
+                        break;
+                    case 0x12:
+                        JPEGPutMCU12(pJPEG, xoff, iPitch);
+                        break;
+                    case 0x21:
+                        JPEGPutMCU21(pJPEG, xoff, iPitch);
+                        break;
+                    case 0x22:
+                        JPEGPutMCU22(pJPEG, xoff, iPitch);
+                        break;
+                } // switch on color option
+            }
+            xoff += mcuCX;
+            if (xoff == iPitch || x == cx-1) // time to draw
+            {
+                xoff = 0;
+                jd.iWidth = jd.iWidthUsed = iPitch; // width of each LCD block group
+                jd.pUser = pJPEG->pUser;
+                if (pJPEG->ucPixelType > EIGHT_BIT_GRAYSCALE) // dither to 4/2/1 bits
+                    JPEGDither(pJPEG, cx * mcuCX, mcuCY);
+                if ((x+1)*mcuCX > pJPEG->iWidth) { // right edge has clipped pixels
+                   jd.iWidthUsed = iPitch - (cx*mcuCX - pJPEG->iWidth);
+                }
+                if ((jd.y - pJPEG->iYOffset + mcuCY) > (pJPEG->iHeight>>iScaleShift)) { // last row needs to be trimmed
+                   jd.iHeight = (pJPEG->iHeight>>iScaleShift) - (jd.y - pJPEG->iYOffset);
+                }
+                bContinue = (*pJPEG->pfnDraw)(&jd);
+                jd.x += iPitch;
+                if ((cx - 1 - x) < iMCUCount) // change pitch for the last set of MCUs on this row
+                    iPitch = (cx - 1 - x) * mcuCX;
+            }
+            if (pJPEG->iResInterval)
+            {
+                if (--pJPEG->iResCount == 0)
+                {
+                    pJPEG->iResCount = pJPEG->iResInterval;
+                    iDCPred0 = iDCPred1 = iDCPred2 = 0; // reset DC predictors
+                    if (pJPEG->bb.ulBitOff & 7) // need to start at the next even byte
+                    {
+                        pJPEG->bb.ulBitOff += (8 - (pJPEG->bb.ulBitOff & 7));  // new restart interval starts on byte boundary
+                    }
+                } // if restart interval needs to reset
+            } // if there is a restart interval
+            // See if we need to feed it more data
+            if (pJPEG->iVLCOff >= FILE_HIGHWATER)
+                JPEGGetMoreData(pJPEG); // need more 'filtered' VLC data
+        } // for x
+    } // for y
+    if (iErr != 0)
+        pJPEG->iError = JPEG_DECODE_ERROR;
+    return (iErr == 0);
+} /* DecodeJPEG() */
