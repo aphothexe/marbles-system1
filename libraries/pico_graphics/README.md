@@ -64,4 +64,170 @@ PicoGraphics_PenP4 graphics(WIDTH, HEIGHT, nullptr);     // For colour LCDs such
 PicoGraphics_PenP8 graphics(WIDTH, HEIGHT, nullptr);     // ditto- uses 2x the RAM of P4
 PicoGraphics_PenRGB332 graphics(WIDTH, HEIGHT, nullptr); // ditto
 PicoGraphics_PenRGB565 graphics(WIDTH, HEIGHT, nullptr); // For 16-bit colour LCDs. Uses 2x the RAM of P8 or RGB332 but permits 65K colour.
-PicoGraphics_PenRGB8
+PicoGraphics_PenRGB888 graphics(WIDTH, HEIGHT, nullptr); // For 32-bit colour devices. Uses 4x the RAM of P8 or RGB332 but permits 16M colour.
+```
+
+To draw something to a display you should create a display driver instance, eg:
+
+```c++
+ST7789 st7789(PicoExplorer::WIDTH, PicoExplorer::HEIGHT, ROTATE_0, false, get_spi_pins(BG_SPI_FRONT));
+```
+
+And then send it the Pico Graphics instance to draw:
+
+```c++
+st7789.update(&graphics);
+```
+
+The driver will check your graphics type and act accordingly.
+
+## Function Reference
+
+### Types
+
+#### Rect
+
+The `Rect` type describes a rectangle in terms of its x, y position, width and height.
+
+##### Rect.empty
+
+```c++
+bool Rect::empty();
+```
+
+##### Rect.contains
+
+```c++
+bool Rect::contains(const Rect &p);
+```
+
+`contains` allows you to check if a `Rect` contains a specific `Point`. This can be useful for checking collissions (have I clicked on something?):
+
+```c++
+Point cursor(50, 50);
+Rect widget(0, 0, 100, 100);
+bool hover = widet.contains(cursor);
+```
+
+##### Rect.intersects
+
+```c++
+bool Rect::intersects(const Rect &r);
+```
+
+`intersects` allows you to check if a `Rect` intersects or overlaps another `Rect`, for example these rectangles do not intersect:
+
+```c++
+Rect a(10, 10, 10, 10);
+Rect b(30, 10, 10, 10);
+a.intersects(b) == false
+```
+
+And these do:
+
+```c++
+Rect a(10, 10, 10, 10);
+Rect b(15, 10, 10, 10);
+a.intersects(b) == true
+```
+
+##### Rect.intersection
+
+```c++
+Rect Rect::intersection(const Rect &r);
+```
+
+`intersection` takes an input `Rect` and returns a new `Rect` that describes the region in which the two `Rect`s overlap. For example:
+
+```c++
+Rect a(0, 0, 10, 20);
+Rect b(0, 0, 20, 10);
+Rect c = a.intersection(b);
+```
+
+In this case `c` would equal `Rect c(0, 0, 10, 10);` since this is the region that `a` and `b` overlap.
+
+
+##### Rect.inflate & Rect.deflate
+
+```c++
+void Rect::inflate(int32_t v);
+void Rect::declate(int32_t v);
+```
+
+`inflate` will inflate a `Rect`, like a balooon, by adding the number of pixels you specify to all sides. For example:
+
+```c++
+Rect box(10, 10, 10, 10);
+box.inflate(10);
+```
+
+Would inflate our `box` to start at 0,0 and be 30x30 pixels in size.
+
+`deflate` does the opposite:
+
+```c++
+Rect box(10, 10, 10, 10);
+box.deflate(1);
+```
+
+Would deflate our `box` to start at `11,11` and be 8x8 pixels in size.
+
+Since `rectangle` *always* draws a filled rectangle, this can be useful to add an outline of your desired thickness:
+
+```c++
+WHITE = graphics.create_pen(255, 255, 255);
+Rect box(10, 10, 100, 100);
+box.inflate(1); // Inflate our box by 1px on all sides
+graphics.set_pen(WHITE); // White outline
+graphics.rectangle(box);
+box.deflate(1); // Return to our original box size
+graphics.set_pen(0, 0, 0); /// Black fill
+graphics.rectangle(box);
+```
+
+#### Point
+
+The `Point` type describes a single point - synonymous with a pixel - in terms of its x and y position.
+
+##### Point.clamp
+
+```c++
+Point Point::clamp(const Rect &r);
+```
+
+A point can be clamped within the confines of a `Rect`. This is useful for keeping - for example - a cursor within the bounds of the screen:
+
+```c++
+Point cursor(10, 1000);       // A point, far outside the bounds of our screen
+cursor.clamp(graphics.bounds);  // Clamp to the screen
+```
+
+### Pens & Clipping
+
+#### set_pen
+
+In order to draw anything with Pico Graphics you must first set the pen to your desired palette colour:
+
+```c++
+void PicoGraphics::set_pen(uint8_t p);
+```
+
+This value represents an index into the internal colour palette, which has 256 entries and defaults to RGB332 giving an approximation of all RGB888 colours.
+
+
+#### create_pen
+
+```c++
+int PicoGraphics::create_pen(uint8_t r, uint8_t g, uint8_t b);
+```
+
+By default create pen takes R, G and B values, clamps them to 3, 3 and 2 bits respectively and returns an index in the RGB332 palette.
+
+You must create pens before using them with `set_pen()` which accepts only a palette index.
+
+#### set_clip & remove_clip
+
+```c++
+void PicoGraphics::set_clip(const Rect &r);
+void Pico
