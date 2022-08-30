@@ -101,3 +101,37 @@ namespace pimoroni {
 
         // find the pattern coordinate offset
         uint pattern_index = (p.x & 0b11) | ((p.y & 0b11) << 2);
+
+        // set the pixel
+        //color = candidates[pattern[pattern_index]];
+        _set_pixel(p, candidate_cache[cache_key][dither16_pattern[pattern_index]]);
+    }
+    void PicoGraphics_Pen3Bit::frame_convert(PenType type, conversion_callback_func callback) {
+        if(type == PEN_P4) {
+            uint8_t row_buf[bounds.w / 2];
+            uint offset = (bounds.w * bounds.h) / 8;
+            uint8_t *buf = (uint8_t *)frame_buffer;
+
+            for(auto y = 0; y < bounds.h; y++) {
+                for(auto x = 0; x < bounds.w; x++) {
+                    uint bo = 7 - (x & 0b111);
+
+                    uint8_t *bufA = &buf[(x / 8) + (y * bounds.w / 8)];
+                    uint8_t *bufB = bufA + offset;
+                    uint8_t *bufC = bufA + offset + offset;
+
+                    uint8_t nibble = (*bufA >> bo) & 1U;
+                    nibble <<= 1;
+                    nibble |= (*bufB >> bo) & 1U;
+                    nibble <<= 1;
+                    nibble |= (*bufC >> bo) & 1U;
+                    nibble <<= (x & 0b1) ? 0 : 4;
+
+                    row_buf[x / 2] &= (x & 0b1) ? 0b11110000 : 0b00001111;
+                    row_buf[x / 2] |= nibble;
+                }
+                callback(row_buf, bounds.w / 2);
+            }
+        }
+    }
+}
