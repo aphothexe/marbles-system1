@@ -230,4 +230,102 @@ You must create pens before using them with `set_pen()` which accepts only a pal
 
 ```c++
 void PicoGraphics::set_clip(const Rect &r);
-void Pico
+void PicoGraphics::remove_clip();
+```
+
+`set_clip` applies a clipping rectangle to the drawing surface. Any pixels outside of this rectangle will not be drawn. By default drawing operations are clipped to `bounds` since it's impossible to draw outside of the buffer.
+
+`remove_clip` sets the surface clipping rectangle back to the surface `bounds`.
+
+### Palette
+
+If you construct an instance of PicoGraphics with `PicoGraphics_PenRGB332` all colour values (created pens) will be clamped to their `RGB332` equivalent values.
+
+This will give you an approximate colour for every RGB888 value you request, but only a fixed palette of 256 total colours is actually supported and displayed on screen.
+
+If you don't want to think about or manage a palette of custom colours, `RGB332` is the way to go.
+
+If you wish to choose your own custom palette you should use either `PicoGraphics_PenP8` or `PicoGraphics_PenP4` which support up to 256 and 16 colours respectively.
+
+Internally all colours are stored as RGB888 and converted when they are displayed on your screen.
+
+#### update_pen
+
+```c++
+int PicoGraphics::update_pen(uint8_t index, uint8_t r, uint8_t g, uint8_t b);
+```
+
+Modify a palette entry to the given RGB colour (or nearest supported equivilent.)
+
+#### reset_pen
+
+```c++
+void PicoGraphics::reset_pen(uint8_t index);
+```
+
+Return a palette entry to its default value. Usually black and marked unused.
+
+### Pixels
+
+#### pixel
+
+```c++
+void PicoGraphics::pixel(const Point &p);
+```
+
+`pixel` sets the pixel at `Point p` to the current `pen`.
+
+#### pixel_span
+
+```c++
+void PicoGraphics::pixel_span(const Point &p, int32_t l)
+```
+
+`pixel_span` draws a horizontal line of pixels of length `int32_t l` starting at `Point p`.
+
+### Primitives
+
+#### rectangle
+
+```c++
+void PicoGraphics::rectangle(const Rect &r) ;
+```
+
+`rectangle` draws a filled rectangle described by `Rect`.
+
+#### circle
+
+```c++
+PicoGraphics::circle(const Point &p, int32_t radius) 
+```
+
+`circle` draws a filled circle centered on `Point p` with radius `int32_t radius`.
+
+### Text
+
+```c++
+void PicoGraphics::text(const std::string &t, const Point &p, int32_t wrap, uint8_t scale);
+```
+
+`text` allows you to draw a string at `Point p`, with a maximum line-width of `int32_t wrap`.
+
+The 6x6 and 6x8 pixel font characters are encoded in `font6_data.hpp` and `font8_data.hpp` along with their character widths so that text can be drawn variable-width.
+
+You can scale text with `uint8_t scale` for 12x12, 18x18, etc character sizes.
+
+### Change Font
+
+```c++
+void PicoGraphics::set_font(const Font *font);
+```
+
+
+`set_font` allows you to change the font that PicoGraphics uses to draw text.
+
+If you:
+
+```c++
+#include "font8_data.hpp"
+```
+
+Then you can: `set_font(&font8);` to use a font with upper/lowercase characters.
