@@ -78,4 +78,22 @@ Alternatively you can use:
 pico_unicorn.set_pixel(x, y, v);
 ```
 
-Which sets the R, G and B elements of the pixel to the same value- li
+Which sets the R, G and B elements of the pixel to the same value- lighting it up white at your chosen intensity.
+
+#### is_pressed
+
+```c++
+bool is_pressed(uint8_t button);
+```
+
+Reads the GPIO pin connected to one of Pico Unicorn's buttons, returning a `bool` - `true` if it's pressed and `false` if it is released.
+
+```c++
+pico_unicorn.is_pressed(button);
+```
+
+The button vaule should be a `uint8_t` denoting a pin, and constants `A`, `B`, `X` and `Y` are supplied to make it easier. e:
+
+```c++
+bool is_a_button_pressed = pico_unicorn.is_pressed(PicoUnicorn::A)
+```
