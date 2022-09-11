@@ -126,4 +126,29 @@ def draw_clock():
         if cursors[cursor] == "year":
             display.line(ymd_offset, 120, ymd_offset + y_width, 120)
         if cursors[cursor] == "month":
-            display.line(ymd_offset + m_offset, 120, ymd_offset + m_offset + m_width,
+            display.line(ymd_offset + m_offset, 120, ymd_offset + m_offset + m_width, 120)
+        if cursors[cursor] == "day":
+            display.line(ymd_offset + d_offset, 120, ymd_offset + d_offset + d_width, 120)
+
+        if cursors[cursor] == "hour":
+            display.line(hms_offset, 70, hms_offset + h_width, 70)
+        if cursors[cursor] == "minute":
+            display.line(hms_offset + mi_offset, 70, hms_offset + mi_offset + mi_width, 70)
+
+    display.update()
+
+
+year, month, day, wd, hour, minute, second, _ = rtc.datetime()
+
+if (year, month, day) == (2021, 1, 1):
+    rtc.datetime((2022, 2, 28, 0, 12, 0, 0, 0))
+
+last_second = second
+
+while True:
+    if not set_clock:
+        year, month, day, wd, hour, minute, second, _ = rtc.datetime()
+        if second != last_second:
+            draw_clock()
+            last_second = second
+    time.sleep(0.01)
