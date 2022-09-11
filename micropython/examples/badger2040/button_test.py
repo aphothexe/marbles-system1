@@ -40,3 +40,29 @@ def button(pin):
         return
     if pin == button_down:
         message = "Button Down"
+        return
+    if pin == button_user:
+        message = "Button Usr"
+        return
+
+
+button_a.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+button_b.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+button_c.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+
+button_up.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+button_down.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+button_user.irq(trigger=machine.Pin.IRQ_RISING, handler=button)
+
+
+while True:
+    if message is not None:
+        display.pen(15)
+        display.clear()
+        display.pen(0)
+        display.thickness(4)
+        display.text(message, 6, message_y, 1.4)
+        for _ in range(2):
+            display.update()
+        message = None
+    time.sleep(0.1)
