@@ -123,4 +123,93 @@ class Board:
                 neighbour_column = current_column + column
                 # Don't count the current cell
                 if not (
-            
+                    neighbour_row == current_row and neighbour_column == current_column
+                ):
+                    # It's a toroidal world so go all the way round if necessary
+                    if (neighbour_row) < 0:
+                        neighbour_row = self._rows - 1
+                    elif (neighbour_row) >= self._rows:
+                        neighbour_row = 0
+
+                    if (neighbour_column) < 0:
+                        neighbour_column = self._columns - 1
+                    elif (neighbour_column) >= self._columns:
+                        neighbour_column = 0
+
+                    neighbours.append(self._grid[neighbour_row][neighbour_column])
+        return neighbours
+
+    # Calculate the next generation
+    def create_next_generation(self):
+        to_alive = []
+        to_dead = []
+        changed = False
+
+        for row in range(len(self._grid)):
+            for column in range(len(self._grid[row])):
+                # Get all the neighours that are alive
+                alive_neighbours = []
+                for neighbour_cell in self.get_neighbours(row, column):
+                    if neighbour_cell.is_alive():
+                        alive_neighbours.append(neighbour_cell)
+
+                current_cell = self._grid[row][column]
+                # Apply the Conway GoL rules (B3/S23)
+                if current_cell.is_alive():
+                    if len(alive_neighbours) < 2 or len(alive_neighbours) > 3:
+                        to_dead.append(current_cell)
+                    if len(alive_neighbours) == 3 or len(alive_neighbours) == 2:
+                        to_alive.append(current_cell)
+                else:
+                    if len(alive_neighbours) == 3:
+                        to_alive.append(current_cell)
+
+        for cell in to_alive:
+            if not cell.is_alive():
+                # The board has changed since the previous generation
+                changed = True
+            cell.make_alive()
+
+        for cell in to_dead:
+            if cell.is_alive():
+                # The board has changed since the previous generation
+                changed = True
+            cell.make_dead()
+
+        return changed
+
+
+# ------------------------------
+#       Main program loop
+# ------------------------------
+
+
+def main():
+    global restart
+
+    init_screen()
+    board = Board()
+    board.draw_board()
+    time.sleep(0.5)
+
+    while True:
+        # The 'a' button has been pressed so restart sim
+        if restart:
+            init_screen()
+            restart = False
+            board = Board()
+            board.draw_board()
+            time.sleep(0.5)
+        # The board didn't update since the previous generation
+        if not board.create_next_generation():
+            screen.update_speed(badger2040.UPDATE_NORMAL)
+            board.draw_board()
+            screen.update_speed(badger2040.UPDATE_TURBO)
+            time.sleep(5)
+            restart = True
+        # Draw the next generation
+        else:
+            board.draw_board()
+
+
+main()
