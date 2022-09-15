@@ -174,3 +174,90 @@ def render_page():
                 return
             else:
                 # Set the line to the word and advance the current position
+                line = next_word
+                pos = next_pos
+
+            # A new line was spotted, so advance a row
+            if add_newline:
+                print("")
+                row += 1
+                if (row * text_spacing) + text_spacing >= HEIGHT:
+                    print("+++++")
+                    display.update()
+                    return
+                add_newline = False
+        else:
+            # The appended line was not too long, so set it as the line and advance the current position
+            line = appended_line
+            pos = next_pos
+
+
+# ------------------------------
+#       Main program loop
+# ------------------------------
+
+launch = True
+changed = False
+
+# Open the book file
+ebook = open(text_file, "r")
+if len(state["offsets"]) > state["current_page"]:
+    ebook.seek(state["offsets"][state["current_page"]])
+else:
+    state["current_page"] = 0
+    state["offsets"] = []
+
+while True:
+    # Was the next page button pressed?
+    if display.pressed(badger2040.BUTTON_DOWN):
+        state["current_page"] += 1
+
+        changed = True
+
+    # Was the previous page button pressed?
+    if display.pressed(badger2040.BUTTON_UP):
+        if state["current_page"] > 0:
+            state["current_page"] -= 1
+            if state["current_page"] == 0:
+                ebook.seek(0)
+            else:
+                ebook.seek(state["offsets"][state["current_page"] - 1])  # Retrieve the start position of the last page
+            changed = True
+
+    if display.pressed(badger2040.BUTTON_A):
+        state["text_size"] += 0.1
+        if state["text_size"] > 0.8:
+            state["text_size"] = 0.5
+        text_spacing = int(34 * state["text_size"])
+        state["offsets"] = []
+        ebook.seek(0)
+        state["current_page"] = 0
+        changed = True
+
+    if display.pressed(badger2040.BUTTON_B):
+        state["font_idx"] += 1
+        if (state["font_idx"] >= len(FONTS)):
+            state["font_idx"] = 0
+        state["offsets"] = []
+        ebook.seek(0)
+        state["current_page"] = 0
+        changed = True
+
+    if launch and not changed:
+        if state["current_page"] > 0 and len(state["offsets"]) > state["current_page"] - 1:
+            ebook.seek(state["offsets"][state["current_page"] - 1])
+        changed = True
+        launch = False
+
+    if changed:
+        draw_frame()
+        render_page()
+
+        # Is the next page one we've not displayed before?
+        if state["current_page"] >= len(state["offsets"]):
+            state["offsets"].append(ebook.tell())  # Add its start position to the state["offsets"] list
+        badger_os.state_save("ebook", state)
+
+        changed = False
+
+    display.halt()
