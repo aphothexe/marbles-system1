@@ -72,4 +72,4 @@ while True:
 
     display.update()
 
-    t
+    time.sleep(integration_time / 1000.0)
