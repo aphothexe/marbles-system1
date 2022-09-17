@@ -118,4 +118,22 @@ while True:
                 state["current_qr"] -= 1
                 changed = True
 
-  
+        if display.pressed(badger2040w.BUTTON_DOWN):
+            if state["current_qr"] < TOTAL_CODES - 1:
+                state["current_qr"] += 1
+                changed = True
+
+    if display.pressed(badger2040w.BUTTON_B) or display.pressed(badger2040w.BUTTON_C):
+        display.set_pen(15)
+        display.clear()
+        badger_os.warning(display, "To add QR codes, connect Badger 2040 W to a PC, load up Thonny, and add files to /qrcodes directory.")
+        time.sleep(4)
+        changed = True
+
+    if changed:
+        draw_qr_file(state["current_qr"])
+        badger_os.state_save("qrcodes", state)
+        changed = False
+
+    # Halt the Badger to save power, it will wake up if any of the front buttons are pressed
+    display.halt()
