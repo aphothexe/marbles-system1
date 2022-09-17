@@ -118,3 +118,66 @@ def render():
 
 def wait_for_user_to_release_buttons():
     while display.pressed_any():
+        time.sleep(0.01)
+
+
+def launch_example(index):
+    wait_for_user_to_release_buttons()
+
+    file = examples[(state["page"] * 3) + index]
+    file = f"{APP_DIR}/{file}"
+
+    for k in locals().keys():
+        if k not in ("gc", "file", "badger_os"):
+            del locals()[k]
+
+    gc.collect()
+
+    badger_os.launch(file)
+
+
+def button(pin):
+    global changed
+    changed = True
+
+    if pin == badger2040.BUTTON_A:
+        launch_example(0)
+    if pin == badger2040.BUTTON_B:
+        launch_example(1)
+    if pin == badger2040.BUTTON_C:
+        launch_example(2)
+    if pin == badger2040.BUTTON_UP:
+        if state["page"] > 0:
+            state["page"] -= 1
+        render()
+    if pin == badger2040.BUTTON_DOWN:
+        if state["page"] < MAX_PAGE - 1:
+            state["page"] += 1
+        render()
+
+
+if exited_to_launcher or not woken_by_button:
+    wait_for_user_to_release_buttons()
+    display.set_update_speed(badger2040.UPDATE_MEDIUM)
+    render()
+
+display.set_update_speed(badger2040.UPDATE_FAST)
+
+while True:
+    if display.pressed(badger2040.BUTTON_A):
+        button(badger2040.BUTTON_A)
+    if display.pressed(badger2040.BUTTON_B):
+        button(badger2040.BUTTON_B)
+    if display.pressed(badger2040.BUTTON_C):
+        button(badger2040.BUTTON_C)
+
+    if display.pressed(badger2040.BUTTON_UP):
+        button(badger2040.BUTTON_UP)
+    if display.pressed(badger2040.BUTTON_DOWN):
+        button(badger2040.BUTTON_DOWN)
+
+    if changed:
+        badger_os.state_save("launcher", state)
+        changed = False
+
+    display.halt()
