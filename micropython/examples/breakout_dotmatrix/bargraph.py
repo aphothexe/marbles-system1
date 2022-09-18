@@ -23,4 +23,19 @@ while True:
     values = values[:width]
 
     # Animate a value from 0 to height + 1
-    value = (math.sin((time.time() - start_time) * math.pi) + 1)
+    value = (math.sin((time.time() - start_time) * math.pi) + 1) / 2.0
+    value *= height + 1
+    value = math.floor(value)
+
+    for y in range(height):
+        y = height - 1 - y
+
+        for x in range(width // 2):
+            # Left
+            display.set_pixel(x, y, value <= y)
+
+            # Right
+            display.set_pixel(x + (width // 2), y, values[x] <= y)
+
+    display.show()
+    time.sleep(1.0 / height)
