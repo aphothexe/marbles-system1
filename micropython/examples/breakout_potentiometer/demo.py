@@ -23,4 +23,28 @@ def hsv_to_rgb(h, s, v):
     t = v * (1.0 - s * (1.0 - f))
     i = i % 6
     if i == 0:
-        return v, t, 
+        return v, t, p
+    if i == 1:
+        return q, v, p
+    if i == 2:
+        return p, v, t
+    if i == 3:
+        return p, q, v
+    if i == 4:
+        return t, p, v
+    if i == 5:
+        return v, p, q
+
+
+val = 0
+
+while True:
+    val = pot.read()
+    h = val * 240.0     # Colour range from red to blue
+
+    r, g, b = [int(255 * c) for c in hsv_to_rgb(h / 360.0, 1.0, 1.0)]  # rainbow magic
+
+    print("Percent: ", int(val * 100), "%", sep="")
+    pot.set_led(r, g, b)
+
+    time.sleep(0.02)
