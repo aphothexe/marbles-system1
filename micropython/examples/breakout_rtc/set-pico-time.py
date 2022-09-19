@@ -26,4 +26,10 @@ def set_pico_time():
     # set the Pico's RTC from the RTC breakout
     RV3028.update_time()
     RTC().datetime([RV3028.get_year(), RV3028.get_month(), RV3028.get_date(),
-                    RV3028.get_weekday(), RV3028.get_hou
+                    RV3028.get_weekday(), RV3028.get_hours(), RV3028.get_minutes(),
+                    RV3028.get_seconds(), 0])
+    print(f"Pico RTC set to breakout time: {RV3028.string_date()} {RV3028.string_time()}")
+
+
+# call the function
+set_pico_time()
