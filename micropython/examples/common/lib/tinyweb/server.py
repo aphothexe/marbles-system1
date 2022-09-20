@@ -426,3 +426,238 @@ class webserver:
             # Read HTTP Request with timeout
             await asyncio.wait_for(self._handle_request(req, resp),
                                    self.request_timeout)
+
+            # OPTIONS method is handled automatically
+            if req.method == b'OPTIONS':
+                resp.add_access_control_headers()
+                # Since we support only HTTP 1.0 - it is important
+                # to tell browser that there is no payload expected
+                # otherwise some webkit based browsers (Chrome)
+                # treat this behavior as an error
+                resp.add_header('Content-Length', '0')
+                await resp._send_headers()
+                return
+
+            # Ensure that HTTP method is allowed for this path
+            if req.method not in req.params['methods']:
+                raise HTTPException(405)
+
+            # Handle URL
+            gc.collect()
+            if hasattr(req, '_param'):
+                await req.handler(req, resp, req._param)
+            else:
+                await req.handler(req, resp)
+            # Done here
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+        except OSError as e:
+            # Do not send response for connection related errors - too late :)
+            # P.S. code 32 - is possible BROKEN PIPE error (TODO: is it true?)
+            if e.args[0] not in (errno.ECONNABORTED, errno.ECONNRESET, 32):
+                try:
+                    await resp.error(500)
+                except Exception as e:
+                    log.exc(e, "")
+        except HTTPException as e:
+            try:
+                await resp.error(e.code)
+            except Exception as e:
+                log.exc(e)
+        except Exception as e:
+            # Unhandled expection in user's method
+            log.error(req.path.decode())
+            log.exc(e, "")
+            try:
+                await resp.error(500)
+                # Send exception info if desired
+                if self.debug:
+                    sys.print_exception(e, resp.writer.s)
+            except Exception:
+                pass
+        finally:
+            await writer.aclose()
+            # Max concurrency support -
+            # if queue is full schedule resume of TCP server task
+            if len(self.conns) == self.max_concurrency:
+                self.loop.create_task(self._server_coro)
+            # Delete connection, using socket as a key
+            del self.conns[id(writer.s)]
+
+    def add_route(self, url, f, **kwargs):
+        """Add URL to function mapping.
+        Arguments:
+            url - url to map function with
+            f - function to map
+        Keyword arguments:
+            methods - list of allowed methods. Defaults to ['GET', 'POST']
+            save_headers - contains list of HTTP headers to be saved. Case sensitive. Default - empty.
+            max_body_size - Max HTTP body size (e.g. POST form data). Defaults to 1024
+            allowed_access_control_headers - Default value for the same name header. Defaults to *
+            allowed_access_control_origins - Default value for the same name header. Defaults to *
+        """
+        if url == '' or '?' in url:
+            raise ValueError('Invalid URL')
+        # Initial params for route
+        params = {'methods': ['GET'],
+                  'save_headers': [],
+                  'max_body_size': 1024,
+                  'allowed_access_control_headers': '*',
+                  'allowed_access_control_origins': '*',
+                  }
+        params.update(kwargs)
+        params['allowed_access_control_methods'] = ', '.join(params['methods'])
+        # Convert methods/headers to bytestring
+        params['methods'] = [x.encode() for x in params['methods']]
+        params['save_headers'] = [x.encode() for x in params['save_headers']]
+        # If URL has a parameter
+        if url.endswith('>'):
+            idx = url.rfind('<')
+            path = url[:idx]
+            idx += 1
+            param = url[idx:-1]
+            if path.encode() in self.parameterized_url_map:
+                raise ValueError('URL exists')
+            params['_param_name'] = param
+            self.parameterized_url_map[path.encode()] = (f, params)
+
+        if url.encode() in self.explicit_url_map:
+            raise ValueError('URL exists')
+        self.explicit_url_map[url.encode()] = (f, params)
+
+    def add_resource(self, cls, url, **kwargs):
+        """Map resource (RestAPI) to URL
+        Arguments:
+            cls - Resource class to map to
+            url - url to map to class
+            kwargs - User defined key args to pass to the handler.
+        Example:
+            class myres():
+                def get(self, data):
+                    return {'hello': 'world'}
+            app.add_resource(myres, '/api/myres')
+        """
+        methods = []
+        callmap = {}
+        # Create instance of resource handler, if passed as just class (not instance)
+        try:
+            obj = cls()
+        except TypeError:
+            obj = cls
+        # Get all implemented HTTP methods and make callmap
+        for m in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']:
+            fn = m.lower()
+            if hasattr(obj, fn):
+                methods.append(m)
+                callmap[m.encode()] = (getattr(obj, fn), kwargs)
+        self.add_route(url, restful_resource_handler,
+                       methods=methods,
+                       save_headers=['Content-Length', 'Content-Type'],
+                       _callmap=callmap)
+
+    def catchall(self):
+        """Decorator for catchall()
+        Example:
+            @app.catchall()
+            def catchall_handler(req, resp):
+                response.code = 404
+                await response.start_html()
+                await response.send('<html><body><h1>My custom 404!</h1></html>\n')
+        """
+        params = {'methods': [b'GET'], 'save_headers': [], 'max_body_size': 1024, 'allowed_access_control_headers': '*', 'allowed_access_control_origins': '*'}
+
+        def _route(f):
+            self.catch_all_handler = (f, params)
+            return f
+        return _route
+
+    def route(self, url, **kwargs):
+        """Decorator for add_route()
+        Example:
+            @app.route('/')
+            def index(req, resp):
+                await resp.start_html()
+                await resp.send('<html><body><h1>Hello, world!</h1></html>\n')
+        """
+        def _route(f):
+            self.add_route(url, f, **kwargs)
+            return f
+        return _route
+
+    def resource(self, url, method='GET', **kwargs):
+        """Decorator for add_resource() method
+        Examples:
+            @app.resource('/users')
+            def users(data):
+                return {'a': 1}
+            @app.resource('/messages/<topic_id>')
+            async def index(data, topic_id):
+                yield '{'
+                yield '"topic_id": "{}",'.format(topic_id)
+                yield '"message": "test",'
+                yield '}'
+        """
+        def _resource(f):
+            self.add_route(url, restful_resource_handler,
+                           methods=[method],
+                           save_headers=['Content-Length', 'Content-Type'],
+                           _callmap={method.encode(): (f, kwargs)})
+            return f
+        return _resource
+
+    async def _tcp_server(self, host, port, backlog):
+        """TCP Server implementation.
+        Opens socket for accepting connection and
+        creates task for every new accepted connection
+        """
+        addr = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0][-1]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(False)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(addr)
+        sock.listen(backlog)
+        try:
+            while True:
+                if IS_UASYNCIO_V3:
+                    yield uasyncio.core._io_queue.queue_read(sock)
+                else:
+                    yield asyncio.IORead(sock)
+                csock, caddr = sock.accept()
+                csock.setblocking(False)
+                # Start handler / keep it in the map - to be able to
+                # shutdown gracefully - by close all connections
+                self.processed_connections += 1
+                hid = id(csock)
+                handler = self._handler(asyncio.StreamReader(csock),
+                                        asyncio.StreamWriter(csock, {}))
+                self.conns[hid] = handler
+                self.loop.create_task(handler)
+                # In case of max concurrency reached - temporary pause server:
+                # 1. backlog must be greater than max_concurrency, otherwise
+                #    client will got "Connection Reset"
+                # 2. Server task will be resumed whenever one active connection finished
+                if len(self.conns) == self.max_concurrency:
+                    # Pause
+                    yield False
+        except asyncio.CancelledError:
+            return
+        finally:
+            sock.close()
+
+    def run(self, host="127.0.0.1", port=8081, loop_forever=True):
+        """Run Web Server. By default it runs forever.
+        Keyword arguments:
+            host - host to listen on. By default - localhost (127.0.0.1)
+            port - port to listen on. By default - 8081
+            loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
+        """
+        self._server_coro = self._tcp_server(host, port, self.backlog)
+        self.loop.create_task(self._server_coro)
+        if loop_forever:
+            self.loop.run_forever()
+
+    def shutdown(self):
+        """Gracefully shutdown Web Server"""
+        asyncio.cancel(self._server_coro)
+        for hid, coro in self.conns.items():
+            asyncio.cancel(coro)
