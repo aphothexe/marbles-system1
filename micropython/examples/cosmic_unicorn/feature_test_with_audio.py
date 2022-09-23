@@ -187,4 +187,144 @@ while True:
             channels[1].volume(12000 / 65535)
             channels[2].volume(18000 / 65535)
             channels[3].volume(8000 / 65535)
-            channels[4].volume(12000 
+            channels[4].volume(12000 / 65535)
+            channels[5].volume(0)
+
+            # If the synth is not already playing, init the first beat
+            if not synthing:
+                beat = 0
+                next_beat()
+
+            cu.play_synth()
+            synthing = True
+            timer.init(freq=10, mode=Timer.PERIODIC, callback=tick)
+
+        was_a_pressed = True
+    else:
+        was_a_pressed = False
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_B):
+        if not was_b_pressed:
+            channels[0].volume(0)
+            channels[1].volume(12000 / 65535)
+            channels[2].volume(0)
+            channels[3].volume(0)
+            channels[4].volume(0)
+            channels[5].volume(0)
+
+            # If the synth is not already playing, init the first beat
+            if not synthing:
+                beat = 0
+                next_beat()
+
+            cu.play_synth()
+            synthing = True
+            timer.init(freq=10, mode=Timer.PERIODIC, callback=tick)
+
+        was_b_pressed = True
+    else:
+        was_b_pressed = False
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_C):
+        if not was_c_pressed:
+            # Stop synth (if running) and play Tone A
+            timer.deinit()
+            tone_a = 400
+            channels[5].play_tone(tone_a, 0.06)
+            channels[5].volume(12000 / 65535)
+
+            cu.play_synth()
+            synthing = False
+
+        was_c_pressed = True
+    else:
+        was_c_pressed = False
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_D):
+        if not was_d_pressed:
+            # Stop synth (if running) and play Tone B
+            timer.deinit()
+            tone_b = 600
+
+            channels[5].play_tone(tone_b, 0.06, attack=0.5)
+            channels[5].volume(12000 / 65535)
+
+            cu.play_synth()
+            synthing = False
+
+        was_d_pressed = True
+    else:
+        was_d_pressed = False
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_UP):
+        if tone_b > 0:  # Zero means tone not playing
+            # Increase Tone B
+            tone_b = min(tone_b + 10, 20000)
+            channels[5].frequency(tone_b)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        if tone_b > 0:  # Zero means tone not playing
+            # Decrease Tone B
+            tone_b = max(tone_b - 10, 10)
+            channels[5].frequency(max(tone_b, 10))
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_UP):
+        if tone_a > 0:  # Zero means tone not playing
+            # Increase Tone A
+            tone_a = min(tone_a + 10, 20000)
+            channels[5].frequency(tone_a)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_DOWN):
+        if tone_a > 0:  # Zero means tone not playing
+            # Decrease Tone A
+            tone_a = max(tone_a - 10, 10)
+            channels[5].frequency(tone_a)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_SLEEP):
+        if not was_z_pressed:
+            # Stop synth and both tones
+            tone_a = 0
+            tone_b = 0
+            cu.stop_playing()
+            timer.deinit()
+            synthing = False
+
+        was_z_pressed = True
+    else:
+        was_z_pressed = False
+
+    graphics.set_pen(graphics.create_pen(0, 0, 0))
+    graphics.clear()
+
+    if test == 0:
+        # print("grid pattern")
+        grid(255, 255, 255)
+    elif test == 1:
+        # print("red gradient")
+        gradient(255, 0, 0)
+    elif test == 2:
+        # print("green gradient")
+        gradient(0, 255, 0)
+    elif test == 3:
+        # print("blue gradient")
+        gradient(0, 0, 255)
+    elif test == 4:
+        # print("white gradient")
+        gradient(255, 255, 255)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_A):
+        text = "PlaySyn"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_B):
+        text = "SoloSyn"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_C):
+        text = "Tone A"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_D):
+        text = "Tone B"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_UP):
+        text = "RaiseA"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_D
