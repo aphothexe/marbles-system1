@@ -327,4 +327,21 @@ while True:
     if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_UP):
         text = "RaiseA"
 
-    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_D
+    if cu.is_pressed(CosmicUnicorn.SWITCH_VOLUME_DOWN):
+        text = "LowerA"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_UP):
+        text = "RaiseB"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        text = "LowerB"
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_SLEEP):
+        text = "Stop"
+
+    outline_text(text)
+
+    cu.update(graphics)
+
+    # pause for a moment (important or the USB serial device will fail
+    time.sleep(0.001)
