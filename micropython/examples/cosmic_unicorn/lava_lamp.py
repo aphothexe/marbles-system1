@@ -66,3 +66,86 @@ def update_liquid():
     for y in range(height):
         for x in range(width):
             liquid[x][y] = 0.0
+
+    for blob in blobs:
+        r_sq = blob.r * blob.r
+        blob_y_range = range(max(math.floor(blob.y - blob.r), 0),
+                             min(math.ceil(blob.y + blob.r), height))
+        blob_x_range = range(max(math.floor(blob.x - blob.r), 0),
+                             min(math.ceil(blob.x + blob.r), width))
+
+        for y in blob_y_range:
+            for x in blob_x_range:
+                x_diff = x - blob.x
+                y_diff = y - blob.y
+                d_sq = x_diff * x_diff + y_diff * y_diff
+                if d_sq <= r_sq:
+                    liquid[x][y] += 1.0 - (d_sq / r_sq)
+
+
+@micropython.native  # noqa: F821
+def move_blobs():
+    for blob in blobs:
+        blob.x += blob.dx
+        blob.y += blob.dy
+
+        if blob.x < 0.0 or blob.x >= float(width):
+            blob.dx = 0.0 - blob.dx
+
+        if blob.y < 0.0 or blob.y >= float(height):
+            blob.dy = 0.0 - blob.dy
+
+
+@micropython.native  # noqa: F821
+def draw_portrait():
+    global hue
+    hue += 0.001
+
+    dark = from_hsv(hue, 1.0, 0.3)
+    mid = from_hsv(hue, 1.0, 0.6)
+    bright = from_hsv(hue, 1.0, 1.0)
+
+    for y in range(height):
+        for x in range(width):
+            v = liquid[x][y]
+
+            # select a colour for this pixel based on how much
+            # "blobfluence" there is at this position in the liquid
+            if v >= 1.5:
+                graphics.set_pen(bright)
+            elif v >= 1.25:
+                graphics.set_pen(mid)
+            elif v >= 1.0:
+                graphics.set_pen(dark)
+            else:
+                graphics.set_pen(0)
+            graphics.pixel(y, x)
+
+    cu.update(graphics)
+
+
+setup_portrait()
+
+cu.set_brightness(0.5)
+
+while True:
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_UP):
+        cu.adjust_brightness(+0.01)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        cu.adjust_brightness(-0.01)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_A):
+        setup_portrait()
+
+    start = time.ticks_ms()
+
+    update_liquid()
+    move_blobs()
+    draw_portrait()
+
+    # pause for a moment (important or the USB serial device will fail)
+    time.sleep(0.001)
+
+    print("total took: {} ms".format(time.ticks_ms() - start))
