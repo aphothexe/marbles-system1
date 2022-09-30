@@ -104,4 +104,12 @@ while True:
         stripe_width += 0.05
         stripe_width = 10.0 if stripe_width > 10.0 else stripe_width
 
-    if cu.is_pressed(CosmicUnic
+    if cu.is_pressed(CosmicUnicorn.SWITCH_D):
+        stripe_width -= 0.05
+        stripe_width = 1.0 if stripe_width < 1.0 else stripe_width
+
+    start = time.ticks_ms()
+
+    draw()
+
+    print("total took: {} ms".format(time.ticks_ms() - start))
