@@ -43,4 +43,55 @@ def update():
     d = numpy.roll(trippy, 1, axis=1)
     e = numpy.roll(trippy, -1, axis=1)
 
-    # Average over 5 adjacent pixels and
+    # Average over 5 adjacent pixels and apply damping
+    trippy[:] += a + b + d + e
+    trippy[:] /= 5.0
+
+
+def draw():
+    # Copy the effect to the framebuffer
+    memoryview(graphics)[:] = numpy.ndarray(numpy.clip(trippy, 0, 1) * (PALETTE_ENTRIES - 1), dtype=numpy.uint8).tobytes()
+    cu.update(graphics)
+
+
+width = CosmicUnicorn.WIDTH
+height = CosmicUnicorn.HEIGHT
+trippy = numpy.zeros((height, width))
+
+t_count = 0
+t_total = 0
+
+
+while True:
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_UP):
+        cu.adjust_brightness(+0.01)
+
+    if cu.is_pressed(CosmicUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        cu.adjust_brightness(-0.01)
+
+    tstart = time.ticks_ms()
+    gc.collect()
+    update()
+    draw()
+    tfinish = time.ticks_ms()
+
+    total = tfinish - tstart
+    t_total += total
+    t_count += 1
+
+    if t_count == 60:
+        per_frame_avg = t_total / t_count
+        print(f"60 frames in {t_total}ms, avg {per_frame_avg:.02f}ms per frame, {1000/per_frame_avg:.02f} FPS")
+        t_count = 0
+        t_total = 0
+
+    # pause for a moment (important or the USB serial device will fail)
+    # try to pace at 60fps or 30fps
+    if total > 1000 / 30:
+        time.sleep(0.0001)
+    elif total > 1000 / 60:
+        t = 1000 / 30 - total
+        time.sleep(t / 1000)
+    else:
+        t = 1000 / 60 - total
+        time.sleep(t / 1000)
