@@ -1,9 +1,11 @@
+
 import gc
+import time
 from encoder import Encoder
 # from encoder import REVERSED_DIR
 
 """
-An example of how to read a mechanical rotary encoder, only when a change has occurred.
+An example of how to read a mechanical rotary encoder.
 """
 
 # Free up hardware resources ahead of creating a new Encoder
@@ -19,15 +21,13 @@ enc = Encoder(0, 0, (PIN_A, PIN_B), PIN_C)
 # enc.direction(REVERSED_DIR)
 
 
-# Print out the initial count, step, and turn (they should all be zero)
-print("Count =", enc.count(), end=", ")
-print("Step =", enc.step(), end=", ")
-print("Turn =", enc.turn())
-
 # Loop forever
 while True:
-    if enc.delta() != 0:
-        # Print out the new count, step, and turn
-        print("Count =", enc.count(), end=", ")
-        print("Step =", enc.step(), end=", ")
-        print("Turn =", enc.turn())
+
+    # Print out the count, delta, step, and turn
+    print("Count =", enc.count(), end=", ")
+    print("Delta =", enc.delta(), end=", ")
+    print("Step =", enc.step(), end=", ")
+    print("Turn =", enc.turn())
+
+    time.sleep(0.1)

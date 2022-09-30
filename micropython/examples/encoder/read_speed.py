@@ -1,9 +1,11 @@
+
 import gc
+import time
 from encoder import Encoder
 # from encoder import REVERSED_DIR
 
 """
-An example of how to read a mechanical rotary encoder, only when a change has occurred.
+An example of how to read the speed a mechanical rotary encoder is being turned at.
 """
 
 # Free up hardware resources ahead of creating a new Encoder
@@ -19,15 +21,13 @@ enc = Encoder(0, 0, (PIN_A, PIN_B), PIN_C)
 # enc.direction(REVERSED_DIR)
 
 
-# Print out the initial count, step, and turn (they should all be zero)
-print("Count =", enc.count(), end=", ")
-print("Step =", enc.step(), end=", ")
-print("Turn =", enc.turn())
-
 # Loop forever
 while True:
-    if enc.delta() != 0:
-        # Print out the new count, step, and turn
-        print("Count =", enc.count(), end=", ")
-        print("Step =", enc.step(), end=", ")
-        print("Turn =", enc.turn())
+    capture = enc.capture()
+
+    print("Count =", capture.count, end=", ")
+    print("Angle =", capture.degrees, end=", ")
+    print("Freq =", capture.frequency, end=", ")
+    print("Speed =", capture.degrees_per_second)
+
+    time.sleep(0.1)
