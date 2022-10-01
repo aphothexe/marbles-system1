@@ -150,4 +150,4 @@ Here are some cool Galactic Unicorn community projects and resources that you mi
 - :link: [Galactic Unicorn Graphical Workout](https://www.instructables.com/Galactic-Unicorn-Graphical-Workout/)
 - :link: [Galactic Unicorn Bounce - Simple GFX Demo](https://www.instructables.com/Galactic-Unicorn-Bounce-Simple-GFX-Demo/)
 - :link: [Cheerlights + Galactic Unicorn + MicroPython (beginner-friendly tutorial)](https://cheerlights.com/cheerlights-raspberry-pi-pico-w-micropython/)
-- :link: [CheerClock (plus laser-cut templates for a 
+- :link: [CheerClock (plus laser-cut templates for a fancy case/diffuser)](https://github.com/seanosteen/CheerClock)
