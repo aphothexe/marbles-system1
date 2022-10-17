@@ -53,4 +53,27 @@ def update():
                 age[x][y] = 0.0
                 lifetime[x][y] = 1.0 + random.uniform(0.0, 0.1)
 
-        
+            age[x][y] += 0.025
+
+
+setup()
+
+gu.set_brightness(0.5)
+
+while True:
+
+    if gu.is_pressed(GalacticUnicorn.SWITCH_BRIGHTNESS_UP):
+        gu.adjust_brightness(+0.01)
+
+    if gu.is_pressed(GalacticUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        gu.adjust_brightness(-0.01)
+
+    start = time.ticks_ms()
+
+    draw()
+    update()
+
+    # pause for a moment (important or the USB serial device will fail)
+    time.sleep(0.001)
+
+    print("total took: {} ms".format(time.ticks_ms() - start))
