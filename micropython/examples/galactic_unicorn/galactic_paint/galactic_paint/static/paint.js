@@ -135,4 +135,80 @@ $(document).ready(function(){
   }
 
   function lighten(obj){
-    var c = tinycol
+    var c = tinycolor($(obj).css('background-color'));
+    c.lighten(5);
+    update_pixel(obj, c);
+  }
+
+  function darken(obj){
+    var c = tinycolor($(obj).css('background-color'));
+    c.darken(5);
+    update_pixel(obj, c);
+  }
+
+  function pick(obj){
+    color = tinycolor($(obj).css('background-color'));
+    picker.val(color.toHexString());
+  }
+
+  function update_pixel(obj, col){
+    var bgcol = tinycolor($(obj).css('background-color'));
+
+    if(col != bgcol){
+      $(obj)
+        .data('changed', true)
+        .css('background-color', col.toRgbString());
+    }
+  }
+
+  function update_pixels(){
+    var changed = false;
+    
+    $('td').each(function( index, obj ){
+      if($(obj).data('changed')){
+        $(obj).data('changed',false);
+        changed = true;
+
+        var x = $(this).index();
+        var y = $(this).parent().index();
+        var col = tinycolor($(obj).css('background-color')).toRgb();
+
+        if(socket) {
+          socket.send(new Uint8Array([x, y, col.r, col.g, col.b]));
+        }
+      }
+    });
+    if(changed){
+      socket.send('show');
+    }
+  }
+
+  function paint(obj){
+    update_pixel(obj, color);
+  }
+
+  $('table td').on('click', function(){
+    handle_tool(this, true);
+  });
+  $('table td').on('mousemove', function(){
+    if(!md) return false;
+    handle_tool(this, false);
+  })
+
+  const socket = new WebSocket('ws://' + window.location.host + '/paint');
+  socket.addEventListener('message', ev => {
+    console.log('<<< ' + ev.data);
+
+    if(ev.data.substring(0, 6) == "alert:") {
+      alert(ev.data.substring(6));
+    }
+  });
+  socket.addEventListener('close', ev => {
+    console.log('<<< closed');
+  });
+
+  socket.addEventListener('open', ev => {
+    clear();
+    update = setInterval(update_pixels, 50);
+  });
+});
