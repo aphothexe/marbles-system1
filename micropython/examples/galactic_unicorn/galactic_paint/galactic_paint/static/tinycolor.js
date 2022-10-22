@@ -632,3 +632,123 @@
         return tinycolor(hsl);
     }
     
+    function triad(color) {
+        var hsl = tinycolor(color).toHsl();
+        var h = hsl.h;
+        return [
+            tinycolor(color),
+            tinycolor({ h: (h + 120) % 360, s: hsl.s, l: hsl.l }),
+            tinycolor({ h: (h + 240) % 360, s: hsl.s, l: hsl.l })
+        ];
+    }
+    
+    function tetrad(color) {
+        var hsl = tinycolor(color).toHsl();
+        var h = hsl.h;
+        return [
+            tinycolor(color),
+            tinycolor({ h: (h + 90) % 360, s: hsl.s, l: hsl.l }),
+            tinycolor({ h: (h + 180) % 360, s: hsl.s, l: hsl.l }),
+            tinycolor({ h: (h + 270) % 360, s: hsl.s, l: hsl.l })
+        ];
+    }
+    
+    function splitcomplement(color) {
+        var hsl = tinycolor(color).toHsl();
+        var h = hsl.h;
+        return [
+            tinycolor(color),
+            tinycolor({ h: (h + 72) % 360, s: hsl.s, l: hsl.l}),
+            tinycolor({ h: (h + 216) % 360, s: hsl.s, l: hsl.l})
+        ];
+    }
+    
+    function analogous(color, results, slices) {
+        results = results || 6;
+        slices = slices || 30;
+    
+        var hsl = tinycolor(color).toHsl();
+        var part = 360 / slices;
+        var ret = [tinycolor(color)];
+    
+        for (hsl.h = ((hsl.h - (part * results >> 1)) + 720) % 360; --results; ) {
+            hsl.h = (hsl.h + part) % 360;
+            ret.push(tinycolor(hsl));
+        }
+        return ret;
+    }
+    
+    function monochromatic(color, results) {
+        results = results || 6;
+        var hsv = tinycolor(color).toHsv();
+        var h = hsv.h, s = hsv.s, v = hsv.v;
+        var ret = [];
+        var modification = 1 / results;
+    
+        while (results--) {
+            ret.push(tinycolor({ h: h, s: s, v: v}));
+            v = (v + modification) % 1;
+        }
+    
+        return ret;
+    }
+    
+    // Utility Functions
+    // ---------------------
+    
+    tinycolor.mix = function(color1, color2, amount) {
+        amount = (amount === 0) ? 0 : (amount || 50);
+    
+        var rgb1 = tinycolor(color1).toRgb();
+        var rgb2 = tinycolor(color2).toRgb();
+    
+        var p = amount / 100;
+    
+        var rgba = {
+            r: ((rgb2.r - rgb1.r) * p) + rgb1.r,
+            g: ((rgb2.g - rgb1.g) * p) + rgb1.g,
+            b: ((rgb2.b - rgb1.b) * p) + rgb1.b,
+            a: ((rgb2.a - rgb1.a) * p) + rgb1.a
+        };
+    
+        return tinycolor(rgba);
+    };
+    
+    
+    // Readability Functions
+    // ---------------------
+    // <http://www.w3.org/TR/2008/REC-WCAG20-20081211/#contrast-ratiodef (WCAG Version 2)
+    
+    // `contrast`
+    // Analyze the 2 colors and returns the color contrast defined by (WCAG Version 2)
+    tinycolor.readability = function(color1, color2) {
+        var c1 = tinycolor(color1);
+        var c2 = tinycolor(color2);
+        return (Math.max(c1.getLuminance(),c2.getLuminance())+0.05) / (Math.min(c1.getLuminance(),c2.getLuminance())+0.05);
+    };
+    
+    // `isReadable`
+    // Ensure that foreground and background color combinations meet WCAG2 guidelines.
+    // The third argument is an optional Object.
+    //      the 'level' property states 'AA' or 'AAA' - if missing or invalid, it defaults to 'AA';
+    //      the 'size' property states 'large' or 'small' - if missing or invalid, it defaults to 'small'.
+    // If the entire object is absent, isReadable defaults to {level:"AA",size:"small"}.
+    
+    // *Example*
+    //    tinycolor.isReadable("#000", "#111") => false
+    //    tinycolor.isReadable("#000", "#111",{level:"AA",size:"large"}) => false
+    tinycolor.isReadable = function(color1, color2, wcag2) {
+        var readability = tinycolor.readability(color1, color2);
+        var wcag2Parms, out;
+    
+        out = false;
+    
+        wcag2Parms = validateWCAG2Parms(wcag2);
+        switch (wcag2Parms.level + wcag2Parms.size) {
+            case "AAsmall":
+            case "AAAlarge":
+                out = readability >= 4.5;
+                break;
+            case "AAlarge":
+                out = readability >= 3;
+  
