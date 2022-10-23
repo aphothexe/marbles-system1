@@ -1105,4 +1105,89 @@
         // Just return an object and let the conversion functions handle that.
         // This way the result will be the same whether the tinycolor is initialized with string or object.
         var match;
-        if ((match = matchers.rgb.exec(col
+        if ((match = matchers.rgb.exec(color))) {
+            return { r: match[1], g: match[2], b: match[3] };
+        }
+        if ((match = matchers.rgba.exec(color))) {
+            return { r: match[1], g: match[2], b: match[3], a: match[4] };
+        }
+        if ((match = matchers.hsl.exec(color))) {
+            return { h: match[1], s: match[2], l: match[3] };
+        }
+        if ((match = matchers.hsla.exec(color))) {
+            return { h: match[1], s: match[2], l: match[3], a: match[4] };
+        }
+        if ((match = matchers.hsv.exec(color))) {
+            return { h: match[1], s: match[2], v: match[3] };
+        }
+        if ((match = matchers.hsva.exec(color))) {
+            return { h: match[1], s: match[2], v: match[3], a: match[4] };
+        }
+        if ((match = matchers.hex8.exec(color))) {
+            return {
+                r: parseIntFromHex(match[1]),
+                g: parseIntFromHex(match[2]),
+                b: parseIntFromHex(match[3]),
+                a: convertHexToDecimal(match[4]),
+                format: named ? "name" : "hex8"
+            };
+        }
+        if ((match = matchers.hex6.exec(color))) {
+            return {
+                r: parseIntFromHex(match[1]),
+                g: parseIntFromHex(match[2]),
+                b: parseIntFromHex(match[3]),
+                format: named ? "name" : "hex"
+            };
+        }
+        if ((match = matchers.hex4.exec(color))) {
+            return {
+                r: parseIntFromHex(match[1] + '' + match[1]),
+                g: parseIntFromHex(match[2] + '' + match[2]),
+                b: parseIntFromHex(match[3] + '' + match[3]),
+                a: convertHexToDecimal(match[4] + '' + match[4]),
+                format: named ? "name" : "hex8"
+            };
+        }
+        if ((match = matchers.hex3.exec(color))) {
+            return {
+                r: parseIntFromHex(match[1] + '' + match[1]),
+                g: parseIntFromHex(match[2] + '' + match[2]),
+                b: parseIntFromHex(match[3] + '' + match[3]),
+                format: named ? "name" : "hex"
+            };
+        }
+    
+        return false;
+    }
+    
+    function validateWCAG2Parms(parms) {
+        // return valid WCAG2 parms for isReadable.
+        // If input parms are invalid, return {"level":"AA", "size":"small"}
+        var level, size;
+        parms = parms || {"level":"AA", "size":"small"};
+        level = (parms.level || "AA").toUpperCase();
+        size = (parms.size || "small").toLowerCase();
+        if (level !== "AA" && level !== "AAA") {
+            level = "AA";
+        }
+        if (size !== "small" && size !== "large") {
+            size = "small";
+        }
+        return {"level":level, "size":size};
+    }
+    
+    // Node: Export function
+    if (typeof module !== "undefined" && module.exports) {
+        module.exports = tinycolor;
+    }
+    // AMD/requirejs: Define the module
+    else if (typeof define === 'function' && define.amd) {
+        define(function () {return tinycolor;});
+    }
+    // Browser: Expose to window
+    else {
+        window.tinycolor = tinycolor;
+    }
+    
+    })(Math);
