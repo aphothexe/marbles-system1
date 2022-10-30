@@ -98,4 +98,52 @@ width = GalacticUnicorn.WIDTH
 height = GalacticUnicorn.HEIGHT
 life = numpy.zeros((height, width), dtype=numpy.bool)
 next_generation = numpy.zeros((height, width), dtype=numpy.bool)
-neighbours
+neighbours = numpy.zeros((height, width), dtype=numpy.uint8)
+duration = numpy.zeros((height, width))
+last_gen = time.ticks_ms()
+
+t_count = 0
+t_total = 0
+
+seed_life()
+
+
+while True:
+    if gu.is_pressed(GalacticUnicorn.SWITCH_BRIGHTNESS_UP):
+        gu.adjust_brightness(+0.01)
+
+    if gu.is_pressed(GalacticUnicorn.SWITCH_BRIGHTNESS_DOWN):
+        gu.adjust_brightness(-0.01)
+
+    if gu.is_pressed(GalacticUnicorn.SWITCH_A):
+        life[:] = int(False)
+
+    if gu.is_pressed(GalacticUnicorn.SWITCH_B):
+        SMOOTHED = not SMOOTHED
+
+    tstart = time.ticks_ms()
+    gc.collect()
+    update()
+    draw()
+    tfinish = time.ticks_ms()
+
+    total = tfinish - tstart
+    t_total += total
+    t_count += 1
+
+    if t_count == 60:
+        per_frame_avg = t_total / t_count
+        print(f"60 frames in {t_total}ms, avg {per_frame_avg:.02f}ms per frame, {1000/per_frame_avg:.02f} FPS")
+        t_count = 0
+        t_total = 0
+
+    # pause for a moment (important or the USB serial device will fail)
+    # try to pace at 60fps or 30fps
+    if total > 1000 / 30:
+        time.sleep(0.0001)
+    elif total > 1000 / 60:
+        t = 1000 / 30 - total
+        time.sleep(t / 1000)
+    else:
+        t = 1000 / 60 - total
+        time.sleep(t / 1000)
