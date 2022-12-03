@@ -96,4 +96,29 @@ while True:
         r, g, b = [int(255 * c) for c in hsv_to_rgb(hue / 360, 1.0, BRIGHTNESS)]
         gp.set_backlight(r, g, b, 0)
 
-        # keep track of readings in a list (so we can draw th
+        # keep track of readings in a list (so we can draw the graph)
+        readings.append(co2)
+        # we only need to save a screen's worth of readings, so delete the oldest
+        if len(readings) > WIDTH:
+            readings.pop(0)
+
+        # draw the graph
+        clear()
+        for r in range(len(readings)):
+            # this line scales the y axis of the graph into the available space
+            y = round(GRAPH_BOTTOM + ((readings[r] - MIN) * (GRAPH_TOP - GRAPH_BOTTOM) / (MAX - MIN)))
+            display.pixel(r, y)
+
+        # draw the text
+        display.text("CO2", 0, 0, scale=2)
+        display.text(f"Temp {temperature:.0f}°c", 0, 16, scale=1)
+        display.text(f"Low {lowest:.0f}ppm", 0, HEIGHT - 8, scale=1)
+        # measure the rest of the text before drawing so that we can right align it
+        text_width = display.measure_text(f"{co2:.0f}ppm", scale=2)
+        display.text(f"{co2:.0f}ppm", WIDTH - text_width, 0, scale=2)
+        text_width = display.measure_text(f"Humidity {humidity:.0f}%", scale=1)
+        display.text(f"Humidity {humidity:.0f}%", WIDTH - text_width, 16, scale=1)
+        text_width = display.measure_text(f"High {highest:.0f}ppm", scale=1)
+        display.text(f"High {highest:.0f}ppm", WIDTH - text_width, HEIGHT - 8, scale=1)
+
+        display.update()
