@@ -44,4 +44,56 @@ Generate a random activity from Bored API.
 ### Image Gallery
 [/image_gallery](../inky_frame/image_gallery)
 
-This
+This photo frame example displays local images on Inky Frame and lets you switch between them with the buttons. Use `image_gallery.py` if your images are stored on your Pico, or `image_gallery_sd.py` if the images are on your SD card.
+
+### LED PWM
+[led_pwm.py](led_pwm.py)
+
+A basic example showing how you can control the brightness of Inky Frame's LEDs using PWM.
+
+### News
+[inky_frame_news.py](inky_frame_news.py)
+
+Display headlines from BBC News.
+
+### PlaceKitten
+[inky_frame_placekitten.py](inky_frame_placekitten.py)
+
+Download a random (from a small subset) image from PlaceKitten.
+
+### Quote of the Day
+[inky_frame_quote_of_the_day.py](inky_frame_quote_of_the_day.py)
+
+Load the WikiQuotes Quote of the Day and display it.
+
+### Random Joke
+[inky_frame_random_joke.py](inky_frame_random_joke.py)
+
+Load a random joke from JokeAPI.dev and display it.
+
+Jokes are rendered into images "offline" by our feed2image service for two reasons:
+
+1. Saves the Pico W having to process them
+2. JokeAPI.dev needs TLS1.3 which Pico W does not support!
+
+For bugs/contributions or to complain about a joke, see: https://github.com/pimoroni/feed2image
+
+### SD Card Test
+[sd_test.py](sd_test.py)
+
+This simple example shows how to read and write from the SD card on Inky Frame.
+
+### XKCD Daily
+[inky_frame_xkcd_daily.py](inky_frame_xkcd_daily.py)
+
+Download and display the daily webcomic from https://xkcd.com/
+
+The webcomic is rendered "offline" by our feed2image service since xkcd.com requires TLS1.3!
+
+For bugs/contributions see: https://github.com/pimoroni/feed2image
+
+### Dithering
+[inky_frame_dithering.py](inky_frame_dithering.py)
+
+A basic example showing automatic dithering in action, as PicoGraphics tries to use Inky Frame's limited colour palette to match arbitrary colours.
+
