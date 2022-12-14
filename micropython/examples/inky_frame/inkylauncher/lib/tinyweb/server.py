@@ -151,4 +151,112 @@ class request:
 class response:
     """HTTP Response class"""
 
-    def __init__(self, 
+    def __init__(self, _writer):
+        self.writer = _writer
+        self.send = _writer.awrite
+        self.code = 200
+        self.version = '1.0'
+        self.headers = {}
+
+    async def _send_headers(self):
+        """Compose and send:
+        - HTTP request line
+        - HTTP headers following by \r\n.
+        This function is generator.
+        P.S.
+        Because of usually we have only a few HTTP headers (2-5) it doesn't make sense
+        to send them separately - sometimes it could increase latency.
+        So combining headers together and send them as single "packet".
+        """
+        # Request line
+        hdrs = 'HTTP/{} {} MSG\r\n'.format(self.version, self.code)
+        # Headers
+        for k, v in self.headers.items():
+            hdrs += '{}: {}\r\n'.format(k, v)
+        hdrs += '\r\n'
+        # Collect garbage after small mallocs
+        gc.collect()
+        await self.send(hdrs)
+
+    async def error(self, code, msg=None):
+        """Generate HTTP error response
+        This function is generator.
+        Arguments:
+            code - HTTP response code
+        Example:
+            # Not enough permissions. Send HTTP 403 - Forbidden
+            await resp.error(403)
+        """
+        self.code = code
+        if msg:
+            self.add_header('Content-Length', len(msg))
+        await self._send_headers()
+        if msg:
+            await self.send(msg)
+
+    async def redirect(self, location, msg=None):
+        """Generate HTTP redirect response to 'location'.
+        Basically it will generate HTTP 302 with 'Location' header
+        Arguments:
+            location - URL to redirect to
+        Example:
+            # Redirect to /something
+            await resp.redirect('/something')
+        """
+        self.code = 302
+        self.add_header('Location', location)
+        if msg:
+            self.add_header('Content-Length', len(msg))
+        await self._send_headers()
+        if msg:
+            await self.send(msg)
+
+    def add_header(self, key, value):
+        """Add HTTP response header
+        Arguments:
+            key - header name
+            value - header value
+        Example:
+            resp.add_header('Content-Encoding', 'gzip')
+        """
+        self.headers[key] = value
+
+    def add_access_control_headers(self):
+        """Add Access Control related HTTP response headers.
+        This is required when working with RestApi (JSON requests)
+        """
+        self.add_header('Access-Control-Allow-Origin', self.params['allowed_access_control_origins'])
+        self.add_header('Access-Control-Allow-Methods', self.params['allowed_access_control_methods'])
+        self.add_header('Access-Control-Allow-Headers', self.params['allowed_access_control_headers'])
+
+    async def start_html(self):
+        """Start response with HTML content type.
+        This function is generator.
+        Example:
+            await resp.start_html()
+            await resp.send('<html><h1>Hello, world!</h1></html>')
+        """
+        self.add_header('Content-Type', 'text/html')
+        await self._send_headers()
+
+    async def send_file(self, filename, content_type=None, content_encoding=None, max_age=2592000, buf_size=128):
+        """Send local file as HTTP response.
+        This function is generator.
+        Arguments:
+            filename - Name of file which exists in local filesystem
+        Keyword arguments:
+            content_type - Filetype. By default - None means auto-detect.
+            max_age - Cache control. How long browser can keep this file on disk.
+                      By default - 30 days
+                      Set to 0 - to disable caching.
+        Example 1: Default use case:
+            await resp.send_file('images/cat.jpg')
+        Example 2: Disable caching:
+            await resp.send_file('static/index.html', max_age=0)
+        Example 3: Override content type:
+            await resp.send_file('static/file.bin', content_type='application/octet-stream')
+        """
+        try:
+            # Get file size
+            stat = os.stat(filename)
+ 
