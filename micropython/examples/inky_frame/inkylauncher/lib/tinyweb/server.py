@@ -358,4 +358,109 @@ class webserver:
             max_concurrency - How many connections can be processed concurrently.
                               It is very important to limit this number because of
                               memory constrain.
-                              Default value depends o
+                              Default value depends on platform
+            backlog         - Parameter to socket.listen() function. Defines size of
+                              pending to be accepted connections queue.
+                              Must be greater than max_concurrency
+            debug           - Whether send exception info (text + backtrace)
+                              to client together with HTTP 500 or not.
+        """
+        self.loop = asyncio.get_event_loop()
+        self.request_timeout = request_timeout
+        self.max_concurrency = max_concurrency
+        self.backlog = backlog
+        self.debug = debug
+        self.explicit_url_map = {}
+        self.catch_all_handler = None
+        self.parameterized_url_map = {}
+        # Currently opened connections
+        self.conns = {}
+        # Statistics
+        self.processed_connections = 0
+
+    def _find_url_handler(self, req):
+        """Helper to find URL handler.
+        Returns tuple of (function, opts, param) or (None, None) if not found.
+        """
+        # First try - lookup in explicit (non parameterized URLs)
+        if req.path in self.explicit_url_map:
+            return self.explicit_url_map[req.path]
+        # Second try - strip last path segment and lookup in another map
+        idx = req.path.rfind(b'/') + 1
+        path2 = req.path[:idx]
+        if len(path2) > 0 and path2 in self.parameterized_url_map:
+            # Save parameter into request
+            req._param = req.path[idx:].decode()
+            return self.parameterized_url_map[path2]
+
+        if self.catch_all_handler:
+            return self.catch_all_handler
+
+        # No handler found
+        return (None, None)
+
+    async def _handle_request(self, req, resp):
+        await req.read_request_line()
+        # Find URL handler
+        req.handler, req.params = self._find_url_handler(req)
+        if not req.handler:
+            # No URL handler found - read response and issue HTTP 404
+            await req.read_headers()
+            raise HTTPException(404)
+        # req.params = params
+        # req.handler = han
+        resp.params = req.params
+        # Read / parse headers
+        await req.read_headers(req.params['save_headers'])
+
+    async def _handler(self, reader, writer):
+        """Handler for TCP connection with
+        HTTP/1.0 protocol implementation
+        """
+        gc.collect()
+
+        try:
+            req = request(reader)
+            resp = response(writer)
+            # Read HTTP Request with timeout
+            await asyncio.wait_for(self._handle_request(req, resp),
+                                   self.request_timeout)
+
+            # OPTIONS method is handled automatically
+            if req.method == b'OPTIONS':
+                resp.add_access_control_headers()
+                # Since we support only HTTP 1.0 - it is important
+                # to tell browser that there is no payload expected
+                # otherwise some webkit based browsers (Chrome)
+                # treat this behavior as an error
+                resp.add_header('Content-Length', '0')
+                await resp._send_headers()
+                return
+
+            # Ensure that HTTP method is allowed for this path
+            if req.method not in req.params['methods']:
+                raise HTTPException(405)
+
+            # Handle URL
+            gc.collect()
+            if hasattr(req, '_param'):
+                await req.handler(req, resp, req._param)
+            else:
+                await req.handler(req, resp)
+            # Done here
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+        except OSError as e:
+            # Do not send response for connection related errors - too late :)
+            # P.S. code 32 - is possible BROKEN PIPE error (TODO: is it true?)
+            if e.args[0] not in (errno.ECONNABORTED, errno.ECONNRESET, 32):
+                try:
+                    await resp.error(500)
+                except Exception as e:
+                    log.exc(e, "")
+        except HTTPException as e:
+            try:
+                await resp.error(e.code)
+            except Exception as e:
+                log.exc(e)
+  
