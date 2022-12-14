@@ -259,4 +259,103 @@ class response:
         try:
             # Get file size
             stat = os.stat(filename)
- 
+            slen = str(stat[6])
+            self.add_header('Content-Length', slen)
+            # Find content type
+            if content_type:
+                self.add_header('Content-Type', content_type)
+            # Add content-encoding, if any
+            if content_encoding:
+                self.add_header('Content-Encoding', content_encoding)
+            # Since this is static content is totally make sense
+            # to tell browser to cache it, however, you can always
+            # override it by setting max_age to zero
+            self.add_header('Cache-Control', 'max-age={}, public'.format(max_age))
+            with open(filename) as f:
+                await self._send_headers()
+                gc.collect()
+                buf = bytearray(min(stat[6], buf_size))
+                while True:
+                    size = f.readinto(buf)
+                    if size == 0:
+                        break
+                    await self.send(buf, sz=size)
+        except OSError as e:
+            # special handling for ENOENT / EACCESS
+            if e.args[0] in (errno.ENOENT, errno.EACCES):
+                raise HTTPException(404)
+            else:
+                raise
+
+
+async def restful_resource_handler(req, resp, param=None):
+    """Handler for RESTful API endpoins"""
+    # Gather data - query string, JSON in request body...
+    data = await req.read_parse_form_data()
+    # Add parameters from URI query string as well
+    # This one is actually for simply development of RestAPI
+    if req.query_string != b'':
+        data.update(parse_query_string(req.query_string.decode()))
+    # Call actual handler
+    _handler, _kwargs = req.params['_callmap'][req.method]
+    # Collect garbage before / after handler execution
+    gc.collect()
+    if param:
+        res = _handler(data, param, **_kwargs)
+    else:
+        res = _handler(data, **_kwargs)
+    gc.collect()
+    # Handler result could be:
+    # 1. generator - in case of large payload
+    # 2. string - just string :)
+    # 2. dict - meaning client what tinyweb to convert it to JSON
+    # it can also return error code together with str / dict
+    # res = {'blah': 'blah'}
+    # res = {'blah': 'blah'}, 201
+    if isinstance(res, type_gen):
+        # Result is generator, use chunked response
+        # NOTICE: HTTP 1.0 by itself does not support chunked responses, so, making workaround:
+        # Response is HTTP/1.1 with Connection: close
+        resp.version = '1.1'
+        resp.add_header('Connection', 'close')
+        resp.add_header('Content-Type', 'application/json')
+        resp.add_header('Transfer-Encoding', 'chunked')
+        resp.add_access_control_headers()
+        await resp._send_headers()
+        # Drain generator
+        for chunk in res:
+            chunk_len = len(chunk.encode('utf-8'))
+            await resp.send('{:x}\r\n'.format(chunk_len))
+            await resp.send(chunk)
+            await resp.send('\r\n')
+            gc.collect()
+        await resp.send('0\r\n\r\n')
+    else:
+        if type(res) == tuple:
+            resp.code = res[1]
+            res = res[0]
+        elif res is None:
+            raise Exception('Result expected')
+        # Send response
+        if type(res) is dict:
+            res_str = json.dumps(res)
+        else:
+            res_str = res
+        resp.add_header('Content-Type', 'application/json')
+        resp.add_header('Content-Length', str(len(res_str)))
+        resp.add_access_control_headers()
+        await resp._send_headers()
+        await resp.send(res_str)
+
+
+class webserver:
+
+    def __init__(self, request_timeout=3, max_concurrency=3, backlog=16, debug=False):
+        """Tiny Web Server class.
+        Keyword arguments:
+            request_timeout - Time for client to send complete request
+                              after that connection will be closed.
+            max_concurrency - How many connections can be processed concurrently.
+                              It is very important to limit this number because of
+                              memory constrain.
+                              Default value depends o
