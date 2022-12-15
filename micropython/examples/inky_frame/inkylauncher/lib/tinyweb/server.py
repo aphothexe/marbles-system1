@@ -561,4 +561,102 @@ class webserver:
             def catchall_handler(req, resp):
                 response.code = 404
                 await response.start_html()
-                await response.send('<html><body><h
+                await response.send('<html><body><h1>My custom 404!</h1></html>\n')
+        """
+        params = {'methods': [b'GET'], 'save_headers': [], 'max_body_size': 1024, 'allowed_access_control_headers': '*', 'allowed_access_control_origins': '*'}
+
+        def _route(f):
+            self.catch_all_handler = (f, params)
+            return f
+        return _route
+
+    def route(self, url, **kwargs):
+        """Decorator for add_route()
+        Example:
+            @app.route('/')
+            def index(req, resp):
+                await resp.start_html()
+                await resp.send('<html><body><h1>Hello, world!</h1></html>\n')
+        """
+        def _route(f):
+            self.add_route(url, f, **kwargs)
+            return f
+        return _route
+
+    def resource(self, url, method='GET', **kwargs):
+        """Decorator for add_resource() method
+        Examples:
+            @app.resource('/users')
+            def users(data):
+                return {'a': 1}
+            @app.resource('/messages/<topic_id>')
+            async def index(data, topic_id):
+                yield '{'
+                yield '"topic_id": "{}",'.format(topic_id)
+                yield '"message": "test",'
+                yield '}'
+        """
+        def _resource(f):
+            self.add_route(url, restful_resource_handler,
+                           methods=[method],
+                           save_headers=['Content-Length', 'Content-Type'],
+                           _callmap={method.encode(): (f, kwargs)})
+            return f
+        return _resource
+
+    async def _tcp_server(self, host, port, backlog):
+        """TCP Server implementation.
+        Opens socket for accepting connection and
+        creates task for every new accepted connection
+        """
+        addr = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)[0][-1]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setblocking(False)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(addr)
+        sock.listen(backlog)
+        try:
+            while True:
+                if IS_UASYNCIO_V3:
+                    yield uasyncio.core._io_queue.queue_read(sock)
+                else:
+                    yield asyncio.IORead(sock)
+                csock, caddr = sock.accept()
+                csock.setblocking(False)
+                # Start handler / keep it in the map - to be able to
+                # shutdown gracefully - by close all connections
+                self.processed_connections += 1
+                hid = id(csock)
+                handler = self._handler(asyncio.StreamReader(csock),
+                                        asyncio.StreamWriter(csock, {}))
+                self.conns[hid] = handler
+                self.loop.create_task(handler)
+                # In case of max concurrency reached - temporary pause server:
+                # 1. backlog must be greater than max_concurrency, otherwise
+                #    client will got "Connection Reset"
+                # 2. Server task will be resumed whenever one active connection finished
+                if len(self.conns) == self.max_concurrency:
+                    # Pause
+                    yield False
+        except asyncio.CancelledError:
+            return
+        finally:
+            sock.close()
+
+    def run(self, host="127.0.0.1", port=8081, loop_forever=True):
+        """Run Web Server. By default it runs forever.
+        Keyword arguments:
+            host - host to listen on. By default - localhost (127.0.0.1)
+            port - port to listen on. By default - 8081
+            loop_forever - run loo.loop_forever(), otherwise caller must run it by itself.
+        """
+        self._server_coro = self._tcp_server(host, port, self.backlog)
+        self.loop.create_task(self._server_coro)
+        if loop_forever:
+            self.loop.run_forever()
+
+    def shutdown(self):
+        """Gracefully shutdown Web Server"""
+        asyncio.cancel(self._server_coro)
+        for hid, coro in self.conns.items():
+            asyncio.cancel(coro)
