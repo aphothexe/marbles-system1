@@ -463,4 +463,102 @@ class webserver:
                 await resp.error(e.code)
             except Exception as e:
                 log.exc(e)
-  
+        except Exception as e:
+            # Unhandled expection in user's method
+            log.error(req.path.decode())
+            log.exc(e, "")
+            try:
+                await resp.error(500)
+                # Send exception info if desired
+                if self.debug:
+                    sys.print_exception(e, resp.writer.s)
+            except Exception:
+                pass
+        finally:
+            await writer.aclose()
+            # Max concurrency support -
+            # if queue is full schedule resume of TCP server task
+            if len(self.conns) == self.max_concurrency:
+                self.loop.create_task(self._server_coro)
+            # Delete connection, using socket as a key
+            del self.conns[id(writer.s)]
+
+    def add_route(self, url, f, **kwargs):
+        """Add URL to function mapping.
+        Arguments:
+            url - url to map function with
+            f - function to map
+        Keyword arguments:
+            methods - list of allowed methods. Defaults to ['GET', 'POST']
+            save_headers - contains list of HTTP headers to be saved. Case sensitive. Default - empty.
+            max_body_size - Max HTTP body size (e.g. POST form data). Defaults to 1024
+            allowed_access_control_headers - Default value for the same name header. Defaults to *
+            allowed_access_control_origins - Default value for the same name header. Defaults to *
+        """
+        if url == '' or '?' in url:
+            raise ValueError('Invalid URL')
+        # Initial params for route
+        params = {'methods': ['GET'],
+                  'save_headers': [],
+                  'max_body_size': 1024,
+                  'allowed_access_control_headers': '*',
+                  'allowed_access_control_origins': '*',
+                  }
+        params.update(kwargs)
+        params['allowed_access_control_methods'] = ', '.join(params['methods'])
+        # Convert methods/headers to bytestring
+        params['methods'] = [x.encode() for x in params['methods']]
+        params['save_headers'] = [x.encode() for x in params['save_headers']]
+        # If URL has a parameter
+        if url.endswith('>'):
+            idx = url.rfind('<')
+            path = url[:idx]
+            idx += 1
+            param = url[idx:-1]
+            if path.encode() in self.parameterized_url_map:
+                raise ValueError('URL exists')
+            params['_param_name'] = param
+            self.parameterized_url_map[path.encode()] = (f, params)
+
+        if url.encode() in self.explicit_url_map:
+            raise ValueError('URL exists')
+        self.explicit_url_map[url.encode()] = (f, params)
+
+    def add_resource(self, cls, url, **kwargs):
+        """Map resource (RestAPI) to URL
+        Arguments:
+            cls - Resource class to map to
+            url - url to map to class
+            kwargs - User defined key args to pass to the handler.
+        Example:
+            class myres():
+                def get(self, data):
+                    return {'hello': 'world'}
+            app.add_resource(myres, '/api/myres')
+        """
+        methods = []
+        callmap = {}
+        # Create instance of resource handler, if passed as just class (not instance)
+        try:
+            obj = cls()
+        except TypeError:
+            obj = cls
+        # Get all implemented HTTP methods and make callmap
+        for m in ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']:
+            fn = m.lower()
+            if hasattr(obj, fn):
+                methods.append(m)
+                callmap[m.encode()] = (getattr(obj, fn), kwargs)
+        self.add_route(url, restful_resource_handler,
+                       methods=methods,
+                       save_headers=['Content-Length', 'Content-Type'],
+                       _callmap=callmap)
+
+    def catchall(self):
+        """Decorator for catchall()
+        Example:
+            @app.catchall()
+            def catchall_handler(req, resp):
+                response.code = 404
+                await response.start_html()
+                await response.send('<html><body><h
