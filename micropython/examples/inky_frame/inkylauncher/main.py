@@ -112,4 +112,57 @@ def launcher():
             reset()
         if ih.inky_frame.button_d.read():
             ih.inky_frame.button_d.led_on()
-            ih.updat
+            ih.update_state("news_headlines")
+            time.sleep(0.5)
+            reset()
+        if ih.inky_frame.button_e.read():
+            ih.inky_frame.button_e.led_on()
+            ih.update_state("random_joke")
+            time.sleep(0.5)
+            reset()
+
+
+# Turn any LEDs off that may still be on from last run.
+ih.clear_button_leds()
+ih.led_warn.off()
+
+if ih.inky_frame.button_a.read() and ih.inky_frame.button_e.read():
+    launcher()
+
+ih.clear_button_leds()
+
+if ih.file_exists("state.json"):
+    # Loads the JSON and launches the app
+    ih.load_state()
+    ih.launch_app(ih.state['run'])
+
+    # Passes the the graphics object from the launcher to the app
+    ih.app.graphics = graphics
+    ih.app.WIDTH = WIDTH
+    ih.app.HEIGHT = HEIGHT
+
+else:
+    launcher()
+
+try:
+    from secrets import WIFI_SSID, WIFI_PASSWORD
+    ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
+except ImportError:
+    print("Create secrets.py with your WiFi credentials")
+
+# Get some memory back, we really need it!
+gc.collect()
+
+# The main loop executes the update and draw function from the imported app,
+# and then goes to sleep ZzzzZZz
+
+file = ih.file_exists("state.json")
+
+print(file)
+
+while True:
+    ih.app.update()
+    ih.led_warn.on()
+    ih.app.draw()
+    ih.led_warn.off()
+    ih.sleep(ih.app.UPDATE_INTERVAL)
