@@ -93,4 +93,79 @@ def measure_qr_code(size, code):
     return module_size * w, module_size
 
 
-def
+def draw_qr_code(ox, oy, size, code):
+    size, module_size = measure_qr_code(size, code)
+    graphics.set_pen(1)
+    graphics.rectangle(ox, oy, size, size)
+    graphics.set_pen(0)
+    for x in range(size):
+        for y in range(size):
+            if code.get_module(x, y):
+                graphics.rectangle(ox + x * module_size, oy + y * module_size, module_size, module_size)
+
+
+# A function to get the data from an RSS Feed, this in case BBC News.
+def get_rss():
+    try:
+        stream = urequest.urlopen(URL)
+        output = list(parse_xml_stream(stream, [b"title", b"description", b"guid", b"pubDate"], b"item"))
+        return output
+
+    except OSError as e:
+        print(e)
+        return False
+
+
+feed = None
+
+
+def update():
+    global feed
+    # Gets Feed Data
+    feed = get_rss()
+
+
+def draw():
+    global feed
+    graphics.set_font("bitmap8")
+
+    # Clear the screen
+    graphics.set_pen(1)
+    graphics.clear()
+    graphics.set_pen(0)
+
+    # Draws 2 articles from the feed if they're available.
+    if feed:
+
+        # Title
+        graphics.set_pen(graphics.create_pen(200, 0, 0))
+        graphics.rectangle(0, 0, WIDTH, 40)
+        graphics.set_pen(1)
+        graphics.text("Headlines from BBC News:", 10, 10, 320, 3)
+
+        graphics.set_pen(4)
+        graphics.text(feed[0]["title"], 10, 70, WIDTH - 150, 3 if graphics.measure_text(feed[0]["title"]) < WIDTH else 2)
+        graphics.text(feed[1]["title"], 130, 260, WIDTH - 140, 3 if graphics.measure_text(feed[1]["title"]) < WIDTH else 2)
+
+        graphics.set_pen(3)
+        graphics.text(feed[0]["description"], 10, 135 if graphics.measure_text(feed[0]["title"]) < 650 else 90, WIDTH - 150, 2)
+        graphics.text(feed[1]["description"], 130, 320 if graphics.measure_text(feed[1]["title"]) < 650 else 230, WIDTH - 145, 2)
+
+        graphics.line(10, 215, WIDTH - 10, 215)
+
+        code.set_text(feed[0]["guid"])
+        draw_qr_code(WIDTH - 110, 65, 100, code)
+        code.set_text(feed[1]["guid"])
+        draw_qr_code(10, 265, 100, code)
+
+        graphics.set_pen(graphics.create_pen(200, 0, 0))
+        graphics.rectangle(0, HEIGHT - 20, WIDTH, 20)
+
+    else:
+        graphics.set_pen(4)
+        graphics.rectangle(0, (HEIGHT // 2) - 20, WIDTH, 40)
+        graphics.set_pen(1)
+        graphics.text("Unable to display news feed!", 5, (HEIGHT // 2) - 15, WIDTH, 2)
+        graphics.text("Check your network settings in secrets.py", 5, (HEIGHT // 2) + 2, WIDTH, 2)
+
+    graphics.update()
