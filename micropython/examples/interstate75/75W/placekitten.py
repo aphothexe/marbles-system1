@@ -32,4 +32,45 @@ def status_handler(mode, status, ip):
     graphics.set_pen(BLACK)
     graphics.clear()
     graphics.set_pen(WHITE)
-    graph
+    graphics.text("Network: {}".format(WIFI_CONFIG.SSID), 2, 2, scale=1)
+    status_text = "Connecting..."
+    if status is not None:
+        if status:
+            status_text = "Connection successful!"
+        else:
+            status_text = "Connection failed!"
+
+    graphics.text(status_text, 2, 12, scale=1)
+    graphics.text("IP: {}".format(ip), 2, 22, scale=1)
+    i75.update(graphics)
+
+
+# connect to wifi
+network_manager = NetworkManager(WIFI_CONFIG.COUNTRY, status_handler=status_handler)
+uasyncio.get_event_loop().run_until_complete(network_manager.client(WIFI_CONFIG.SSID, WIFI_CONFIG.PSK))
+
+url = ENDPOINT.format(WIDTH, HEIGHT + random.randint(0, 10))
+print("Requesting URL: {}".format(url))
+socket = urequest.urlopen(url)
+
+# Load the image data into RAM (if you have enough!)
+data = bytearray(1024 * 10)
+socket.readinto(data)
+socket.close()
+
+# draw the image
+jpeg = jpegdec.JPEG(graphics)
+jpeg.open_RAM(data)
+jpeg.decode(0, 0)
+
+"""
+# draw a box with the URL - only really works on looooong displays
+graphics.set_pen(BLACK)
+graphics.rectangle(0, HEIGHT - 7, WIDTH, 7)
+graphics.set_font("bitmap6")
+graphics.set_pen(WHITE)
+graphics.text(url, 1, HEIGHT - 7, scale=1)
+"""
+
+# update the display
+i75.update(graphics)
