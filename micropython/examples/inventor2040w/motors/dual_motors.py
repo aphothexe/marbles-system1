@@ -55,4 +55,10 @@ for j in range(SWEEPS):
             m.to_percent(i, 0, STEPS, 0.0 - SPEED_EXTENT, SPEED_EXTENT)
         time.sleep(STEPS_INTERVAL)
     for i in range(0, STEPS):
-        f
+        for m in board.motors:
+            m.to_percent(i, STEPS, 0, 0.0 - SPEED_EXTENT, SPEED_EXTENT)
+        time.sleep(STEPS_INTERVAL)
+
+# Disable the motors
+for m in board.motors:
+    m.disable()
