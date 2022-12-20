@@ -33,4 +33,15 @@ while not board.switch_pressed():
         voltage = analogs[i].read_voltage()
         print(ADC_NAMES[i], " = ", round(voltage, 3), sep="", end=", ")
 
-        # Set the neighbouring LED to
+        # Set the neighbouring LED to a colour based on the
+        # voltage, with Green for high and Blue for low
+        hue = (2.0 - (voltage / 3.3)) * 0.333
+        board.leds.set_hsv(i + LED_A0, hue, 1.0, BRIGHTNESS)
+
+    # Print a new line
+    print()
+
+    time.sleep(1.0 / UPDATES)
+
+# Turn off the LED bars
+board.leds.clear()
