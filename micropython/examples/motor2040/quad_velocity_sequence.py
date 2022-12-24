@@ -157,4 +157,4 @@ while not user_sw.raw():
 
 # Stop all the motors
 for m in motors:
-  
+    m.disable()
