@@ -24,4 +24,39 @@ SPEED_EXTENT = 1.0    # How far from zero to drive the motors
 gc.collect()
 
 # Create a list of motors
-MOTOR_PINS = [motor2040.MOTOR_A, motor2040.MOTOR
+MOTOR_PINS = [motor2040.MOTOR_A, motor2040.MOTOR_B, motor2040.MOTOR_C, motor2040.MOTOR_D]
+motors = [Motor(pins) for pins in MOTOR_PINS]
+
+# Create the LED, using PIO 1 and State Machine 0
+led = WS2812(motor2040.NUM_LEDS, 1, 0, motor2040.LED_DATA)
+
+# Create the user button
+user_sw = Button(motor2040.USER_SW)
+
+# Start updating the LED
+led.start()
+
+
+offset = 0.0
+
+# Make waves until the user button is pressed
+while not user_sw.raw():
+
+    offset += SPEED / 1000.0
+
+    # Update the LED
+    led.set_hsv(0, offset / 2, 1.0, BRIGHTNESS)
+
+    # Update all the motors
+    for i in range(len(motors)):
+        angle = ((i / len(motors)) + offset) * math.pi
+        motors[i].speed(math.sin(angle) * SPEED_EXTENT)
+
+    time.sleep(1.0 / UPDATES)
+
+# Stop all the motors
+for m in motors:
+    m.disable()
+
+# Turn off the LED
+led.clear()
