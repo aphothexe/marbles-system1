@@ -45,4 +45,47 @@ print()
 print("check alarm function")
 print()
 
-print("- settin
+print("- setting alarm for in 6 seconds")
+print("  > 08:07:21")
+rtc.set_alarm(21, 7, 8)
+
+print()
+print("- waiting for alarm flag")
+
+while not rtc.read_alarm_flag():
+    pass
+
+print()
+print("- alarm triggered at")
+now = rtc.datetime()
+print("  >", now)
+print()
+
+print("- clear alarm flag")
+rtc.clear_alarm_flag()
+print()
+
+
+print("check timer function")
+print()
+
+print("- setting timer for in 5 seconds")
+rtc.set_timer(5)
+
+print()
+print("- waiting for timer flag")
+
+while not rtc.read_timer_flag():
+    pass
+
+print()
+print("- timer triggered at")
+now = rtc.datetime()
+print("  >", now)
+print()
+
+print("- clear timer flag")
+rtc.clear_alarm_flag()
+
+print()
+print("tests complete")
