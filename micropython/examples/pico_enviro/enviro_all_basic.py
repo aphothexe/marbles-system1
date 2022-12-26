@@ -52,4 +52,29 @@ while True:
     # read LTR559
     ltr_reading = ltr.get_reading()
     lux = ltr_reading[BreakoutLTR559.LUX]
-    prox = ltr_reading[Breakout
+    prox = ltr_reading[BreakoutLTR559.PROXIMITY]
+
+    # read mic
+    mic_reading = mic.read_u16()
+
+    # read particle sensor
+    particulate_reading = pms5003.read()
+
+    if heater == "Stable" and ltr_reading is not None:
+        led.set_rgb(0, 0, 0)
+        print(f"""
+             Temperature = {corrected_temperature} °C
+             Humidity = {corrected_humidity} %
+             Pressure = {pressure/100} hPa
+             Gas = {gas}
+             Lux = {lux}
+             Mic = {mic_reading}
+             Particulates (1.0) = {particulate_reading.pm_ug_per_m3(1.0)} ug/m3
+             Particulates (2.5) = {particulate_reading.pm_ug_per_m3(2.5)} ug/m3
+             Particulates (10) = {particulate_reading.pm_ug_per_m3(10)} ug/m3
+             """)
+    else:
+        # light up the LED red if there's a problem with the BME688 or LTR559 sensor readings
+        led.set_rgb(255, 0, 0)
+
+    time.sleep(1.0)
