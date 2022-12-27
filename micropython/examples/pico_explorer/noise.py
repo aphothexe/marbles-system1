@@ -109,4 +109,41 @@ tones = {
 }
 
 # put the notes for your song in here!
-song = ["F6", "F6", "E6", "F6", "F5",
+song = ["F6", "F6", "E6", "F6", "F5", "P", "F5", "P", "C6", "AS5", "A5", "C6", "F6", "P", "F6", "P", "G6", "FS6", "G6", "G5", "P", "G5", "P", "G6", "F6", "E6", "D6", "C6", "P", "C6", "P", "D6", "E6", "F6", "E6", "D6", "C6", "D6", "C6", "AS5", "A5", "AS5", "A5", "G5", "F5", "G5", "F5", "E5", "D5", "C5", "D5", "E5", "F5", "G5", "AS5", "A5", "G5", "A5", "F5", "P", "F5"]
+
+
+def clear():                        # this function clears Pico Explorer's screen to black
+    display.set_pen(BLACK)
+    display.clear()
+    display.update()
+
+
+def playtone(frequency):            # this function tells your program how to make noise
+    BUZZER.set_tone(frequency)
+
+
+def bequiet():                      # this function tells your program how not to make noise
+    BUZZER.set_tone(-1)
+
+
+def playsong(song):                 # this function plays your song
+    a = 0                           # this variable keeps track of the visualiser bars
+    for i in range(len(song)):
+        if (song[i] == "P"):
+            bequiet()
+        else:
+            playtone(tones[song[i]])
+            display.set_pen(GREEN)  # switch to green pen
+            display.rectangle(a, 240 - (int((tones[song[i]]) / 21)), 5, 240)  # draw a green bar corresponding to the frequency of the note
+            a += 7
+        if a >= 240:  # clears the screen if the green bars reach the right hand edge
+            clear()
+            a = 0
+        display.update()
+        time.sleep(0.15)  # change this number if you want to alter how long the notes play for
+    bequiet()
+
+
+clear()
+playsong(song)
+clear()
