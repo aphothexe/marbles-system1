@@ -44,4 +44,41 @@ def status_handler(mode, status, ip):
 graphics.set_font("bitmap8")
 graphics.set_update_speed(1)
 
-network_manager = NetworkManager(WIFI_CO
+network_manager = NetworkManager(WIFI_CONFIG.COUNTRY, status_handler=status_handler)
+uasyncio.get_event_loop().run_until_complete(network_manager.client(WIFI_CONFIG.SSID, WIFI_CONFIG.PSK))
+
+
+url = ENDPOINT.format(WIDTH, HEIGHT + random.randint(0, 10))
+print("Requesting URL: {}".format(url))
+socket = urequest.urlopen(url)
+
+# Load the image data into RAM (if you have enough!)
+data = bytearray(1024 * 10)
+socket.readinto(data)
+socket.close()
+
+
+"""
+# Stream the image data from the socket onto disk in 1024 byte chunks
+# if you're doing something else RAM intensive you might want to use this!
+data = bytearray(1024)
+with open(FILENAME, "wb") as f:
+    while True:
+        if socket.readinto(data) == 0:
+            break
+        f.write(data)
+socket.close()
+"""
+
+jpeg = jpegdec.JPEG(graphics)
+jpeg.open_RAM(data)
+jpeg.decode(0, 0)
+
+graphics.set_pen(15)
+graphics.rectangle(0, HEIGHT - 14, WIDTH, 14)
+
+graphics.set_pen(0)
+graphics.text(url, 5, HEIGHT - 9, scale=1)
+
+graphics.set_update_speed(1)
+graphics.update()
