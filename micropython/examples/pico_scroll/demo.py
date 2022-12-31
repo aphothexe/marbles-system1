@@ -32,4 +32,5 @@ while True:
     scroll.update()
     i += 1
     if i >= loop:
- 
+        i = 0
+    time.sleep(0.02)
