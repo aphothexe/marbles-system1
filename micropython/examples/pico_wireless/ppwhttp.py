@@ -273,3 +273,63 @@ def handle_http_request(server_sock, timeout=5000):
         for line in head.split("\r\n")[1:]:
             key, value = line.split(": ", 1)
             dhead[key] = value
+
+    method, url, _ = head.split("\r\n", 1)[0].split(" ")
+
+    print("Serving {} on {}...".format(method, url))
+
+    response = None
+
+    data = {}
+
+    if url.startswith("/"):
+        url = url[1:]
+    url = url.split("/")
+    handler, data = find_route(routes, url, method, data)
+
+    # Dispatch the request to the relevant route
+    if callable(handler):
+        if method == "POST":
+            for var in body.split("&"):
+                key, value = var.split("=")
+                data[key] = value
+
+        if data == {}:
+            response = handler(method, url)
+        else:
+            response = handler(method, url, data)
+
+    if response is not None:
+        response = "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: text/html\r\n\r\n".format(len(response)) + response
+        picowireless.send_data(client_sock, response)
+        picowireless.client_stop(client_sock)
+        print("Success! Sending 200 OK")
+        return True
+    else:
+        picowireless.send_data(client_sock, "HTTP/1.1 501 Not Implemented\r\nContent-Length: 19\r\n\r\n501 Not Implemented")
+        picowireless.client_stop(client_sock)
+        print("Unhandled Request! Sending 501 OK")
+        return False
+
+
+def route(url, methods="GET"):
+    if type(methods) is str:
+        methods = [methods]
+
+    if url.startswith("/"):
+        url = url[1:]
+
+    url = url.split("/")
+
+    def decorate(handler):
+        route = routes
+        for part in url:
+            if part not in route:
+                route[part] = {}
+
+            route = route[part]
+
+        for method in methods:
+            route[method] = handler
+
+    return decorate
