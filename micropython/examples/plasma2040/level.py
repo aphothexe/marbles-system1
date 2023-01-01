@@ -157,3 +157,54 @@ while True:
         # Convert the difference between the band and goal positions into a colour hue
         position_diff = min(abs(band_position - goal_position), 1.0)
         hue = map(position_diff, 0.0, 1.0, ANGLE_MODE_GOAL_HUE, ANGLE_MODE_EDGE_HUE)
+
+    elif mode == VELOCITY:
+        # Apply the measured angle as a velocity to the band position, clamping it between -1 and +1
+        band_position += measured_angle * VELOCITY_SENSITIVITY
+        band_position = min(1.0, max(-1.0, band_position))
+
+        # Convert the difference between the band and goal positions into a colour hue
+        position_diff = min(abs(band_position - goal_position), 1.0)
+        hue = map(position_diff, 0.0, 1.0, VELOCITY_MODE_GOAL_HUE, VELOCITY_MODE_EDGE_HUE)
+
+    # Convert the band and goal positions to positions on the LED strip
+    strip_band_position = map(band_position, -1.0, 1.0, 0.0, float(NUM_LEDS))
+    strip_goal_position = map(goal_position, -1.0, 1.0, 0.0, float(NUM_LEDS))
+
+    # Draw the band and goal
+    colour_band(strip_band_position, BAND_PIXEL_WIDTH, strip_goal_position, GOAL_PIXEL_WIDTH, hue)
+
+    sw_pressed = user_sw.read()
+    a_pressed = button_a.read()
+    b_pressed = button_b.read()
+
+    if b_pressed:
+        game_mode = not game_mode
+
+    if sw_pressed:
+        invert = not invert
+
+    if mode == ANGLE:
+        if game_mode:
+            led.set_rgb(255, 255, 0)
+        else:
+            led.set_rgb(0, 255, 0)
+        if a_pressed:
+            mode = VELOCITY
+
+    elif mode == VELOCITY:
+        if game_mode:
+            led.set_rgb(255, 0, 255)
+        else:
+            led.set_rgb(0, 0, 255)
+        if a_pressed:
+            mode = ANGLE
+
+    if game_mode:
+        # Check if the band is within the goal, and if so, set a new goal
+        above_lower = strip_band_position >= strip_goal_position - (GOAL_PIXEL_WIDTH - BAND_PIXEL_WIDTH) / 2
+        below_upper = strip_band_position <= strip_goal_position + (GOAL_PIXEL_WIDTH - BAND_PIXEL_WIDTH) / 2
+        if above_lower and below_upper:
+            goal_position = random.uniform(-1.0, 1.0)
+
+    time.sleep(1.0 / UPDATES)
