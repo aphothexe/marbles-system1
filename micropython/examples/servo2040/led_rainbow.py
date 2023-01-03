@@ -40,3 +40,6 @@ while not user_sw.raw():
         led_bar.set_hsv(i, hue + offset, 1.0, BRIGHTNESS)
 
     time.sleep(1.0 / UPDATES)
+
+# Turn off the LED bar
+led_bar.clear()
