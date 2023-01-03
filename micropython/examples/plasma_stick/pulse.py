@@ -35,4 +35,5 @@ while True:
 
 #     # adjust the saturation instead of the brightness/value
 #     for i in range(NUM_LEDS):
-#         led_strip.set_hsv(i, COLOUR, (1
+#         led_strip.set_hsv(i, COLOUR, (1 + sin(offset)) / 2, 0.8)
+#     offset += 0.002
