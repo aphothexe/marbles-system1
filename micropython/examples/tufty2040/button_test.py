@@ -31,4 +31,56 @@ while True:
     if button_a.is_pressed:                               # if a button press is detected then...
         display.set_pen(BLACK)                            # set pen to black
         display.clear()                                   # clear display to the pen colour
-        display.se
+        display.set_pen(WHITE)                            # change the pen colour
+        display.text("Button A pressed", 10, 10, WIDTH - 10, 3)  # display some text on the screen
+        display.update()                                  # update the display
+        time.sleep(1)                                    # pause for a sec
+
+    elif button_b.is_pressed:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(TEAL)
+        display.text("Button B pressed", 10, 10, WIDTH - 10, 3)
+        display.update()
+        time.sleep(1)
+
+    elif button_c.is_pressed:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(MAGENTA)
+        display.text("Button C pressed", 10, 10, WIDTH - 10, 3)
+        display.update()
+        time.sleep(1)
+
+    elif button_up.is_pressed:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(YELLOW)
+        display.text("Button UP pressed", 10, 10, WIDTH - 10, 3)
+        display.update()
+        time.sleep(1)
+
+    elif button_down.is_pressed:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(GREEN)
+        display.text("Button DOWN pressed", 10, 10, WIDTH - 10, 3)
+        display.update()
+        time.sleep(1)
+
+    elif button_boot.is_pressed:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(BLUE)
+        display.text("Button BOOT/USR pressed", 10, 10, WIDTH - 10, 3)
+        display.update()
+        time.sleep(1)
+
+    else:
+        display.set_pen(BLACK)
+        display.clear()
+        display.set_pen(RED)
+        display.text("Press any button!", 10, 10, WIDTH, 3)
+        display.update()
+
+    time.sleep(0.1)  # this number is how frequently Tufty checks for button presses
