@@ -102,4 +102,130 @@ set_pen(
 
 ### Pen Thickness
 
-:warning: Applies to Hershey font
+:warning: Applies to Hershey fonts only.
+
+Thickness affects Hershey text and governs how thick the component lines should be, making it appear bolder:
+
+```python
+set_thickness(
+    value  # int: thickness in pixels
+)
+```
+
+## Displaying Images
+
+Badger 2040 W can display basic JPEG images. They must not be progressive. It will attempt to dither them to the black/white display.
+
+To display a JPEG, import and set up the `jpegdec` module like so:
+
+```python
+import badger2040w
+import jpegdec
+
+badger = badger2040w.Badger2040W()
+jpeg = jpegdec.JPEG(badger.display)
+```
+
+`badger.display` points to the PicoGraphics instance that the Badger2040W class manages for you.
+
+You can open and display a JPEG file like so:
+
+```python
+jpeg.open_file("/image.jpg")
+jpeg.decode(x, y)
+```
+
+Where `x, y` is the position at which you want to display the JPEG.
+
+## Updating The Display
+
+### Update
+
+Starts a full update of the screen. Will block until the update has finished.
+
+Update takes no parameters, but the update time will vary depending on which update speed you've selected.
+
+```python
+badger.update()
+```
+
+### Clear
+
+Before drawing again it can be useful to `clear` your display.
+
+`clear` fills the drawing buffer with the pen colour, giving you a clean slate:
+
+```python
+badger.clear()
+```
+
+### Partial Update
+
+Starts a partial update of the screen. Will block until the update has finished.
+
+A partial update allows you to update a portion of the screen rather than the whole thing.
+
+That portion *must* be a multiple of 8 pixels tall, but can be any number of pixels wide.
+
+```python
+partial_update(
+    x,  # int: x coordinate of the update region
+    y,  # int: y coordinate of the update region (must be a multiple of 8)
+    w,  # int: width of the update region
+    h   # int: height of the update region (must be a multiple of 8)
+)
+```
+
+### Update Speed
+
+Badger 2040 W is capable of updating the display at multiple different speeds.
+
+These offer a tradeoff between the quality of the final image and the speed of the update.
+
+There are currently four constants naming the different update speeds from 0 to 3:
+
+* `UPDATE_NORMAL` - a normal update, great for display the first screen of your application and ensuring good contrast and no ghosting
+* `UPDATE_MEDIUM` - a good balance of speed and clarity, you probably want this most of the time
+* `UPDATE_FAST` - a fast update, good for stepping through screens such as the pages of a book or the launcher
+* `UPDATE_TURBO` - a super fast update, prone to ghosting, great for making minor changes such as moving a cursor through a menu
+
+```python
+set_update_speed(
+    speed  # int: one of the update constants
+)
+```
+
+## LED
+
+The white indicator LED can be controlled, with brightness ranging from 0 (off) to 255:
+
+```python
+led(
+    brightness  # int: 0 (off) to 255 (full)
+)
+```
+
+## Buttons
+
+Badger 2040 W features five buttons on its front, labelled A, B, C, ↑ (up) and ↓ (down). These can be read using the `pressed(button)` method, which accepts the button's pin number. For convenience, each button can be referred to using these constants:
+
+* `BUTTON_A` = `12`
+* `BUTTON_B` = `13`
+* `BUTTON_C` = `14`
+* `BUTTON_UP` = `15`
+* `BUTTON_DOWN` = `11`
+
+Additionally you can use `pressed_any()` to see if _any_ button has been pressed.
+
+## Waking From Sleep
+
+### Button Presses
+
+When running on battery, pressing a button on Badger 2040 W will power the unit on. It will automatically be latched on and `main.py` will be executed.
+
+There are some useful functions to determine if Badger 2040 W has been woken by a button, and figure out which one:
+
+* `badger2040w.woken_by_button()` - determine if any button was pressed during power-on.
+* `badger2040w.pressed_to_wake(button)` - determine if the given button was pressed during power-on.
+* `badger2040w.reset_pressed_to_wake()` - clear the wakeup GPIO state.
+* `badger2040w.pressed_to_wake_get_once(button)` - returns `True` if the given button was pressed to wake Badger, and then clears th
