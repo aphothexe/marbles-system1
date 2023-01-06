@@ -228,4 +228,33 @@ There are some useful functions to determine if Badger 2040 W has been woken by 
 * `badger2040w.woken_by_button()` - determine if any button was pressed during power-on.
 * `badger2040w.pressed_to_wake(button)` - determine if the given button was pressed during power-on.
 * `badger2040w.reset_pressed_to_wake()` - clear the wakeup GPIO state.
-* `badger2040w.pressed_to_wake_get_once(button)` - returns `True` if the given button was pressed to wake Badger, and then clears th
+* `badger2040w.pressed_to_wake_get_once(button)` - returns `True` if the given button was pressed to wake Badger, and then clears the state of that pin.
+
+### Real-time Clock
+
+Badger 2040 W includes a PCF85063a RTC which continues to run from battery when the Badger is off. It can be used to wake the Badger on a schedule.
+
+## Update Speed
+
+The E Ink display on Badger 2040 W supports several update speeds. These can be set using `set_update_speed(speed)` where `speed` is a value from `0` to `3`. For convenience these speeds have been given the following constants:
+
+* `UPDATE_NORMAL` = `0`
+* `UPDATE_MEDIUM` = `1`
+* `UPDATE_FAST` = `2`
+* `UPDATE_TURBO` = `3`
+
+## System speed
+
+The system clock speed of the RP2040 can be controlled, allowing power to be saved if on battery, or faster computations to be performed.  Use `badger2040w.system_speed(speed)` where `speed` is one of the following constants:
+
+* `SYSTEM_VERY_SLOW` = `0`  _4 MHz if on battery, 48 MHz if connected to USB_
+* `SYSTEM_SLOW` = `1`  _12 MHz if on battery, 48 MHz if connected to USB_
+* `SYSTEM_NORMAL` = `2`  _48 MHz_
+* `SYSTEM_FAST` = `3`  _133 MHz_
+* `SYSTEM_TURBO` = `4`  _250 MHz_
+
+On USB, the system will not run slower than 48MHz, as that is the minimum clock speed required to keep the USB connection stable.
+
+It is best to set the clock speed as the first thing in your program, and you must not change it after initializing any drivers for any I2C hardware connected to the Qwiic port.  To allow you to set the speed at the top of your program, this method is on the `badger2040w` module, rather than the `badger` instance, although we have made sure that it is safe to call it after creating a `badger` instance.
+
+Note that `SYSTEM_TURBO` overclocks the RP2040 to 250MHz, and applies a small over voltage to ensure this is stable. We've found that every RP2040 we've tested is happy to run at this speed without any issues.
