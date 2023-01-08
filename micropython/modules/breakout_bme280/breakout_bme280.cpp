@@ -64,4 +64,24 @@ mp_obj_t BreakoutBME280_configure(size_t n_args, const mp_obj_t *pos_args, mp_ma
         { MP_QSTR_os_pressure, MP_ARG_INT, { .u_int=BME280_OVERSAMPLING_16X } },
         { MP_QSTR_os_temp, MP_ARG_INT, { .u_int=BME280_OVERSAMPLING_2X } },
         { MP_QSTR_os_humidity, MP_ARG_INT, { .u_int=BME280_OVERSAMPLING_1X } },
-        { MP_QSTR_mode, MP_ARG_INT, { .u_int=BME28
+        { MP_QSTR_mode, MP_ARG_INT, { .u_int=BME280_NORMAL_MODE } },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_bme280_BreakoutBME280_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_bme280_BreakoutBME280_obj_t);
+    self->breakout->configure(
+        args[ARG_filter].u_int,
+        args[ARG_standby_time].u_int,
+        args[ARG_os_pressure].u_int,
+        args[ARG_os_temp].u_int,
+        args[ARG_os_humidity].u_int,
+        args[ARG_mode].u_int
+    );
+
+    return mp_const_none;
+}
+
+
+}
