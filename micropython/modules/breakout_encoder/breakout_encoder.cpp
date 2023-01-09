@@ -137,3 +137,33 @@ mp_obj_t BreakoutEncoder_set_led(size_t n_args, const mp_obj_t *pos_args, mp_map
     int r = args[ARG_r].u_int;
     int g = args[ARG_g].u_int;
     int b = args[ARG_b].u_int;
+
+    if(r < 0 || r > 255)
+        mp_raise_ValueError("r out of range. Expected 0 to 255");
+    else if(g < 0 || g > 255)
+        mp_raise_ValueError("g out of range. Expected 0 to 255");
+    else if(b < 0 || b > 255)
+        mp_raise_ValueError("b out of range. Expected 0 to 255");
+    else
+        self->breakout->set_led(r, g, b);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutEncoder_available(mp_obj_t self_in) {
+    breakout_encoder_BreakoutEncoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_encoder_BreakoutEncoder_obj_t);
+    return mp_obj_new_bool(self->breakout->available());
+}
+
+mp_obj_t BreakoutEncoder_read(mp_obj_t self_in) {
+    breakout_encoder_BreakoutEncoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_encoder_BreakoutEncoder_obj_t);
+    return mp_obj_new_int(self->breakout->read());
+}
+
+mp_obj_t BreakoutEncoder_clear(mp_obj_t self_in) {
+    breakout_encoder_BreakoutEncoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_encoder_BreakoutEncoder_obj_t);
+    self->breakout->clear();
+
+    return mp_const_none;
+}
+}
