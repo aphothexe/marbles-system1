@@ -74,4 +74,16 @@ result = icp10125.measure(icp10125.LOW_POWER)
 
 ### Low Noise
 
-Low-noise measurements take 24ms (roughly 3.
+Low-noise measurements take 24ms (roughly 3.5x as long as normal) and trade speed for stability.
+
+```python
+result = icp10125.measure(icp10125.LOW_NOISE)
+```
+
+### Ultra Low Noise
+
+Ultra Low-noise measurements take 95ms
+
+```python
+result = icp10125.measure(icp10125.ULTRA_LOW_NOISE)
+```
