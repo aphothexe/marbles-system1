@@ -50,4 +50,42 @@ mp_obj_t BreakoutMatrix11x7_set_pixel(size_t n_args, const mp_obj_t *pos_args, m
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_col, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_row, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_val, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
     
+    breakout_matrix11x7_BreakoutMatrix11x7_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_matrix11x7_BreakoutMatrix11x7_obj_t);
+
+    int x = args[ARG_x].u_int;
+    int y = args[ARG_y].u_int;
+    int val = args[ARG_val].u_int;
+
+    if(x < 0 || x >= BreakoutMatrix11x7::WIDTH || y < 0 || y >= BreakoutMatrix11x7::HEIGHT)
+        mp_raise_ValueError("x or y out of range.");
+    else {
+        if(val < 0 || val > 255)
+            mp_raise_ValueError("val out of range. Expected 0 to 255");
+        else
+            self->breakout->set_pixel(x, y, val);
+    }
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutMatrix11x7_update(mp_obj_t self_in) {
+    breakout_matrix11x7_BreakoutMatrix11x7_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_matrix11x7_BreakoutMatrix11x7_obj_t);
+    self->breakout->update();
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutMatrix11x7_clear(mp_obj_t self_in) {
+    breakout_matrix11x7_BreakoutMatrix11x7_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_matrix11x7_BreakoutMatrix11x7_obj_t);
+    self->breakout->clear();
+
+    return mp_const_none;
+}
+}
