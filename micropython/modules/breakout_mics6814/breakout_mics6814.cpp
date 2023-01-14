@@ -138,4 +138,80 @@ mp_obj_t BreakoutMICS6814_set_led(size_t n_args, const mp_obj_t *pos_args, mp_ma
     return mp_const_none;
 }
 
-mp_obj_t BreakoutMICS
+mp_obj_t BreakoutMICS6814_set_heater(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_on };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_on, MP_ARG_REQUIRED | MP_ARG_BOOL },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_mics6814_BreakoutMICS6814_obj_t);
+
+    self->breakout->set_heater(args[ARG_on].u_bool);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutMICS6814_disable_heater(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    self->breakout->disable_heater();
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutMICS6814_get_raw_ref(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->get_raw_ref());
+}
+
+mp_obj_t BreakoutMICS6814_get_raw_red(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->get_raw_red());
+}
+
+mp_obj_t BreakoutMICS6814_get_raw_nh3(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->get_raw_nh3());
+}
+
+mp_obj_t BreakoutMICS6814_get_raw_oxd(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->get_raw_oxd());
+}
+
+mp_obj_t BreakoutMICS6814_read_all(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    BreakoutMICS6814::Reading reading = self->breakout->read_all();
+
+    mp_obj_t tuple[4];
+    tuple[REF] = mp_obj_new_float(reading.ref);
+    tuple[REDUCING] = mp_obj_new_float(reading.reducing);
+    tuple[NH3] = mp_obj_new_float(reading.nh3);
+    tuple[OXIDISING] = mp_obj_new_float(reading.oxidising);
+
+    return mp_obj_new_tuple(4, tuple);
+}
+
+mp_obj_t BreakoutMICS6814_read_ref(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->read_ref());
+}
+
+mp_obj_t BreakoutMICS6814_read_reducing(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->read_reducing());
+}
+
+mp_obj_t BreakoutMICS6814_read_nh3(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->read_nh3());
+}
+
+mp_obj_t BreakoutMICS6814_read_oxidising(mp_obj_t self_in) {
+    breakout_mics6814_BreakoutMICS6814_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_mics6814_BreakoutMICS6814_obj_t);
+    return mp_obj_new_float(self->breakout->read_oxidising());
+}
+}
