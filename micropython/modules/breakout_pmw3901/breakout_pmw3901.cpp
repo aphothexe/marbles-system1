@@ -165,4 +165,97 @@ mp_obj_t make_new(enum ChipType chip, const mp_obj_type_t *type, size_t n_args, 
 
 /***** Destructor ******/
 mp_obj_t BreakoutPMW3901___del__(mp_obj_t self_in) {
-    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_O
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_pmw3901_BreakoutPMW3901_obj_t);
+    m_del_class(BreakoutPMW3901, self->breakout);
+    return mp_const_none;
+}
+
+/***** Methods *****/
+mp_obj_t BreakoutPMW3901_get_id(mp_obj_t self_in) {
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_pmw3901_BreakoutPMW3901_obj_t);
+    return mp_obj_new_int(self->breakout->get_id());
+}
+
+mp_obj_t BreakoutPMW3901_get_revision(mp_obj_t self_in) {
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_pmw3901_BreakoutPMW3901_obj_t);
+    return mp_obj_new_int(self->breakout->get_revision());
+}
+
+mp_obj_t BreakoutPMW3901_set_rotation(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_degrees };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_degrees, MP_ARG_INT, {.u_int = (uint8_t)BreakoutPMW3901::DEGREES_0} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_pmw3901_BreakoutPMW3901_obj_t);
+
+    int degrees = args[ARG_degrees].u_int;
+    if(degrees < 0 || degrees > 3)
+        mp_raise_ValueError("degrees out of range. Expected 0 (0), 1 (90), 2 (180) or 3 (270)");
+    else
+        self->breakout->set_rotation((BreakoutPMW3901::Degrees)degrees);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutPMW3901_set_orientation(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_invert_x, ARG_invert_y, ARG_swap_xy };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_invert_x, MP_ARG_BOOL, {.u_bool = true} },
+        { MP_QSTR_invert_y, MP_ARG_BOOL, {.u_bool = true} },
+        { MP_QSTR_swap_xy, MP_ARG_BOOL, {.u_bool = true} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_pmw3901_BreakoutPMW3901_obj_t);
+
+    bool invert_x = args[ARG_invert_x].u_int;
+    bool invert_y = args[ARG_invert_y].u_int;
+    bool swap_xy = args[ARG_swap_xy].u_int;
+    self->breakout->set_orientation(invert_x, invert_y, swap_xy);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutPMW3901_get_motion(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_timeout };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_timeout, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_pmw3901_BreakoutPMW3901_obj_t);
+
+    float timeout = (float)BreakoutPMW3901::DEFAULT_MOTION_TIMEOUT_MS / 1000.0f;
+    uint16_t timeout_ms = BreakoutPMW3901::DEFAULT_MOTION_TIMEOUT_MS;
+
+    if (args[ARG_timeout].u_obj != mp_const_none) {
+        timeout = mp_obj_get_float(args[ARG_timeout].u_obj);
+        timeout_ms = (uint16_t)(timeout * 1000.0f);
+    }
+    int16_t x = 0;
+    int16_t y = 0;
+    if(self->breakout->get_motion(x, y, timeout_ms)) {
+        mp_obj_t tuple[2];
+        tuple[0] = mp_obj_new_int(x);
+        tuple[1] = mp_obj_new_int(y);
+        return mp_obj_new_tuple(2, tuple);
+    }
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutPMW3901_get_motion_slow(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_timeout };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_timeout, MP_ARG_OBJ, {.u_obj = mp_const_none} },
