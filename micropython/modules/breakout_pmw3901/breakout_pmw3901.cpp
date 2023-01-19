@@ -70,4 +70,99 @@ mp_obj_t make_new(enum ChipType chip, const mp_obj_type_t *type, size_t n_args, 
 
         // Parse args.
         mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-        mp_arg_parse_all_k
+        mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        int slot = args[ARG_slot].u_int;
+        if(slot == BG_SPI_FRONT || slot == BG_SPI_BACK) {
+            self = m_new_obj_with_finaliser(breakout_pmw3901_BreakoutPMW3901_obj_t);
+            self->base.type = &breakout_pmw3901_BreakoutPMW3901_type;
+
+            if(chip == ChipType::PMW3901) {
+                BreakoutPMW3901 *breakout = m_new_class(BreakoutPMW3901, (BG_SPI_SLOT)slot);
+                if (!breakout->init()) {
+                    m_del_class(BreakoutPMW3901, breakout);
+                    mp_raise_msg(&mp_type_RuntimeError, "BreakoutPMW3901: Init failed");
+                }
+                self->breakout = breakout;
+            } else {
+                BreakoutPAA5100 *breakout = m_new_class(BreakoutPAA5100, (BG_SPI_SLOT)slot);
+                if (!breakout->init()) {
+                    m_del_class(BreakoutPAA5100, breakout);
+                    mp_raise_msg(&mp_type_RuntimeError, "BreakoutPAA5100: Init failed");
+                }
+                self->breakout = breakout;
+            }
+        }
+        else {
+            mp_raise_ValueError("slot not a valid value. Expected 0 to 1");
+        }
+    }
+    else {
+        enum { ARG_spi, ARG_cs, ARG_sck, ARG_mosi, ARG_miso, ARG_interrupt };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_spi, MP_ARG_INT, {.u_int = -1} },
+            { MP_QSTR_cs, MP_ARG_INT, {.u_int = pimoroni::SPI_BG_FRONT_CS} },
+            { MP_QSTR_sck, MP_ARG_INT, {.u_int = pimoroni::SPI_DEFAULT_SCK} },
+            { MP_QSTR_mosi, MP_ARG_INT, {.u_int = pimoroni::SPI_DEFAULT_MOSI} },
+            { MP_QSTR_miso, MP_ARG_INT, {.u_int = pimoroni::SPI_DEFAULT_MISO} },
+            { MP_QSTR_interrupt, MP_ARG_INT, {.u_int = pimoroni::SPI_BG_FRONT_PWM} },
+        };
+
+        // Parse args.
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        // Get SPI bus.
+        int spi_id = args[ARG_spi].u_int;
+        int sck = args[ARG_sck].u_int;
+        int mosi = args[ARG_mosi].u_int;
+        int miso = args[ARG_miso].u_int;
+
+        if(spi_id == -1) {
+            spi_id = (sck >> 3) & 0b1;  // If no spi specified, choose the one for the given SCK pin
+        }
+        if(spi_id < 0 || spi_id > 1) {
+            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("SPI(%d) doesn't exist"), spi_id);
+        }
+
+        if(!IS_VALID_SCK(spi_id, sck)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("bad SCK pin"));
+        }
+
+        if(!IS_VALID_MOSI(spi_id, mosi)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("bad MOSI pin"));
+        }
+
+        if(!IS_VALID_MISO(spi_id, miso)) {
+            mp_raise_ValueError(MP_ERROR_TEXT("bad MISO pin"));
+        }
+
+        self = m_new_obj_with_finaliser(breakout_pmw3901_BreakoutPMW3901_obj_t);
+        self->base.type = &breakout_pmw3901_BreakoutPMW3901_type;
+
+        spi_inst_t *spi = (spi_id == 0) ? spi0 : spi1;
+        if(chip == ChipType::PMW3901) {
+            BreakoutPMW3901 *breakout = m_new_class(BreakoutPMW3901, spi, args[ARG_cs].u_int, sck, mosi, miso, args[ARG_interrupt].u_int);
+            if (!breakout->init()) {
+                m_del_class(BreakoutPMW3901, breakout);
+                mp_raise_msg(&mp_type_RuntimeError, "BreakoutPMW3901: Init failed");
+            }
+            self->breakout = breakout;
+        } else {
+            BreakoutPAA5100 *breakout = m_new_class(BreakoutPAA5100, spi, args[ARG_cs].u_int, sck, mosi, miso, args[ARG_interrupt].u_int);
+            if (!breakout->init()) {
+                m_del_class(BreakoutPAA5100, breakout);
+                mp_raise_msg(&mp_type_RuntimeError, "BreakoutPAA5100: Init failed");
+            }
+            self->breakout = breakout;
+        }
+    }
+
+    self->chip = chip;
+
+    return MP_OBJ_FROM_PTR(self);
+}
+
+/***** Destructor ******/
+mp_obj_t BreakoutPMW3901___del__(mp_obj_t self_in) {
+    breakout_pmw3901_BreakoutPMW3901_obj_t *self = MP_O
