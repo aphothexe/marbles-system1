@@ -37,4 +37,22 @@ STATIC const mp_map_elem_t scd41_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_set_temperature_offset), MP_ROM_PTR(&scd41_set_temperature_offset_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_temperature_offset), MP_ROM_PTR(&scd41_get_temperature_offset_obj) },
 
-    { MP_ROM_QSTR(MP_QSTR_set_sensor_altitude), 
+    { MP_ROM_QSTR(MP_QSTR_set_sensor_altitude), MP_ROM_PTR(&scd41_set_sensor_altitude_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_ambient_pressure), MP_ROM_PTR(&scd41_set_ambient_pressure_obj) },
+};
+STATIC MP_DEFINE_CONST_DICT(mp_module_scd41_globals, scd41_globals_table);
+
+/***** Module Definition *****/
+const mp_obj_module_t scd41_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t*)&mp_module_scd41_globals,
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+#if MICROPY_VERSION <= 70144
+MP_REGISTER_MODULE(MP_QSTR_breakout_scd41, scd41_user_cmodule, MODULE_BREAKOUT_SCD41_ENABLED);
+#else
+MP_REGISTER_MODULE(MP_QSTR_breakout_scd41, scd41_user_cmodule);
+#endif
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
