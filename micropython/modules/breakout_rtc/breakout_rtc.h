@@ -62,4 +62,22 @@ extern mp_obj_t BreakoutRTC_disable_timer(mp_obj_t self_in);
 extern mp_obj_t BreakoutRTC_enable_timer_interupt(mp_obj_t self_in);
 extern mp_obj_t BreakoutRTC_disable_timer_interrupt(mp_obj_t self_in);
 extern mp_obj_t BreakoutRTC_read_timer_interrupt_flag(mp_obj_t self_in);
-extern mp_obj_t 
+extern mp_obj_t BreakoutRTC_clear_timer_interrupt_flag(mp_obj_t self_in);
+
+extern mp_obj_t BreakoutRTC_enable_periodic_update_interrupt(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args);
+extern mp_obj_t BreakoutRTC_disable_periodic_update_interrupt(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_read_periodic_update_interrupt_flag(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_clear_periodic_update_interrupt_flag(mp_obj_t self_in);
+
+extern mp_obj_t BreakoutRTC_enable_trickle_charge(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args);
+extern mp_obj_t BreakoutRTC_disable_trickle_charge(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_set_backup_switchover_mode(mp_obj_t self_in, mp_obj_t val_in);
+
+extern mp_obj_t BreakoutRTC_enable_clock_out(mp_obj_t self_in, mp_obj_t freq_in);
+extern mp_obj_t BreakoutRTC_enable_interrupt_controlled_clockout(mp_obj_t self_in, mp_obj_t freq_in);
+extern mp_obj_t BreakoutRTC_disable_clock_out(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_read_clock_output_interrupt_flag(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_clear_clock_output_interrupt_flag(mp_obj_t self_in);
+
+extern mp_obj_t BreakoutRTC_status(mp_obj_t self_in);
+extern mp_obj_t BreakoutRTC_clear_interrupts(mp_obj_t self_in);
