@@ -197,4 +197,30 @@ mp_obj_t BreakoutTrackball_set_white(size_t n_args, const mp_obj_t *pos_args, mp
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-   
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_trackball_BreakoutTrackball_obj_t);
+
+    int value = args[ARG_value].u_int;
+
+    if(value < 0 || value > 255)
+        mp_raise_ValueError("value out of range. Expected 0 to 255");
+    else
+        self->breakout->set_white(value);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutTrackball_read(mp_obj_t self_in) {
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(self_in, breakout_trackball_BreakoutTrackball_obj_t);
+    Trackball::State state = self->breakout->read();
+
+    mp_obj_t tuple[6];
+    tuple[LEFT] = mp_obj_new_int(state.left);
+    tuple[RIGHT] = mp_obj_new_int(state.right);
+    tuple[UP] = mp_obj_new_int(state.up);
+    tuple[DOWN] = mp_obj_new_int(state.down);
+    tuple[SW_CHANGED] = mp_obj_new_int(state.sw_changed);
+    tuple[SW_PRESSED] = mp_obj_new_int(state.sw_pressed);
+
+    return mp_obj_new_tuple(6, tuple);
+}
+}
