@@ -89,4 +89,112 @@ mp_obj_t BreakoutTrackball_get_interrupt(mp_obj_t self_in) {
 
 mp_obj_t BreakoutTrackball_set_rgbw(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_self, ARG_r, ARG_g, ARG_b, ARG_w };
-    stati
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_r, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_g, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_b, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_w, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+    
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_trackball_BreakoutTrackball_obj_t);
+
+    int r = args[ARG_r].u_int;
+    int g = args[ARG_g].u_int;
+    int b = args[ARG_b].u_int;
+    int w = args[ARG_w].u_int;
+
+    if(r < 0 || r > 255)
+        mp_raise_ValueError("r out of range. Expected 0 to 255");
+    else if(g < 0 || g > 255)
+        mp_raise_ValueError("g out of range. Expected 0 to 255");
+    else if(b < 0 || b > 255)
+        mp_raise_ValueError("b out of range. Expected 0 to 255");
+    else if(w < 0 || w > 255)
+        mp_raise_ValueError("w out of range. Expected 0 to 255");
+    else
+        self->breakout->set_rgbw(r, g, b, w);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutTrackball_set_red(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_value };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_trackball_BreakoutTrackball_obj_t);
+
+    int value = args[ARG_value].u_int;
+
+    if(value < 0 || value > 255)
+        mp_raise_ValueError("value out of range. Expected 0 to 255");
+    else
+        self->breakout->set_red(value);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutTrackball_set_green(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_value };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_trackball_BreakoutTrackball_obj_t);
+
+    int value = args[ARG_value].u_int;
+
+    if(value < 0 || value > 255)
+        mp_raise_ValueError("value out of range. Expected 0 to 255");
+    else
+        self->breakout->set_green(value);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutTrackball_set_blue(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_value };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    breakout_trackball_BreakoutTrackball_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, breakout_trackball_BreakoutTrackball_obj_t);
+
+    int value = args[ARG_value].u_int;
+
+    if(value < 0 || value > 255)
+        mp_raise_ValueError("value out of range. Expected 0 to 255");
+    else
+        self->breakout->set_blue(value);
+
+    return mp_const_none;
+}
+
+mp_obj_t BreakoutTrackball_set_white(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_value };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+   
