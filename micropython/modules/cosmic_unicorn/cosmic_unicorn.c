@@ -45,4 +45,92 @@ STATIC const mp_rom_map_elem_t Channel_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_attack_duration), MP_ROM_PTR(&Channel_attack_duration_obj) },
     { MP_ROM_QSTR(MP_QSTR_decay_duration), MP_ROM_PTR(&Channel_decay_duration_obj) },
     { MP_ROM_QSTR(MP_QSTR_sustain_level), MP_ROM_PTR(&Channel_sustain_level_obj) },
-    { MP_ROM_QSTR(MP_QSTR_release_duratio
+    { MP_ROM_QSTR(MP_QSTR_release_duration), MP_ROM_PTR(&Channel_release_duration_obj) },
+    { MP_ROM_QSTR(MP_QSTR_pulse_width), MP_ROM_PTR(&Channel_pulse_width_obj) },
+    { MP_ROM_QSTR(MP_QSTR_trigger_attack), MP_ROM_PTR(&Channel_trigger_attack_obj) },
+    { MP_ROM_QSTR(MP_QSTR_trigger_release), MP_ROM_PTR(&Channel_trigger_release_obj) },
+    { MP_ROM_QSTR(MP_QSTR_play_tone), MP_ROM_PTR(&Channel_play_tone_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_NOISE), MP_ROM_INT(128) },
+    { MP_ROM_QSTR(MP_QSTR_SQUARE), MP_ROM_INT(64) },
+    { MP_ROM_QSTR(MP_QSTR_SAW), MP_ROM_INT(32) },
+    { MP_ROM_QSTR(MP_QSTR_TRIANGLE), MP_ROM_INT(16) },
+    { MP_ROM_QSTR(MP_QSTR_SINE), MP_ROM_INT(8) },
+    { MP_ROM_QSTR(MP_QSTR_WAVE), MP_ROM_INT(1) },
+};
+
+STATIC const mp_rom_map_elem_t CosmicUnicorn_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&CosmicUnicorn___del___obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear), MP_ROM_PTR(&CosmicUnicorn_clear_obj) },
+    { MP_ROM_QSTR(MP_QSTR_update), MP_ROM_PTR(&CosmicUnicorn_update_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_brightness), MP_ROM_PTR(&CosmicUnicorn_set_brightness_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_brightness), MP_ROM_PTR(&CosmicUnicorn_get_brightness_obj) },
+    { MP_ROM_QSTR(MP_QSTR_adjust_brightness), MP_ROM_PTR(&CosmicUnicorn_adjust_brightness_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_volume), MP_ROM_PTR(&CosmicUnicorn_set_volume_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_volume), MP_ROM_PTR(&CosmicUnicorn_get_volume_obj) },
+    { MP_ROM_QSTR(MP_QSTR_adjust_volume), MP_ROM_PTR(&CosmicUnicorn_adjust_volume_obj) },
+    { MP_ROM_QSTR(MP_QSTR_light), MP_ROM_PTR(&CosmicUnicorn_light_obj) },
+    { MP_ROM_QSTR(MP_QSTR_is_pressed), MP_ROM_PTR(&CosmicUnicorn_is_pressed_obj) },
+    { MP_ROM_QSTR(MP_QSTR_play_sample), MP_ROM_PTR(&CosmicUnicorn_play_sample_obj) },
+    { MP_ROM_QSTR(MP_QSTR_play_synth), MP_ROM_PTR(&CosmicUnicorn_play_synth_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop_playing), MP_ROM_PTR(&CosmicUnicorn_stop_playing_obj) },
+    { MP_ROM_QSTR(MP_QSTR_synth_channel), MP_ROM_PTR(&CosmicUnicorn_synth_channel_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_WIDTH), MP_ROM_INT(32) },
+    { MP_ROM_QSTR(MP_QSTR_HEIGHT), MP_ROM_INT(32) },
+
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_A), MP_ROM_INT(0) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_B), MP_ROM_INT(1) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_C), MP_ROM_INT(3) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_D), MP_ROM_INT(6) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_SLEEP), MP_ROM_INT(27) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_VOLUME_UP), MP_ROM_INT(7) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_VOLUME_DOWN), MP_ROM_INT(8) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_BRIGHTNESS_UP), MP_ROM_INT(21) },
+    { MP_ROM_QSTR(MP_QSTR_SWITCH_BRIGHTNESS_DOWN), MP_ROM_INT(26) },
+};
+
+STATIC MP_DEFINE_CONST_DICT(Channel_locals_dict, Channel_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(CosmicUnicorn_locals_dict, CosmicUnicorn_locals_dict_table);
+
+/***** Class Definition *****/
+#ifdef MP_DEFINE_CONST_OBJ_TYPE
+MP_DEFINE_CONST_OBJ_TYPE(
+    Channel_type,
+    MP_QSTR_Channel,
+    MP_TYPE_FLAG_NONE,
+    make_new, Channel_make_new,
+    print, Channel_print,
+    locals_dict, (mp_obj_dict_t*)&Channel_locals_dict
+);
+
+MP_DEFINE_CONST_OBJ_TYPE(
+    CosmicUnicorn_type,
+    MP_QSTR_CosmicUnicorn,
+    MP_TYPE_FLAG_NONE,
+    make_new, CosmicUnicorn_make_new,
+    print, CosmicUnicorn_print,
+    locals_dict, (mp_obj_dict_t*)&CosmicUnicorn_locals_dict
+);
+#else
+const mp_obj_type_t Channel_type = {
+    { &mp_type_type },
+    .name = MP_QSTR_Channel,
+    .print = Channel_print,
+    .make_new = Channel_make_new,
+    .locals_dict = (mp_obj_dict_t*)&Channel_locals_dict,
+};
+
+const mp_obj_type_t CosmicUnicorn_type = {
+    { &mp_type_type },
+    .name = MP_QSTR_CosmicUnicorn,
+    .print = CosmicUnicorn_print,
+    .make_new = CosmicUnicorn_make_new,
+    .locals_dict = (mp_obj_dict_t*)&CosmicUnicorn_locals_dict,
+};
+#endif
+
+/***** Globals Table *****/
+STATIC const mp_map_elem_t Cosmic_globals_table[] = {
+    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_cosmic) },
+    { MP_OBJ_NE
