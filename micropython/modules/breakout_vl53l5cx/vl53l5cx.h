@@ -19,4 +19,8 @@ extern mp_obj_t VL53L5CX_set_ranging_frequency_hz(mp_obj_t self_in, mp_obj_t val
 extern mp_obj_t VL53L5CX_set_resolution(mp_obj_t self_in, mp_obj_t value);
 extern mp_obj_t VL53L5CX_set_integration_time_ms(mp_obj_t self_in, mp_obj_t value);
 extern mp_obj_t VL53L5CX_set_sharpener_percent(mp_obj_t self_in, mp_obj_t value);
-extern mp_obj_t VL53L5CX_set_target_ord
+extern mp_obj_t VL53L5CX_set_target_order(mp_obj_t self_in, mp_obj_t value);
+extern mp_obj_t VL53L5CX_set_power_mode(mp_obj_t self_in, mp_obj_t value);
+
+extern mp_obj_t VL53L5CX_data_ready(mp_obj_t self_in);
+extern mp_obj_t VL53L5CX_get_data(mp_obj_t self_in);
