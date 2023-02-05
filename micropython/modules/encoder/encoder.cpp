@@ -154,4 +154,117 @@ mp_obj_t Encoder_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw,
 
 /***** Destructor ******/
 mp_obj_t Encoder___del__(mp_obj_t self_in) {
-    _Encoder_obj_t *self = 
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    m_del_class(Encoder, self->encoder);
+    return mp_const_none;
+}
+
+
+/***** Methods *****/
+extern mp_obj_t Encoder_pins(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    pin_pair pins = self->encoder->pins();
+
+    mp_obj_t tuple[2];
+    tuple[0] = mp_obj_new_int(pins.a);
+    tuple[1] = mp_obj_new_int(pins.b);
+    return mp_obj_new_tuple(2, tuple);
+}
+
+extern mp_obj_t Encoder_common_pin(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_int(self->encoder->common_pin());
+}
+
+extern mp_obj_t Encoder_state(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    bool_pair state = self->encoder->state();
+
+    mp_obj_t tuple[2];
+    tuple[0] = state.a ? mp_const_true : mp_const_false;
+    tuple[1] = state.b ? mp_const_true : mp_const_false;
+    return mp_obj_new_tuple(2, tuple);
+}
+
+extern mp_obj_t Encoder_count(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_int(self->encoder->count());
+}
+
+extern mp_obj_t Encoder_delta(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_int(self->encoder->delta());
+}
+
+extern mp_obj_t Encoder_zero(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    self->encoder->zero();
+    return mp_const_none;
+}
+
+extern mp_obj_t Encoder_step(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_int(self->encoder->step());
+}
+
+extern mp_obj_t Encoder_turn(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_int(self->encoder->turn());
+}
+
+extern mp_obj_t Encoder_revolutions(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_float(self->encoder->revolutions());
+}
+
+extern mp_obj_t Encoder_degrees(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_float(self->encoder->degrees());
+}
+
+extern mp_obj_t Encoder_radians(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+    return mp_obj_new_float(self->encoder->radians());
+}
+
+extern mp_obj_t Encoder_direction(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_direction };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_direction, MP_ARG_OBJ, { .u_obj = mp_const_none }},
+    };
+
+    // Parse args.
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, _Encoder_obj_t);
+
+    if(n_args <= 1) {
+        return mp_obj_new_int(self->encoder->direction());
+    }
+    else {
+        int direction = mp_obj_get_int(args[ARG_direction].u_obj);
+        if(direction < 0 || direction > 1) {
+            mp_raise_ValueError("direction out of range. Expected NORMAL (0) or REVERSED_DIR (1)");
+        }
+        self->encoder->direction((Direction)direction);
+        return mp_const_none;
+    }
+}
+
+extern mp_obj_t Encoder_counts_per_rev(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_counts_per_rev };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_counts_per_rev, MP_ARG_OBJ, { .u_obj = mp_const_none }},
+    };
+
+    // Parse args.
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, _Encoder_obj_t);
+
+    if(n_args <= 1) {
+        return mp_obj_new_float(self->encoder->counts_per_re
