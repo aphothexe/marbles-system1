@@ -267,4 +267,55 @@ extern mp_obj_t Encoder_counts_per_rev(size_t n_args, const mp_obj_t *pos_args, 
     _Encoder_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, _Encoder_obj_t);
 
     if(n_args <= 1) {
-        return mp_obj_new_float(self->encoder->counts_per_re
+        return mp_obj_new_float(self->encoder->counts_per_rev());
+    }
+    else {
+        float counts_per_rev = mp_obj_get_float(args[ARG_counts_per_rev].u_obj);
+        if(counts_per_rev < FLT_EPSILON) {
+            mp_raise_ValueError("counts_per_rev out of range. Expected greater than 0.0");
+        }
+        self->encoder->counts_per_rev(counts_per_rev);
+        return mp_const_none;
+    }
+}
+
+extern mp_obj_t Encoder_capture(mp_obj_t self_in) {
+    _Encoder_obj_t *self = MP_OBJ_TO_PTR2(self_in, _Encoder_obj_t);
+
+    Encoder::Capture capture = self->encoder->capture();
+
+    mp_obj_t tuple[] = {
+        mp_obj_new_int(capture.count()),
+        mp_obj_new_int(capture.delta()),
+        mp_obj_new_float(capture.frequency()),
+        mp_obj_new_float(capture.revolutions()),
+        mp_obj_new_float(capture.degrees()),
+        mp_obj_new_float(capture.radians()),
+        mp_obj_new_float(capture.revolutions_delta()),
+        mp_obj_new_float(capture.degrees_delta()),
+        mp_obj_new_float(capture.radians_delta()),
+        mp_obj_new_float(capture.revolutions_per_second()),
+        mp_obj_new_float(capture.revolutions_per_minute()),
+        mp_obj_new_float(capture.degrees_per_second()),
+        mp_obj_new_float(capture.radians_per_second()),
+    };
+
+    STATIC const qstr tuple_fields[] = {
+        MP_QSTR_count,
+        MP_QSTR_delta,
+        MP_QSTR_frequency,
+        MP_QSTR_revolutions,
+        MP_QSTR_degrees,
+        MP_QSTR_radians,
+        MP_QSTR_revolutions_delta,
+        MP_QSTR_degrees_delta,
+        MP_QSTR_radians_delta,
+        MP_QSTR_revolutions_per_second,
+        MP_QSTR_revolutions_per_minute,
+        MP_QSTR_degrees_per_second,
+        MP_QSTR_radians_per_second,
+    };
+
+    return mp_obj_new_attrtuple(tuple_fields, sizeof(tuple) / sizeof(mp_obj_t), tuple);
+}
+}
