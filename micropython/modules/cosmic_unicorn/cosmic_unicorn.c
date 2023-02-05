@@ -133,4 +133,18 @@ const mp_obj_type_t CosmicUnicorn_type = {
 /***** Globals Table *****/
 STATIC const mp_map_elem_t Cosmic_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_cosmic) },
-    { MP_OBJ_NE
+    { MP_OBJ_NEW_QSTR(MP_QSTR_Channel), (mp_obj_t)&Channel_type },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_CosmicUnicorn), (mp_obj_t)&CosmicUnicorn_type },
+};
+STATIC MP_DEFINE_CONST_DICT(mp_module_Cosmic_globals, Cosmic_globals_table);
+
+/***** Module Definition *****/
+const mp_obj_module_t Cosmic_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t*)&mp_module_Cosmic_globals,
+};
+#if MICROPY_VERSION <= 70144
+MP_REGISTER_MODULE(MP_QSTR_cosmic, Cosmic_user_cmodule, MODULE_Cosmic_ENABLED);
+#else
+MP_REGISTER_MODULE(MP_QSTR_cosmic, Cosmic_user_cmodule);
+#endif
