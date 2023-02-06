@@ -21,4 +21,121 @@ Drawing is primarily handled via our [PicoGraphics](https://github.com/pimoroni/
 - [Example Program](#example-program)
 - [Interleaved Framebuffer](#interleaved-framebuffer)
 - [Function Reference](#function-reference)
-  - [Imports and Ob
+  - [Imports and Objects](#imports-and-objects)
+  - [System State](#system-state)
+    - [`set_brightness(value)`](#set_brightnessvalue)
+    - [`get_brightness()`](#get_brightness)
+    - [`adjust_brightness(delta)`](#adjust_brightnessdelta)
+    - [`set_volume(value)`](#set_volumevalue)
+    - [`get_volume()`](#get_volume)
+    - [`adjust_volume(delta)`](#adjust_volumedelta)
+    - [`light()`](#light)
+    - [`is_pressed(button)`](#is_pressedbutton)
+  - [Drawing](#drawing)
+    - [`update(PicoGraphics)`](#updatepicographics)
+    - [`clear()`](#clear)
+  - [Audio](#audio)
+    - [`play_sample(data)`](#play_sampledata)
+    - [`synth_channel(channel)`](#synth_channelchannel)
+    - [`play_synth()`](#play_synth)
+    - [`stop_playing()`](#stop_playing)
+    - [Channel Reference](#channel-reference)
+  - [Constants](#constants)
+    - [`WIDTH` & `HEIGHT`](#width--height)
+  - [Using Breakouts](#using-breakouts)
+
+# Example Program
+
+The following example shows how to scroll a simple message across the display.
+
+```python
+from galactic import GalacticUnicorn
+from picographics import PicoGraphics, DISPLAY_GALACTIC_UNICORN
+import time
+
+# create a PicoGraphics framebuffer to draw into
+graphics = PicoGraphics(display=DISPLAY_GALACTIC_UNICORN)
+
+# create our GalacticUnicorn object
+gu = GalacticUnicorn()
+
+# start position for scrolling (off the side of the display)
+scroll = float(-GalacticUnicorn.WIDTH)
+
+# message to scroll
+MESSAGE = "Pirate. Monkey. Robot. Ninja."
+
+# pen colours to draw with
+BLACK = graphics.create_pen(0, 0, 0)
+YELLOW = graphics.create_pen(255, 255, 0)
+
+while True:
+    # determine the scroll position of the text
+    width = graphics.measure_text(MESSAGE, 1)
+    scroll += 0.25
+    if scroll > width:
+      scroll = float(-GalacticUnicorn.WIDTH)
+
+    # clear the graphics object
+    graphics.set_pen(BLACK)
+    graphics.clear()
+
+    # draw the text
+    graphics.set_pen(YELLOW)
+    graphics.text(MESSAGE, round(0 - scroll), 2, -1, 0.55);    
+
+    # update the display
+    gu.update(graphics)
+
+    time.sleep(0.02)
+```
+
+# Interleaved Framebuffer
+
+Galactic Unicorn takes advantage of the RP2040's PIOs to drive screen updates - this is what gives it the performance it needs to render with 14-bit precision at over 300 frames per second.
+
+The PIO is a powerful, but limited, tool. It has no way to access memory at random and minimal support for decision making and branching. All it can really do is process a stream of data/instructions in order. 
+
+This means that we need to be clever about the way we pass data into the PIO program, the information needs to be delivered in the exact order that the PIO will need to process it. To achieve this we "interleave" our framebuffer - each frame of BCM data is passed one after another with values for the current row, pixel count, and timing inserted as needed:
+
+    row 0 data:
+      for each bcd frame:
+        bit    : data
+              0: 00110110                           // row pixel count (minus one)
+        1  - 53: xxxxxbgr, xxxxxbgr, xxxxxbgr, ...  // pixel data
+        54 - 55: xxxxxxxx, xxxxxxxx                 // dummy bytes to dword align
+             56: xxxxrrrr                           // row select bits
+        57 - 59: tttttttt, tttttttt, tttttttt       // bcd tick count (0-65536)
+    
+    row 1 data:
+      ...
+
+If you're working with our library then you don't need to worry about any of these details, they are handled for you.
+
+# Function Reference
+
+## Imports and Objects
+
+To access these functions, you'll need to first `import` the relevant libraries and then set up a Galactic Unicorn object:
+
+```python
+from galactic import GalacticUnicorn
+
+gu = GalacticUnicorn()
+```
+
+or (with PicoGraphics):
+
+```python
+from galactic import GalacticUnicorn
+from picographics import PicoGraphics, DISPLAY_GALACTIC_UNICORN
+
+gu = GalacticUnicorn()
+graphics = PicoGraphics(display=DISPLAY_GALACTIC_UNICORN)
+```
+
+## System State
+
+### `set_brightness(value)`
+
+Set the brightness - `value` is supplied as a floating point value between `0.0` a
