@@ -1,0 +1,33 @@
+#include "galactic_unicorn.h"
+
+
+/***** Methods *****/
+MP_DEFINE_CONST_FUN_OBJ_1(Channel___del___obj, Channel___del__);
+MP_DEFINE_CONST_FUN_OBJ_KW(Channel_configure_obj, 1, Channel_configure);
+MP_DEFINE_CONST_FUN_OBJ_1(Channel_restore_obj, Channel_restore);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_waveforms_obj, 1, 2, Channel_waveforms);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_frequency_obj, 1, 2, Channel_frequency);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_volume_obj, 1, 2, Channel_volume);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_attack_duration_obj, 1, 2, Channel_attack_duration);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_decay_duration_obj, 1, 2, Channel_decay_duration);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_sustain_level_obj, 1, 2, Channel_sustain_level);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_release_duration_obj, 1, 2, Channel_release_duration);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Channel_pulse_width_obj, 1, 2, Channel_pulse_width);
+MP_DEFINE_CONST_FUN_OBJ_1(Channel_trigger_attack_obj, Channel_trigger_attack);
+MP_DEFINE_CONST_FUN_OBJ_1(Channel_trigger_release_obj, Channel_trigger_release);
+MP_DEFINE_CONST_FUN_OBJ_KW(Channel_play_tone_obj, 2, Channel_play_tone);
+//MP_DEFINE_CONST_FUN_OBJ_1(Channel_stop_playing_obj, Channel_stop_playing);
+
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUnicorn___del___obj, GalacticUnicorn___del__);
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUnicorn_clear_obj, GalacticUnicorn_clear);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_update_obj, GalacticUnicorn_update);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_set_brightness_obj, GalacticUnicorn_set_brightness);
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUnicorn_get_brightness_obj, GalacticUnicorn_get_brightness);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_adjust_brightness_obj, GalacticUnicorn_adjust_brightness);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_set_volume_obj, GalacticUnicorn_set_volume);
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUnicorn_get_volume_obj, GalacticUnicorn_get_volume);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_adjust_volume_obj, GalacticUnicorn_adjust_volume);
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUnicorn_light_obj, GalacticUnicorn_light);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_is_pressed_obj, GalacticUnicorn_is_pressed);
+MP_DEFINE_CONST_FUN_OBJ_2(GalacticUnicorn_play_sample_obj, GalacticUnicorn_play_sample);
+MP_DEFINE_CONST_FUN_OBJ_1(GalacticUn

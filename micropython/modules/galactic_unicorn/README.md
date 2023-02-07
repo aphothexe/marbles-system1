@@ -271,4 +271,45 @@ sustain_level()
 sustain_level(level)
 release_duration()
 release_duration(duration)
-pulse_wid
+pulse_width()
+pulse_width(width)
+trigger_attack() # start the channel playing
+trigger_release() # stop the channel playing
+play_tone(frequency, volume=None, attack=None, release=None)
+```
+
+## Constants
+
+### `WIDTH` & `HEIGHT`
+
+The width and height of Galactic Unicorn are available in constants `WIDTH` and `HEIGHT`.
+
+For example:
+
+```python
+num_pixels = GalacticUnicorn.WIDTH * GalacticUnicorn.HEIGHT
+print(num_pixels)
+```
+
+## Using Breakouts
+
+Galactic Unicorn has two Qw/ST (Qwiic/STEMMA QT) connectors. Breakouts with Qw/ST connectors, can be plugged straight in with a [JST-SH to JST-SH cable](https://shop.pimoroni.com/products/jst-sh-cable-qwiic-stemma-qt-compatible?variant=31910609813587). You can connect I2C Breakout Garden breakouts without Qw/ST connectors using a [JST-SH to JST-SH cable](https://shop.pimoroni.com/products/jst-sh-cable-qwiic-stemma-qt-compatible?variant=31910609813587) and a [Qw/ST to Breakout Garden adaptor](https://shop.pimoroni.com/products/stemma-qt-qwiic-to-breakout-garden-adapter).
+
+- [List of breakouts currently supported in our C++/MicroPython build](https://github.com/pimoroni/pimoroni-pico#breakouts)
+
+Galactic Unicorn uses GP4 and GP5 for its I2C interface. You can use the constants in the shared `pimoroni` module to set up the I2C interface:
+
+```python
+from pimoroni_i2c import PimoroniI2C
+from pimoroni import BREAKOUT_GARDEN_I2C_PINS
+
+i2c = PimoroniI2C(**BREAKOUT_GARDEN_I2C_PINS)
+```
+
+Alternatively, you can specify the pin numbers directly:
+
+```python
+from pimoroni_i2c import PimoroniI2C
+
+i2c = PimoroniI2C(sda=4, scl=5)
+```
