@@ -138,4 +138,137 @@ graphics = PicoGraphics(display=DISPLAY_GALACTIC_UNICORN)
 
 ### `set_brightness(value)`
 
-Set the brightness - `value` is supplied as a floating point value between `0.0` a
+Set the brightness - `value` is supplied as a floating point value between `0.0` and `1.0`.
+
+### `get_brightness()`
+
+Returns the current brightness as a value between `0.0` and `1.0`.
+
+### `adjust_brightness(delta)`
+
+Adjust the brightness of the display - `delta` is supplied as a floating point value and will be added to the current brightness (and then clamped to the range `0.0` to `1.0`).
+
+For example:
+
+```python
+gu.set_brightness(0.5)
+gu.adjust_brightness(0.1)  # brightness is now 0.6
+gu.adjust_brightness(0.7)  # brightness is now 1.0
+gu.adjust_brightness(-0.2)  # brightness is now 0.8
+```
+
+### `set_volume(value)`
+
+Set the volume - `value` is supplied as a floating point value between `0.0` and `1.0`.
+
+### `get_volume()`
+
+Returns the current volume as a value between `0.0` and `1.0`.
+
+### `adjust_volume(delta)`
+
+Adjust the volume - `delta` is supplied as a floating point value and will be added to the current volume (and then clamped to the range `0.0` to `1.0`).
+
+For example:
+
+```python
+gu.set_volume(0.5)
+gu.set_volume(0.1)  # volume is now 0.6
+gu.adjust_volume(0.7)  # volume is now 1.0
+gu.adjust_volume(-0.2)  # volume is now 0.8
+```
+
+### `light()`
+
+Get the current value seen by the onboard light sensor as a value between `0` and `4095`.
+
+### `is_pressed(button)`
+
+Returns true if the requested `button` is currently pressed.
+
+There are a set of constants in the GalacticUnicorn class that represent each of the buttons. The brightness, sleep, and volume buttons are not tied to hardware functions (they are implemented entirely in software) so can also be used for user functions if preferred. Here's a list of the constants and their associated pin numbers:
+
+```python
+SWITCH_A               =  0
+SWITCH_B               =  1
+SWITCH_C               =  3
+SWITCH_D               =  6
+SWITCH_SLEEP           = 27
+SWITCH_VOLUME_UP       =  7
+SWITCH_VOLUME_DOWN     =  8
+SWITCH_BRIGHTNESS_UP   = 21
+SWITCH_BRIGHTNESS_DOWN = 26
+```
+
+For example:
+
+```python
+while not gu.is_pressed(GalacticUnicorn.SWITCH_A):
+    # wait for switch A to be pressed
+    pass
+
+print("We did it! We pressed switch A! Heck yeah!")
+```
+
+## Drawing
+
+### `update(PicoGraphics)`
+
+The PicoGraphics library provides a collection of powerful drawing methods to make things simple.
+
+The image on the PicoGraphics object provided is copied to the interleaved framebuffer with gamma correction applied.
+
+For example (assuming you've set up your Galactic Unicorn and PicoGraphics objects up [as we did above](#imports-and-objects)):
+
+```python
+gu.update(graphics)
+```
+
+⚠️ If you've used PicoGraphics on our other boards note that this `update` function works a little differently. Here it's a Galactic Unicorn function to which you need to pass a PicoGraphics object to.
+
+### `clear()`
+
+Clear the contents of the interleaved framebuffer. This will make your Galactic Unicorn display turn off. To show an image again, call the `update()` function as described above.
+
+## Audio
+
+Audio functionality is supported by our [PicoSynth library](https://github.com/pimoroni/pimoroni-pico/tree/main/libraries/pico_synth) which allows you to create multiple voice channels with ADSR (attack decay sustain release) envelopes. It provides a similar set of functionality to the classic SID chip in the Commodore 64.
+
+### `play_sample(data)`
+
+Play the provided 16-bit audio sample. `data` must point to a `bytearray` that contains 16-bit PCM data. The number of samples is retrieved from the array's length.
+
+### `synth_channel(channel)`
+
+Gets a `Channel` object which can then be configured with voice, ADSR envelope, etc.
+
+### `play_synth()`
+
+Start the synth playing.
+
+### `stop_playing()`
+
+Stops any currently playing audio.
+
+### Channel Reference
+
+```python
+configure(waveforms=None, frequency=None, volume=None,
+          attack=None, decay=None, sustain=None,
+          release=None, pulse_width=None)
+restore()
+waveforms()
+waveforms(waveforms)
+frequency()
+frequency(frequency)
+volume()
+volume(volume)
+attack_duration()
+attack_duration(duration)
+decay_duration()
+decay_duration(duration)
+sustain_level()
+sustain_level(level)
+release_duration()
+release_duration(duration)
+pulse_wid
