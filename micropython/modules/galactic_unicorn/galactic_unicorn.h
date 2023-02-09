@@ -29,4 +29,22 @@ extern mp_obj_t GalacticUnicorn_make_new(const mp_obj_type_t *type, size_t n_arg
 extern mp_obj_t GalacticUnicorn___del__(mp_obj_t self_in);
 extern mp_obj_t GalacticUnicorn_clear(mp_obj_t self_in);
 
-extern mp_obj_t GalacticUnicorn_update(mp_obj_t sel
+extern mp_obj_t GalacticUnicorn_update(mp_obj_t self_in, mp_obj_t graphics_in);
+
+extern mp_obj_t GalacticUnicorn_set_brightness(mp_obj_t self_in, mp_obj_t value);
+extern mp_obj_t GalacticUnicorn_get_brightness(mp_obj_t self_in);
+extern mp_obj_t GalacticUnicorn_adjust_brightness(mp_obj_t self_in, mp_obj_t delta);
+
+extern mp_obj_t GalacticUnicorn_set_volume(mp_obj_t self_in, mp_obj_t value);
+extern mp_obj_t GalacticUnicorn_get_volume(mp_obj_t self_in);
+extern mp_obj_t GalacticUnicorn_adjust_volume(mp_obj_t self_in, mp_obj_t delta);
+
+extern mp_obj_t GalacticUnicorn_light(mp_obj_t self_in);
+
+extern mp_obj_t GalacticUnicorn_is_pressed(mp_obj_t self_in, mp_obj_t button);
+
+extern mp_obj_t GalacticUnicorn_play_sample(mp_obj_t self_in, mp_obj_t data);
+extern mp_obj_t GalacticUnicorn_play_synth(mp_obj_t self_in);
+extern mp_obj_t GalacticUnicorn_stop_playing(mp_obj_t self_in);
+
+extern mp_obj_t GalacticUnicorn_synth_channel(mp_obj_t self_in, mp_obj_t channel_in);
