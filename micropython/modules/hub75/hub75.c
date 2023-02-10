@@ -59,4 +59,25 @@ STATIC const mp_map_elem_t hub75_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PIN_A2), MP_ROM_INT(28) },
     { MP_ROM_QSTR(MP_QSTR_PIN_INT), MP_ROM_INT(19) },
     { MP_ROM_QSTR(MP_QSTR_PIN_SDA), MP_ROM_INT(20) },
-    { MP_ROM_QSTR(MP_QSTR_PIN_SCL), MP_ROM_I
+    { MP_ROM_QSTR(MP_QSTR_PIN_SCL), MP_ROM_INT(21) },
+    { MP_ROM_QSTR(MP_QSTR_CURRENT_SENSE), MP_ROM_INT(29) },
+
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_RGB), MP_ROM_INT(0x00) },
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_RBG), MP_ROM_INT(0x01) },
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_GRB), MP_ROM_INT(0x02) },
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_GBR), MP_ROM_INT(0x03) },
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_BRG), MP_ROM_INT(0x04) },
+    { MP_ROM_QSTR(MP_QSTR_COLOR_ORDER_BGR), MP_ROM_INT(0x05) },
+};
+STATIC MP_DEFINE_CONST_DICT(mp_module_hub75_globals, hub75_globals_table);
+
+/***** Module Definition *****/
+const mp_obj_module_t hub75_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t*)&mp_module_hub75_globals,
+};
+#if MICROPY_VERSION <= 70144
+MP_REGISTER_MODULE(MP_QSTR_hub75, hub75_user_cmodule, MODULE_HUB75_ENABLED);
+#else
+MP_REGISTER_MODULE(MP_QSTR_hub75, hub75_user_cmodule);
+#endif
