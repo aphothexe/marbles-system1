@@ -30,4 +30,35 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, (mp_obj_dict_t*)&JPEG_locals_dict
 );
 #else
-const mp_obj_type
+const mp_obj_type_t JPEG_type = {
+    { &mp_type_type },
+    .name = MP_QSTR_jpegdec,
+    //.print = _JPEG_print,
+    .make_new = _JPEG_make_new,
+    .locals_dict = (mp_obj_dict_t*)&JPEG_locals_dict,
+};
+#endif
+
+// module
+STATIC const mp_map_elem_t JPEG_globals_table[] = {
+    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_jpegdec) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_JPEG), (mp_obj_t)&JPEG_type },
+
+    { MP_ROM_QSTR(MP_QSTR_JPEG_SCALE_FULL), MP_ROM_INT(0) },
+    { MP_ROM_QSTR(MP_QSTR_JPEG_SCALE_HALF), MP_ROM_INT(2) },
+    { MP_ROM_QSTR(MP_QSTR_JPEG_SCALE_QUARTER), MP_ROM_INT(4) },
+    { MP_ROM_QSTR(MP_QSTR_JPEG_SCALE_EIGHTH), MP_ROM_INT(8) },
+};
+
+STATIC MP_DEFINE_CONST_DICT(mp_module_JPEG_globals, JPEG_globals_table);
+
+const mp_obj_module_t JPEG_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t*)&mp_module_JPEG_globals,
+};
+
+#if MICROPY_VERSION <= 70144
+MP_REGISTER_MODULE(MP_QSTR_jpegdec, JPEG_user_cmodule, MODULE_JPEGDEC_ENABLED);
+#else
+MP_REGISTER_MODULE(MP_QSTR_jpegdec, JPEG_user_cmodule);
+#endif
