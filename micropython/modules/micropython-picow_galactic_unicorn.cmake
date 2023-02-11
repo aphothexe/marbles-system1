@@ -1,3 +1,4 @@
+
 include_directories(${CMAKE_CURRENT_LIST_DIR}/../../)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
@@ -25,20 +26,10 @@ include(pcf85063a/micropython)
 include(adcfft/micropython)
 
 # LEDs & Matrices
-include(plasma/micropython)
-include(hub75/micropython)
+include(galactic_unicorn/micropython)
 
-# Packs
-include(pico_unicorn/micropython)
-include(pico_scroll/micropython)
-include(pico_rgb_keypad/micropython)
-
-# Servos & Motors
-include(pwm/micropython)
-include(servo/micropython)
-include(encoder/micropython)
-include(motor/micropython)
-
-# include(micropython-common)
+# ULAB
+include(micropython-common-ulab)
+enable_ulab()
 
 include(modules_py/modules_py)

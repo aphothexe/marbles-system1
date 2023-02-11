@@ -23,15 +23,16 @@ include(pcf85063a/micropython)
 
 # Utility
 include(adcfft/micropython)
+include(wakeup/micropython)
+
+# Configure wakeup for Inky Frame
+target_compile_definitions(usermod_wakeup INTERFACE
+    -DWAKEUP_HAS_RTC=1
+    -DWAKEUP_HAS_SHIFT_REGISTER=1
+)
 
 # LEDs & Matrices
 include(plasma/micropython)
-include(hub75/micropython)
-
-# Packs
-include(pico_unicorn/micropython)
-include(pico_scroll/micropython)
-include(pico_rgb_keypad/micropython)
 
 # Servos & Motors
 include(pwm/micropython)
@@ -39,6 +40,6 @@ include(servo/micropython)
 include(encoder/micropython)
 include(motor/micropython)
 
-# include(micropython-common)
-
 include(modules_py/modules_py)
+
+copy_module(inky_frame

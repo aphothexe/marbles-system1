@@ -23,15 +23,15 @@ include(pcf85063a/micropython)
 
 # Utility
 include(adcfft/micropython)
+include(wakeup/micropython)
+
+# Configure wakeup for Enviro
+target_compile_definitions(usermod_wakeup INTERFACE
+    -DWAKEUP_HAS_RTC=1
+)
 
 # LEDs & Matrices
 include(plasma/micropython)
-include(hub75/micropython)
-
-# Packs
-include(pico_unicorn/micropython)
-include(pico_scroll/micropython)
-include(pico_rgb_keypad/micropython)
 
 # Servos & Motors
 include(pwm/micropython)
