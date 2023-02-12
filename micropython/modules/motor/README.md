@@ -257,4 +257,151 @@ for addr in range(motor2040.NUM_SENSORS):
 
 #### Fault Sensing
 
-The drivers on Motor 2040 can detect when there is a fault with their connected motors and shut themselves off for safety. When this occurs they also signal the fault by p
+The drivers on Motor 2040 can detect when there is a fault with their connected motors and shut themselves off for safety. When this occurs they also signal the fault by pulling a line to ground, but requires that the line be pulled up by default.
+
+The `AnalogMux` can be set with a pull up on the fault sensor line, by doing the following:
+
+```python
+mux.configure_pull(motor2040.FAULT_SENSE_ADDR, Pin.PULL_UP)
+```
+
+Then the fault can be read as a digital value calling `.read()` on the `AnalogMux` itself, with the value being inverted with `not` to give `True` for when a fault has occurred:
+```python
+mux.select(motor2040.FAULT_SENSE_ADDR)
+print("Fault =", not mux.read())
+```
+This internally reads the value of the `Pin` provided to `muxed_pin` during the creation of the `mux` object, so could be used to read any digital sensors attached to the external sensor headers of Motor 2040 too.
+
+
+### Reading the Encoders
+
+On the top edge of Motor 2040 are four JST-SH 6 pin connectors for N20 style motors with magnetic encoders. With these encoders you can measure the position and speed or your motors, opening up many advanced possibilities!
+
+To start using encoders, you will need to first import the `Encoder` class.
+```python
+from encoder import Encoder
+```
+
+To create your encoder, specify the PIO, PIO state-machine and GPIO pins it will be connected to, and pass them into `Encoder`. For this example we will use one of the handy constants of the `motor2040`.
+```python
+from encoder import MMME_CPR
+from motor import motor2040
+enc = Encoder(0, 0, motor2040.ENCODER_A, counts_per_rev=MMME_CPR, count_microsteps=True)
+```
+With the created encoder class, the current position can be read by calling `.revolutions()`, `.degrees()` or `.radians()`.
+
+For full details on encoders, including how to read speeds, please refer to the [Encoder Library](https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/modules/encoder).
+
+
+### Controlling the LED
+
+Between Motor 2040's four motor connectors is a single addressable RGB LEDs. This works using the same chainable 1-wire signalling as WS2812 LED's, commonly known as Neopixels. As such, it can be controlled using the Plasma Library, as used by the [Pimoroni Plasma 2040](https://shop.pimoroni.com/products/plasma-2040).
+
+To set up the LED, first import the `WS2812` class from the `plasma` module and the pin constants for the LED from `motor`:
+```python
+from plasma import WS2812
+from motor import motor2040
+```
+
+Then construct a new `WS2812` instance, specifying the number of LEDs, PIO, PIO state-machine and GPIO pin.
+```python
+led = WS2812(motor2040.NUM_LEDS, 1, 0, motor2040.LED_DATA)
+```
+
+Finally, start the LED by calling `start`:
+```python
+led.start()
+```
+
+For more information on how to control the LED, please refer to the [Plasma Library](https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/modules/plasma).
+
+
+### Pin Constants
+
+The `motor` module contains a `motor2040` sub module with constants for the motor, encoder, LED, sensor and button pins.
+
+
+#### Motor Pins
+
+* `MOTOR_A` = `(4, 5)`
+* `MOTOR_B` = `(6, 7)`
+* `MOTOR_C` = `(8, 9)`
+* `MOTOR_D` = `(10, 11)`
+
+
+#### Encoder Pins
+
+* `ENCODER_A` = `(0, 1)`
+* `ENCODER_B` = `(2, 3)`
+* `ENCODER_C` = `(12, 13)`
+* `ENCODER_D` = `(14, 15)`
+
+
+#### UART/ULTRASOUND Pins
+
+* `TX_TRIG` = `16`
+* `RX_ECHO` = `17`
+
+
+#### LED Pin
+
+* `LED_DATA` = `18`
+
+
+#### I2C Pins
+
+* `INT` = `19`
+* `SDA` = `20`
+* `SCL` = `21`
+
+
+#### Button Pin
+
+* `USER_SW` = `23`
+
+
+#### Address Pins
+
+* `ADC_ADDR_0` = `22`
+* `ADC_ADDR_1` = `24`
+* `ADC_ADDR_2` = `25`
+
+
+#### ADC Pins
+
+* `ADC0` = `26`
+* `ADC1` = `27`
+* `ADC2` = `28`
+* `SHARED_ADC` = `29`
+
+
+### Other Constants
+
+The `motor2040` sub module also contains other constants to help with the control of Motor 2040's various features:
+
+
+#### Counts
+
+* `NUM_MOTORS` = `4`
+* `NUM_ENCODERS` = `4`
+* `NUM_SENSORS` = `2`
+* `NUM_LEDS` = `1`
+
+
+#### Addresses
+
+* `CURRENT_SENSE_A_ADDR` = `0b000`
+* `CURRENT_SENSE_B_ADDR` = `0b001`
+* `CURRENT_SENSE_C_ADDR` = `0b010`
+* `CURRENT_SENSE_D_ADDR` = `0b011`
+* `VOLTAGE_SENSE_ADDR` = `0b100`
+* `FAULT_SENSE_ADDR` = `0b101`
+* `SENSOR_1_ADDR` = `0b110`
+* `SENSOR_2_ADDR` = `0b111`
+
+
+#### Sensing
+
+* `VOLTAGE_GAIN` = `0.28058`
+* `SHUNT_RESISTOR` = `0.47`
+*
