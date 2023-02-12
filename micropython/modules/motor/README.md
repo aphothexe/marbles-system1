@@ -476,4 +476,56 @@ Both parameters can also be provided during the creation of a new `Motor` object
 
 ### Control by Percent
 
-Sometimes there are projects where a motor needs to drive bas
+Sometimes there are projects where a motor needs to drive based on the reading from a sensor or another device, but the numbers given out are not easy to convert to speeds the motor accepts. To overcome this the library lets you drive the motor at a percent between its negative and positive speeds, or two speeds provided, based on that input.
+
+With an input between `-1.0` and `1.0`, a motor can be set to a percent between its negative and positive speeds using `.to_percent(in)`.
+
+With an input between a provided min and max, a motor can be set to a percent between its negative and positive speeds using `.to_percent(in, in_min, in_max)`.
+
+With an input between a provided min and max, a motor can be set to a percent between two provided speeds using `.to_percent(in, in_min, value_min, value_max)`.
+
+If the motor is disabled, these will enable it.
+
+
+### Control by Duty Cycle
+
+Motor drivers accept pulse width modulated (PWM) signals to control the speed and direction of their connected motors. The percentage of time that these signals are active for is know as their duty cycle. This is typically measured as a value between `0.0` and `1.0`, but as motors use two pins for their control signals, here negative values are added to denote the reverse direction.
+
+The duty cycle of a motor can be set by calling `.duty(duty)`, which takes a float from `-1.0` to `1.0` as its `duty` input. If the motor is disabled this will enable it. This function will also recalculate the related speed.
+
+To read back the current duty cycle of the motor, call `.duty()` without any input. If the motor is disabled, this will be the last duty that was provided when enabled.
+
+
+#### Duty Deadzone
+
+Most motors have a duty cycle value below which their is too much friction for them to move. This may not be a concern, except for when running motors at audable frequencies, where the buzzing of the motor trying to move without success can get annoying.
+
+To overcome this, a duty cycle deadzone can be set on a per motor basis by calling `.deadzone(deadzone)`, which accepts a float from `0.0` to less than `1.0`. Whenever a duty cycle is set, either directly or via speed or percent functions, it will only be output to the motor if it is greater than or equal to the deadzone. If it's below, the motor will be stopped instead. By default the deadzone is `0.05`.
+
+To read back the current duty deadzone of the motor, call `.deadzone()` without any input.
+
+Note that the motor keeps track of its duty cycle, so if the deadzone is changed the check will be performed again, and may either start a motor that was previously stopped or visa versa.
+
+
+### Frequency Control
+
+Motors can be driven at a variety of frequencies, with common values being above the range of human hearing. As such this library uses 25KHz as its default, but this can easily be changed.
+
+The frequency (in Hz) of a motor can be set by calling `.frequency(freq)`, which takes a float as its `freq` input. The supported range of this input is `10` Hz to `400` KHz, though not all motor drivers can handle the very high frequencies.
+
+To read back the current frequency (in Hz) of the motor, call `.frequency()` without any input.
+
+Note that changing the frequency does not change the duty cycle or speed sent to the motors, only how frequently pulses are sent.
+
+### Configuration
+
+### Direction
+
+The driving direction of a motor can be changed either by providing `direction=REVERSED_DIR` when creating the `Motor` object, or by calling `.direction(REVERSED_DIR)` at any time in code. The `REVERSED_DIR` constant comes from the `pimoroni` module. There is also a `NORMAL_DIR` constant, though this is the default.
+
+The current direction of a motor can be read back by calling `.direction()`.
+
+
+### Decay Mode
+
+If you have ever had a motor directly connected to a power source and turned the power off, or disconnected the wire, you may have noticed that the motor continues to spin for a second or two before it reaches a stop. This is because the magnetic field the power source was generating has decayed away quickly, so the only thing slowing the motor down is friction
