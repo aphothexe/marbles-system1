@@ -181,4 +181,80 @@ state = user_sw.raw()
 
 ### Reading the Sensors
 
-On the right-hand edge of Motor 2040 are two analog inpu
+On the right-hand edge of Motor 2040 are two analog inputs, with neighbouring 3.3V and GND. These let you connect up sensors to enable your mechanical creations to sense how they are interacting with the world. For example, a pair of analog proximity sensors could be hooked up for wall avoidance or line following, or they could have microswitches wired to report when a motor driven mechanism has reached an end-stop.
+
+Motor 2040 also has six internal sensors:
+* A voltage sensor, letting you measure the supply voltage to the motors.
+* Four current sensors, letting you measure how much current each motor is drawing.
+* A fault sensor, letting you know if there is an issue with one of more of your motors
+These could be used just for monitoring, or as the trigger to turn off motors safely when voltage gets too low or current draw gets too high.
+
+To allow for all of these inputs, Motor 2040 has an onboard analog multiplexer that expands a single analog pin into eight, by use of three digital address pins that select a single input at a time. As such, the setup for these sensors is more involved than it would be to just read eight analog pins directly.
+
+To begin reading these inputs, first import the `Analog` and `AnalogMux` classes from `pimoroni` and the pin, address, and gain constants from `motor`:
+
+```python
+from pimoroni import Analog
+from motor import motor2040
+```
+
+Then set up three instances of `Analog` for the sensor and fault, voltage, and current sensing:
+
+```python
+sen_adc = Analog(motor2040.SHARED_ADC)
+vol_adc = Analog(motor2040.SHARED_ADC, motor2040.VOLTAGE_GAIN)
+cur_adc = Analog(motor2040.SHARED_ADC, motor2040.CURRENT_GAIN,
+                 motor2040.SHUNT_RESISTOR, motor2040.CURRENT_OFFSET)
+```
+
+You may notice, all three of these use the same `SHARED_ADC` pin. This is intentional as it is just a single pin that is being used for all three different functions, only the gains differ.
+
+The next step is to set up the analog multiplexer, by providing it with the three address pins:
+```python
+mux = AnalogMux(motor2040.ADC_ADDR_0, motor2040.ADC_ADDR_1, motor2040.ADC_ADDR_2)
+```
+Note that the `AnalogMux` does not know about any of the `Analog` classes that were created before.
+
+With the multiplexer now configured, reading each sensor is simply a case of 'selecting' the sensor on the multiplexer then reading the value from one of the three `Analog` classes created at the start.
+
+To read the two sensor headers:
+```python
+for addr in range(motor2040.NUM_SENSORS):
+    mux.select(addr + motor2040.SENSOR_1_ADDR)
+    print("Sensor", addr + 1, "=", sen_adc.read_voltage())
+```
+
+To read the voltage sense:
+```python
+mux.select(motor2040.VOLTAGE_SENSE_ADDR)
+print("Voltage =", vol_adc.read_voltage(), "V")
+```
+
+To read the current draw in amps (A):
+```python
+for addr in range(motor2040.NUM_MOTORS):
+    mux.select(addr + motor2040.CURRENT_SENSE_A_ADDR)
+    print("Current", addr + 1, "=", cur_adc.read_current(), "A")
+```
+
+
+#### Configuring Pulls
+
+For the internal fault sensor, as well as some external sensors, you may need to have the input be pulled high or low before taking a reading. To support this there is an optional `muxed_pin` parameter that can be passed into the `AnalogMux` when creating it, which gives the multiplexer access to the pin to control the pulls.
+
+```python
+mux = AnalogMux(motor2040.ADC_ADDR_0, motor2040.ADC_ADDR_1, motor2040.ADC_ADDR_2,
+                muxed_pin=Pin(motor2040.SHARED_ADC))
+```
+
+From there the pull state of each of the multiplexer's addresses can be configured independently by calling `.configure_pull()`, with the address and the pull state (either `Pin.PULL_UP`, `Pin.PULL_DOWN`, or `None`).
+
+The below example shows how to set both sensor addresses to have pull-downs:
+```python
+for addr in range(motor2040.NUM_SENSORS):
+    mux.configure_pull(addr + motor2040.SENSOR_1_ADDR, Pin.PULL_DOWN)
+```
+
+#### Fault Sensing
+
+The drivers on Motor 2040 can detect when there is a fault with their connected motors and shut themselves off for safety. When this occurs they also signal the fault by p
