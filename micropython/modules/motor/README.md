@@ -404,4 +404,76 @@ The `motor2040` sub module also contains other constants to help with the contro
 
 * `VOLTAGE_GAIN` = `0.28058`
 * `SHUNT_RESISTOR` = `0.47`
-*
+* `CURRENT_GAIN` = `1`
+* `CURRENT_OFFSET` = `-0.005`
+
+
+## Motor
+
+### Getting Started
+
+To start using motors with your Motor 2040, you will need to first import the `Motor` class.
+```python
+from motor import Motor, motor2040
+```
+If you are using another RP2040 based board, then `motor2040` can be omitted from the above line.
+
+To create your motor, choose which GPIO pins it will be connected to, and pass that into `Motor`. For this example we will use one of the handy constants of the `motor2040`.
+```python
+m = Motor(motor2040.MOTOR_A)
+```
+
+You now have a `Motor` class called `m` that will control the physical motor connected to `MOTOR_A`. To start using this motor, simply enable it using:
+```python
+m.enable()
+```
+
+This activates the motor and sets it to its last known speed. Since this is the first time enabling the motor, there is no last known speed, so instead it will be zero.
+
+Once you have finished with the motor, it can be disabled by calling:
+```python
+m.disable()
+```
+
+From here the motor can be controlled in several ways. These are covered in more detail in the following sections.
+
+
+### Control by Speed
+
+The most intuitive way of controlling a motor is by speed. Speed can be any number that has a real-world meaning for that type of motor, for example revolutions per minute, or the linear or angular speed of the mechanism it is driving. By default the speed is a value ranging from `-1.0` to `1.0` but this can be changed by setting a new `speed_scale`. See [Calibration](#calibration) for more details.
+
+The speed of a motor can be set by calling `.speed(speed)`, which takes a float as its `speed` input. If the motor is disabled, this will enable it. The resulting duty cycle will also be stored.
+
+To read back the current speed of the motor, call `.speed()` without any input. If the motor is disabled, this will be the last speed that was provided when enabled.
+
+
+#### Full Speed
+
+To simplify certain motion patterns, a motor can be commanded to its full negative, and full positive speeds. These are performed by calling `.full_negative()`, and `.full_positive()`, respectively. If the motor is disabled, these will enable it.
+
+The value of the full negative and full positive speed can be read back using `.speed_scale()`. This can be useful as an input to equations that provide numbers directly to `.speed(speed)`, for example.
+
+
+#### Stopping
+
+The easiest way to stop a motor is by calling `.stop()`. This is equivalent to calling `.speed(0.0)` and stops the motor using the currently assigned decay mode of the `Motor` object. See [Decay Mode](#decay-mode) for more details.
+
+It is also possible to explicitly have the motor coast or brake to a stop by calling `.coast()` or `.brake()`.
+
+If the motor is disabled, these will enable it.
+
+
+#### Calibration
+
+It is very rare for a motor to perfectly drive at the speed we want them to. As such, the `Motor` class offers two parameters for adjusting how the value provided to `.speed(speed)` is converted to the PWM duty cycle that is actually sent to the motor, a speed scale, and a zeropoint.
+
+Speed scale, as the name implies, is a value that scales the duty cycle up or down to better reflect the measured speed of the motor when driving at full speed. This can be set by calling `.speed_scale(speed_scale)`, which accepts a value greater than `0.0`. The current speed scale can also be read by calling `.speed_scale()`.
+
+Zeropoint is a value that sets what duty cycle should count as the zero speed of the motor. By default this is `0.0` and usually it is fine to leave it at that, but there are cases at low speeds where the expected speed does not match the measured speed, which small adjustments to the zeropoint will fix. This can be set by calling `.zeropoint(zeropoint)`, which accepts a value from `0.0` to less than `1.0`. The current zeropoint can also be read by calling `.zeropoint()`.
+
+Both parameters can also be provided during the creation of a new `Motor` object.
+
+
+### Control by Percent
+
+Sometimes there are projects where a motor needs to drive bas
