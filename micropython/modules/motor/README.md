@@ -685,4 +685,43 @@ If a motor on the cluster is disabled, these will enable it.
 
 #### Calibration
 
-It is very rare for a motor to perfectly drive at the speed we want them to. As such, the each motor on a cluster offers two parameters for adjusting how the value provided to `.speed(speed)` is converted to the PWM duty cycle that
+It is very rare for a motor to perfectly drive at the speed we want them to. As such, the each motor on a cluster offers two parameters for adjusting how the value provided to `.speed(speed)` is converted to the PWM duty cycle that is actually sent to each motor, a speed scale, and a zeropoint.
+
+Speed scale, as the name implies, is a value that scales the duty cycle up or down to better reflect the measured speed of a motor on the cluster when driving at full speed. This can be set for each motor by calling `.speed_scale(motor, speed_scale)` or `.all_speed_scales(speed_scale)`, which both accept a value greater than `0.0`. The current speed scale of a motor can also be read by calling `.speed_scale(motor)`.
+
+Zeropoint is a value that sets what duty cycle should count as the zero speed of a motor on a cluster. By default this is `0.0` and usually it is fine to leave it at that, but there are cases at low speeds where the expected speed does not match the measured speed, which small adjustments to the zeropoint will fix. This can be set by calling `.zeropoint(motor, zeropoint)` or `.all_zeropoints(zeropoint)`, which both accept a value from `0.0` to less than `1.0`. The current zeropoint of a motor can also be read by calling `.zeropoint(motor)`.
+
+Both parameters can also be provided during the creation of a new `MotorCluster` object, though this will apply to all motors.
+
+
+### Control by Percent
+
+Sometimes there are projects where motors need to move based on the readings from sensors or another devices, but the numbers given out are not easy to convert to speeds the motors accept. To overcome this the library lets you drive the motors on a cluster at a percent between their negative and positive speeds, or two speeds provided, based on that input.
+
+With an input between `-1.0` and `1.0`, a motor on a cluster can be set to a percent between its negative and positive speeds using `.to_percent(motor, in)`, or all motors using `.all_to_percent(in)`.
+
+With an input between a provided min and max, a motor on a cluster can be set to a percent between its negative and postive speeds using `.at_percent(motor, in, in_min, in_max)`, or all motors using `.all_at_percent(in, in_min, in_max)`.
+
+With an input between a provided min and max, a motor on a cluster can be set to a percent between two provided speeds using `.at_percent(motor, in, in_min, speed_min, speed_max)`, or all motors using `.all_at_percent(in, in_min, speed_min, speed_max)`.
+
+If a motor on the cluster is disabled, these will enable it.
+
+
+### Control by Duty Cycle
+
+Motor drivers accept pulse width modulated (PWM) signals to control the speed and direction of their connected motors. The percentage of time that these signals are active for is know as their duty cycle. This is typically measured as a value between `0.0` and `1.0`, but as motors use two pins for their control signals, here negative values are added to denote the reverse direction.
+
+The duty cycle of a motor on the cluster can be set by calling `.duty(motor, duty)` or `.all_to_duty(duty)`, which take a float from `-1.0` to `1.0` as their `duty` input. If a motor on the cluster is disabled these will enable it. These functions will also recalculate the related speed.
+
+To read back the current duty cycle of the motor, call `.duty()` without any input. If the motor is disabled, this will be the last duty that was provided when enabled.
+
+
+### Frequency Control
+
+Motors can be driven at a variety of frequencies, with a common values being above the range of human hearing. As such this library uses 25KHz as its default, but this can easily be changed.
+
+The frequency (in Hz) of all the motors on a cluster can be set by calling `.frequency(freq)`, which takes a float as its `freq` input. The supported range of this input is `10` Hz to `400` KHz, though not all motor drivers can handle the very high frequencies. Due to how `MotorCluster` works, there is no way to set independent frequencies for each motor.
+
+To read back the current frequency (in Hz) of all the motors on a cluster, call `.frequency()` without any input.
+
+Note that changing the frequency does not change the duty cycle or speed sent to the motors, only h
