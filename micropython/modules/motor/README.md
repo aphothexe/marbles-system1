@@ -610,4 +610,79 @@ The official [RP2040 datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040
 
 | GPIO        | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 |
 |-------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-| PWM Channel | 0A | 0B | 1A | 1B | 2A | 2B | 3A | 3B | 4A 
+| PWM Channel | 0A | 0B | 1A | 1B | 2A | 2B | 3A | 3B | 4A | 4B | 5A | 5B | 6A | 6B |
+
+
+## MotorCluster
+
+### Getting Started
+
+An alternative way of controlling motors with your Motor 2040 is to use the `MotorCluster` class. This can be imported as follows:
+
+```python
+from motor import MotorCluster, motor2040
+```
+If you are using another RP2040 based board, then `motor2040` can be omitted from the above line.
+
+The next step is to choose which GPIO pins the cluster will be connected to and store them in a `list`. For example, using the handy constants of the `motor2040`, the below line creates the list `[ (4, 5), (6, 7), (8, 9), (10, 11) ]`
+```python
+pins = [ motor2040.MOTOR_A, motor2040.MOTOR_B, motor2040.MOTOR_C, motor2040.MOTOR_D ]
+```
+
+To create your motor cluster, specify the PIO, PIO state-machine and GPIO pins you chose a moment ago, and pass those into `MotorCluster`.
+```python
+cluster = MotorCluster(0, 0, pins)
+```
+
+You now have a `MotorCluster` class called `cluster` that will control the physical motors connected to `MOTOR_A`, `MOTOR_B`, `MOTOR_C`, and `MOTOR_D`. To start using these motors, simply enable them using:
+```python
+cluster.enable_all()
+```
+or
+```python
+cluster.enable(motor)
+```
+where `motor` is the motor's number within the cluster from `0` to `cluster.count() - 1`.
+
+These functions activate the motors and drives them at their last known speed. Since this is the first time enabling the motors, there are no last known speeds, so instead they will be set to zero instead.
+
+Once you have finished with the motors, they can be disabled by calling:
+```python
+cluster.disable_all()
+```
+or
+```python
+cluster.disable(motor)
+```
+where `motor` is the motor's number within the cluster from `0` to `cluster.count() - 1`.
+
+From here the motors can be controlled in several ways. These are covered in more detail in the following sections.
+
+
+### Control by Speed
+
+The most intuitive way of controlling a motor is by speed. Speed can be any number that has a real-world meaning for that type of motor, for example revolutions per minute, or the linear or angular speed of the mechanism it is driving. By default the speed is a value ranging from `-1.0` to `1.0` but this can be changed by setting a new `speed_scale`. See [Calibration](#calibration-1) for more details.
+
+The speed of a motor on a cluster can be set calling `.speed(motor, speed)` or `.all_to_speed(speed)`, which take a float as their `speed` input. If a motor on the cluster is disabled, these will enable it. The resulting duty cycle will also be stored.
+
+To read back the current speed of a motor on the cluster, call `.speed(motor)`. If the motor is disabled, this will be the last speed that was provided when enabled.
+
+
+#### Full Speed
+
+To simplify certain motion patterns, motors on a cluster can be commanded to their full negative, and full positive speeds. These are performed by calling `.full_negative(motor)`, and `.full_positive(motor)`, respectively. If the motor is disabled, these will enable it. There are also `.all_full_negative()`, and `.all_full_positive()` for having all the motors on the cluster drive at once.
+
+The value of the full negative and full positive speed of each motor on a cluster can be read back using `.speed_scale(motor)`. This can be useful as an input to equations that provide numbers directly to `.speed(motor, speed)`, for example.
+
+
+#### Stopping
+
+The easiest way to stop a motor on a cluster is by calling `.stop(motor)`. This is equivalent to calling `.speed(motor, 0.0)` and stops the motor using the currently assigned decay mode of the `Motor` object. See [Decay Mode](#decay-mode-1) for more details. All motors can be stopped at once by calling `.stop_all()`.
+
+It is also possible to explicitly have the motors on a cluster coast or brake to a stop by calling `.coast(motor)`, `.coast_all()`, `.brake(motor)`, or `.brake_all()`.
+
+If a motor on the cluster is disabled, these will enable it.
+
+#### Calibration
+
+It is very rare for a motor to perfectly drive at the speed we want them to. As such, the each motor on a cluster offers two parameters for adjusting how the value provided to `.speed(speed)` is converted to the PWM duty cycle that
