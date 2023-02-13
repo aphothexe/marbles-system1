@@ -528,4 +528,86 @@ The current direction of a motor can be read back by calling `.direction()`.
 
 ### Decay Mode
 
-If you have ever had a motor directly connected to a power source and turned the power off, or disconnected the wire, you may have noticed that the motor continues to spin for a second or two before it reaches a stop. This is because the magnetic field the power source was generating has decayed away quickly, so the only thing slowing the motor down is friction
+If you have ever had a motor directly connected to a power source and turned the power off, or disconnected the wire, you may have noticed that the motor continues to spin for a second or two before it reaches a stop. This is because the magnetic field the power source was generating has decayed away quickly, so the only thing slowing the motor down is friction. This results in the motor coasting to a stop.
+
+By contrast, if you were to wire your circuit up such that instead of disconnecting the power, the off position joined the two ends of the motor together, it would take longer for the magnetic field to decay away. This has the effect of braking the motor, causing it to stop quicker than with friction alone.
+
+These examples describe the two decay modes supported by the `Motor` class, `FAST_DECAY`, and `SLOW_DECAY`, respectively. Generally slow decay offers better motor performance, particularly with low speeds, so this is the default when creating a new `Motor`.
+
+If fast decay is wanted then it can either be changed by providing `mode=FAST_DECAY` during the class creation or by calling `.decay_mode(FAST_DECAY)`. The current decay mode can also be read with `.decay_mode()`.
+
+For more information about motor decay modes, it's highly recommended that you check out the Adafruit Learn Guide titled [Improve Brushed DC Motor Performance](https://learn.adafruit.com/improve-brushed-dc-motor-performance)
+
+
+### Driver Type
+
+There are two common types of DC motor drivers, based on the signals they expect for controlling the motor.
+* Dual PWMs, where both pins control the speed, direction, and decay mode of the motor.
+* Phase/Enable, where a single PWM pin controls speed and a single GPIO pin controls direction. There is no decay mode control.
+
+By default all `Motor` objects are initialised for dual PWM drivers, but if you are using the other type of driver this can be configured by providing `ph_en_driver=True` during object creation.
+
+
+### Function Reference
+
+Here is the complete list of functions available on the `Motor` class:
+```python
+Motor(pins, direction=NORMAL_DIR, speed_scale=1.0, zeropoint=0.0, deadzone=0.05, freq=25000, mode=SLOW_DECAY, ph_en_driver=False)
+pins()
+enable()
+disable()
+is_enabled()
+duty()
+duty(duty)
+speed()
+speed(speed)
+frequency()
+frequency(freq)
+stop()
+coast()
+brake()
+full_negative()
+full_positive()
+to_percent(in)
+to_percent(in, in_min, in_max)
+to_percent(in, in_min, in_max, speed_min, speed_max)
+direction()
+direction(direction)
+speed_scale()
+speed_scale(speed_scale)
+zeropoint()
+zeropoint(zeropoint)
+deadzone()
+deadzone(deadzone)
+decay_mode()
+decay_mode(mode)
+```
+
+### Constants Reference
+
+Here is the complete list of constants on the `motor` module:
+
+* `FAST_DECAY` = `0`
+* `SLOW_DECAY` = `1`
+
+Here are useful constants from the `pimoroni` module:
+
+* `NORMAL_DIR` = `0`
+* `REVERSED_DIR` = `1`
+
+
+### PWM Limitations
+
+Although the RP2040 is capable of outputting up to 16 PWM signals, there are limitations of which pins can be used together:
+* The PWMs output from pins 0 to 15 are repeated for pins 16 to 29, meaning that those pins share the same signals if PWM is enabled on both. For example if you used pin 3 for PWM and then tried to use pin 19, they would both output the same signal and it would not be possible to control them independently.
+* The 16 PWM channels are grouped into 8 PWM slices, each containing A and B sub channels that are synchronised with each other. This means that parameters such as frequency are shared, which can cause issues if you want one motor to operate at a different frequency to it's pin neighbour or to drive an LED with PWM at a high frequency.
+
+The official [RP2040 datasheet](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf), includes the handy _Table 525_ that details the pwm channel for each GPIO pin. This is shown below for convenience:
+
+| GPIO        | 0  | 1  | 2  | 3  | 4  | 5  | 6  | 7  | 8  | 9  | 10 | 11 | 12 | 13 | 14 | 15 |
+|-------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| PWM Channel | 0A | 0B | 1A | 1B | 2A | 2B | 3A | 3B | 4A | 4B | 5A | 5B | 6A | 6B | 7A | 7B |
+
+| GPIO        | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 |
+|-------------|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+| PWM Channel | 0A | 0B | 1A | 1B | 2A | 2B | 3A | 3B | 4A 
