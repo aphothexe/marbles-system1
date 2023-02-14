@@ -724,4 +724,68 @@ The frequency (in Hz) of all the motors on a cluster can be set by calling `.fre
 
 To read back the current frequency (in Hz) of all the motors on a cluster, call `.frequency()` without any input.
 
-Note that changing the frequency does not change the duty cycle or speed sent to the motors, only h
+Note that changing the frequency does not change the duty cycle or speed sent to the motors, only how frequently pulses are sent.
+
+Also, be aware that currently the frequency changes immediately, even if part-way through outputting a pulse. It is therefore recommended to disable all motors first before changing the frequency.
+
+
+### Phase Control
+
+The MotorCluster class allows for the start time of each motor's pulses to be delayed by a percentage of the available time period. This is called their phase.
+
+The phase of a motor on a cluster can be set by calling `.phase(motor, phase)` or `.all_to_phase(phase)`, which take a float between `0.0` and `1.0` as their `phase` input.
+
+To read back the current phase of a motor on a cluster, call `.phase(motor)`.
+
+By default all motors on a cluster will start with different phases unless `auto_phase=False` is provided when creating the `MotorCluster`.
+
+
+### Configuration
+
+### Direction
+
+The driving direction of a motor on the cluster can be changed by calling `.direction(motor, REVERSED_DIR)` or `.all_directions(REVERSED_DIR)` at any time in code. The `REVERSED_DIR` constant comes from the `pimoroni` module. There is also a `NORMAL_DIR` constant, though this is the default.
+
+The current direction of a motor on the cluster can be read back by calling `.direction(motor)`.
+
+
+### Decay Mode
+
+If you have ever had a motor directly connected to a power source and turned the power off, or disconnected the wire, you may have noticed that the motor continues to spin for a second or two before it reaches a stop. This is because the magnetic field the power source was generating has decayed away quickly, so the only thing slowing the motor down is friction. This results in the motor coasting to a stop.
+
+By contrast, if you were to wire your circuit up such that instead of disconnecting the power, the off position joined the two ends of the motor together, it would take longer for the magnetic field to decay away. This has the effect of braking the motor, causing it to stop quicker than with friction alone.
+
+These examples describe the two decay modes supported by the `MotorCluster` class, `FAST_DECAY`, and `SLOW_DECAY`, respectively. Generally slow decay offers better motor performance, particularly with low speeds, so this is the default when creating motors on a new `MotorCluster`.
+
+If fast decay is wanted then it can be changed by calling `.decay_mode(motor, FAST_DECAY)` or `.all_decay_modes(FAST_DECAY)`. The current decay mode of a motor on the cluster can also be read with `.decay_mode(motor)`.
+
+For more information about motor decay modes, it's highly recommended that you check out the Adafruit Learn Guide titled [Improve Brushed DC Motor Performance](https://learn.adafruit.com/improve-brushed-dc-motor-performance)
+
+
+### Delayed Loading
+
+To match behaviour with the regular `Motor` class, `MotorCluster` automatically applies each change to its motor's states immediately. However, sometimes this may not be wanted, and instead you want all motors to receive updated duty cycles at the same time, regardless of how long the code ran that calculated the update.
+
+For this purpose, all the functions that modify a motor state on a cluster include an optional parameter `load`, which by default is `True`. To avoid this "loading" include `load=False` in the relevant function calls. Then either the last call can include `load=True`, or a specific call to `.load()` can be made.
+
+
+### Function Reference
+
+Here is the complete list of functions available on the `MotorCluster` class:
+
+```python
+MotorCluster(pio, sm, pins, direction=NORMAL_DIR, speed_scale=1.0, zeropoint=0.0, deadzone=0.05, freq=25000, mode=SLOW_DECAY, auto_phase=True)
+count()
+pins(motor)
+enable(motor, load=True)
+enable_all(load=True)
+disable(motor, load=True)
+disable_all(load=True)
+is_enabled(motor)
+duty(motor)
+duty(motor, duty, load=True)
+all_to_duty(motor, load=True)
+speed(motor)
+speed(motor, speed, load=True)
+all_to_speed(speed, load=True)
+phase(m
