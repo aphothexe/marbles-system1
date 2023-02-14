@@ -788,4 +788,61 @@ all_to_duty(motor, load=True)
 speed(motor)
 speed(motor, speed, load=True)
 all_to_speed(speed, load=True)
-phase(m
+phase(motor)
+phase(motor, phase, load=True)
+all_to_phase(phase, load=True)
+frequency()
+frequency(freq)
+stop(motor, load=True)
+stop_all(load=True)
+coast(motor, load=True)
+coast_all(load=True)
+brake(motor, load=True)
+brake_all(load=True)
+full_negative(motor, load=True)
+all_full_negative(load=True)
+full_positive(motor, load=True)
+all_full_positive(load=True)
+to_percent(motor, in, load=True)
+to_percent(motor, in, in_min, in_max, load=True)
+to_percent(motor, in, in_min, in_max, speed_min, speed_max, load=True)
+all_to_percent(in, load=True)
+all_to_percent(in, in_min, in_max, load=True)
+all_to_percent(in, in_min, in_max, speed_min, speed_max, load=True)
+load()
+direction(motor)
+direction(motor, direction)
+all_directions(direction)
+speed_scale(motor)
+speed_scale(motor, speed_scale)
+all_speed_scales(speed_scale)
+zeropoint(motor)
+zeropoint(motor, zeropoint)
+all_zeropoints(zeropoint)
+deadzone(motor)
+deadzone(motor, deadzone, load=True)
+all_deadzones(deadzone, load=True)
+decay_mode(motor)
+decay_mode(motor, mode, load=True)
+all_decay_modes(mode, load=True)
+```
+
+
+### Constants Reference
+
+Here is the complete list of constants on the `motor` module:
+
+* `FAST_DECAY` = `0`
+* `SLOW_DECAY` = `1`
+
+Here are useful constants from the `pimoroni` module:
+
+* `NORMAL_DIR` = `0`
+* `REVERSED_DIR` = `1`
+
+
+### PIO Limitations
+
+The RP2040 features two PIOs with four state machines each. This places a hard limit on how many MotorClusters can be created. As this class is capable of driving all 30 GPIO pins, the only time this limit will be of concern is when motors with different frequencies are wanted, as all the outputs a MotorCluster controls share the same frequency. Relating this to the hardware PWM, think of it as a single PWM slice with up to 30 sub channels, A, B, C, D etc.
+
+When creating a MotorCluster, in most cases you'll use `0` for PIO and `0` for PIO state-machine. You should change these though if you plan on running multiple clusters, or using a cluster alongside something else that uses PIO, such as our [Plasma library](https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/modules/plasma).
