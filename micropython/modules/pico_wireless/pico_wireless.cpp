@@ -115,4 +115,104 @@ mp_obj_t picowireless_wifi_set_network(size_t n_args, const mp_obj_t *pos_args, 
         return mp_obj_new_int(wireless->wifi_set_network(ssid));
     }
     else
-        mp_rais
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_passphrase(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_ssid, ARG_passphrase };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_ssid, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_passphrase, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string ssid, passphrase;
+        mp_obj_to_string(args[ARG_ssid].u_obj, ssid);
+        mp_obj_to_string(args[ARG_passphrase].u_obj, passphrase);
+        return mp_obj_new_int(wireless->wifi_set_passphrase(ssid, passphrase));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_key(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_ssid, ARG_key_idx, ARG_passphrase };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_ssid, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_key_idx, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_passphrase, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t key_idx = args[ARG_key_idx].u_int;
+
+        std::string ssid, passphrase;
+        mp_obj_to_string(args[ARG_ssid].u_obj, ssid);
+        mp_obj_to_string(args[ARG_passphrase].u_obj, passphrase);
+        return mp_obj_new_int(wireless->wifi_set_key(ssid, key_idx, passphrase));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_config(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_valid_params, ARG_local_ip, ARG_gateway, ARG_subnet };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_valid_params, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_local_ip, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_gateway, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_subnet, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t valid_params = args[ARG_valid_params].u_int;
+        uint32_t local_ip = mp_obj_to_ip(args[ARG_local_ip].u_obj);
+        uint32_t gateway = mp_obj_to_ip(args[ARG_gateway].u_obj);
+        uint32_t subnet = mp_obj_to_ip(args[ARG_subnet].u_obj);
+        wireless->config(valid_params, local_ip, gateway, subnet);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_set_dns(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_dns_server1, ARG_dns_server2 };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_dns_server1, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_dns_server2 | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t valid_params = n_args;
+        uint32_t dns_server1 = mp_obj_to_ip(args[ARG_dns_server1].u_obj);
+        uint32_t dns_server2 = n_args == 1 ? 0 : mp_obj_to_ip(args[ARG_dns_server2].u_obj);
+        wireless->set_dns(valid_params, dns_server1, dns_server2);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_set_hostname(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wire
