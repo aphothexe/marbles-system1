@@ -169,3 +169,19 @@ STATIC const mp_map_elem_t picowireless_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_is_pressed), MP_ROM_PTR(&picowireless_is_pressed_obj) },
     { MP_ROM_QSTR(MP_QSTR_is_sdcard_detected), MP_ROM_PTR(&picowireless_is_sdcard_detected_obj) },
 };
+STATIC MP_DEFINE_CONST_DICT(mp_module_picowireless_globals, picowireless_globals_table);
+
+/***** Module Definition *****/
+const mp_obj_module_t picowireless_user_cmodule = {
+    .base = { &mp_type_module },
+    .globals = (mp_obj_dict_t*)&mp_module_picowireless_globals,
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+#if MICROPY_VERSION <= 70144
+MP_REGISTER_MODULE(MP_QSTR_picowireless, picowireless_user_cmodule, MODULE_PICO_WIRELESS_ENABLED);
+#else
+MP_REGISTER_MODULE(MP_QSTR_picowireless, picowireless_user_cmodule);
+#endif
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
