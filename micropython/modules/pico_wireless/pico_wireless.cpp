@@ -215,4 +215,147 @@ mp_obj_t picowireless_set_dns(size_t n_args, const mp_obj_t *pos_args, mp_map_t 
 }
 
 mp_obj_t picowireless_set_hostname(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    if(wire
+    if(wireless != nullptr) {
+        enum { ARG_hostname };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_hostname, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string hostname;
+        mp_obj_to_string(args[ARG_hostname].u_obj, hostname);
+        wireless->set_hostname(hostname);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_disconnect() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->disconnect());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_connection_status() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_connection_status());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_mac_address() {
+    if(wireless != nullptr) {
+        uint8_t* mac = wireless->get_mac_address();
+        return mp_obj_new_bytes(mac, WL_MAC_ADDR_LENGTH);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_ip_address() {
+    if(wireless != nullptr) {
+        IPAddress ip;
+        wireless->get_ip_address(ip);
+        return mp_ip_to_obj(ip);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_subnet_mask() {
+    if(wireless != nullptr) {
+        IPAddress mask;
+        wireless->get_subnet_mask(mask);
+        return mp_ip_to_obj(mask);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_gateway_ip() {
+    if(wireless != nullptr) {
+        IPAddress mask;
+        wireless->get_gateway_ip(mask);
+        return mp_ip_to_obj(mask);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_current_ssid() {
+    if(wireless != nullptr) {
+        std::string ssid = wireless->get_current_ssid();
+        return mp_obj_new_str(ssid.c_str(), ssid.length());
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_current_bssid() {
+    if(wireless != nullptr) {
+        uint8_t* bssid = wireless->get_current_bssid();
+        return mp_obj_new_bytes(bssid, WL_MAC_ADDR_LENGTH);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_current_rssi() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_current_rssi());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_current_encryption_type() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_current_encryption_type());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);    
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_start_scan_networks() {
+    // This doesn't actually *do* anything, so might as well save a few instructions!
+    
+    return mp_const_true;
+}
+
+mp_obj_t picowireless_get_scan_networks() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_scan_networks());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);    
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_ssid_networks(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_network_item };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_network_i
