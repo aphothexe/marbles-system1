@@ -464,4 +464,124 @@ mp_obj_t picowireless_req_host_by_name(size_t n_args, const mp_obj_t *pos_args, 
         };
 
         mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
-        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string hostname;
+        mp_obj_to_string(args[ARG_hostname].u_obj, hostname);
+
+        return mp_obj_new_bool(wireless->req_host_by_name(hostname));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_false;
+}
+
+mp_obj_t picowireless_get_host_by_name(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        if(n_args == 0) {
+            IPAddress ip;
+            if(wireless->get_host_by_name(ip)) {
+                return mp_ip_to_obj(ip);
+            }
+        }
+        else {
+            enum { ARG_hostname };
+            static const mp_arg_t allowed_args[] = {
+                { MP_QSTR_hostname, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            };
+
+            mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+            mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+            std::string hostname;
+            mp_obj_to_string(args[ARG_hostname].u_obj, hostname);
+
+            IPAddress ip;
+            if(wireless->get_host_by_name(hostname, ip)) {
+                return mp_ip_to_obj(ip);
+            }
+        }
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_fw_version() {
+    if(wireless != nullptr) {
+        const char* fw_ver = wireless->get_fw_version();
+        return mp_obj_new_str(fw_ver, strnlen(fw_ver, WL_FW_VER_LENGTH));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_time() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_time());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_set_power_mode(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_mode };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_mode, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t mode = args[ARG_mode].u_int;
+        wireless->set_power_mode(mode);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_ap_network(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_ssid, ARG_channel };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_ssid, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_channel, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string ssid;
+        mp_obj_to_string(args[ARG_ssid].u_obj, ssid);
+
+        uint8_t channel = args[ARG_channel].u_int;        
+        return mp_obj_new_int(wireless->wifi_set_ap_network(ssid, channel));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_ap_passphrase(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_ssid, ARG_passphrase, ARG_channel };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_ssid, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_passphrase, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_channel, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string ssid, passphrase;
+        mp_obj_to_string(args[ARG_ss
