@@ -584,4 +584,119 @@ mp_obj_t picowireless_wifi_set_ap_passphrase(size_t n_args, const mp_obj_t *pos_
         mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
         std::string ssid, passphrase;
-        mp_obj_to_string(args[ARG_ss
+        mp_obj_to_string(args[ARG_ssid].u_obj, ssid);
+        mp_obj_to_string(args[ARG_passphrase].u_obj, passphrase);
+
+        uint8_t channel = args[ARG_channel].u_int;        
+        return mp_obj_new_int(wireless->wifi_set_ap_passphrase(ssid, passphrase, channel));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_ping(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_ip_address, ARG_ttl };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_ip_address, MP_ARG_REQUIRED | MP_ARG_OBJ },
+            { MP_QSTR_ttl, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint32_t ip_address = mp_obj_to_ip(args[ARG_ip_address].u_obj);
+        uint8_t ttl = args[ARG_ttl].u_int;
+        return mp_obj_new_int(wireless->ping(ip_address, ttl));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_debug(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_on };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_on, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t on = args[ARG_on].u_int;
+        wireless->debug(on);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_temperature() {
+    if(wireless != nullptr)
+        return mp_obj_new_float(wireless->get_temperature());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);    
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_pin_mode(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_pin, ARG_mode };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_esp_pin, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_mode, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t pin = args[ARG_pin].u_int;
+        uint8_t mode = args[ARG_mode].u_int;
+        wireless->pin_mode(pin, mode);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_digital_write(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_pin, ARG_value };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_esp_pin, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t pin = args[ARG_pin].u_int;
+        uint8_t value = args[ARG_value].u_int;
+        wireless->digital_write(pin, value);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_analog_write(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_pin, ARG_value };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_esp_pin, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_value, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t pin = args[ARG_pin].u_int;
+        uint8
