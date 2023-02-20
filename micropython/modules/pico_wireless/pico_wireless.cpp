@@ -795,4 +795,106 @@ mp_obj_t picowireless_server_start(size_t n_args, const mp_obj_t *pos_args, mp_m
 
             uint32_t ip_address = mp_obj_to_ip(args[ARG_ip_address].u_obj);
             uint16_t port = args[ARG_port].u_int;
-            uin
+            uint8_t sock = args[ARG_sock].u_int;
+            uint8_t protocol_mode = args[ARG_protocol_mode].u_int;
+            wireless->start_server(ip_address, port, sock, protocol_mode);
+        }
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_client_start(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        if(n_args == 4) {
+            enum { ARG_ip_address, ARG_port, ARG_sock, ARG_protocol_mode };
+            static const mp_arg_t allowed_args[] = {
+                { MP_QSTR_ip_address, MP_ARG_REQUIRED | MP_ARG_OBJ },
+                { MP_QSTR_prt, MP_ARG_REQUIRED | MP_ARG_INT },
+                { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+                { MP_QSTR_protocol_mode, MP_ARG_REQUIRED | MP_ARG_INT },
+            };
+
+            mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+            mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+
+            uint32_t ip_address = mp_obj_to_ip(args[ARG_ip_address].u_obj);
+            uint16_t port = args[ARG_port].u_int;
+            uint8_t sock = args[ARG_sock].u_int;
+            uint8_t protocol_mode = args[ARG_protocol_mode].u_int;
+            wireless->start_client(ip_address, port, sock, protocol_mode);
+        }
+        else {
+            enum { ARG_hostname, ARG_ip_address, ARG_port, ARG_sock, ARG_protocol_mode };
+            static const mp_arg_t allowed_args[] = {
+                { MP_QSTR_hostname, MP_ARG_REQUIRED | MP_ARG_OBJ },
+                { MP_QSTR_ip_address, MP_ARG_REQUIRED | MP_ARG_OBJ },
+                { MP_QSTR_prt, MP_ARG_REQUIRED | MP_ARG_INT },
+                { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+                { MP_QSTR_protocol_mode, MP_ARG_REQUIRED | MP_ARG_INT },
+            };
+
+            mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+            mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+            std::string hostname;
+            mp_obj_to_string(args[ARG_hostname].u_obj, hostname);
+
+            uint32_t ip_address = mp_obj_to_ip(args[ARG_ip_address].u_obj);
+            uint16_t port = args[ARG_port].u_int;
+            uint8_t sock = args[ARG_sock].u_int;
+            uint8_t protocol_mode = args[ARG_protocol_mode].u_int;
+            wireless->start_client(hostname, ip_address, port, sock, protocol_mode);
+        }
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_client_stop(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        wireless->stop_client(sock);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_server_state(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        return mp_obj_new_int(wireless->get_server_state(sock));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_client_state(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t 
