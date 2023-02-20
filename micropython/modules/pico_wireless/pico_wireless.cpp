@@ -897,4 +897,115 @@ mp_obj_t picowireless_get_server_state(size_t n_args, const mp_obj_t *pos_args, 
 mp_obj_t picowireless_get_client_state(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     if(wireless != nullptr) {
         enum { ARG_sock };
-        static const mp_arg_t 
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        return mp_obj_new_int(wireless->get_client_state(sock));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_avail_data(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        return mp_obj_new_int(wireless->avail_data(sock));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_avail_server(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        return mp_obj_new_int(wireless->avail_server(sock));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_data(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock, ARG_peek };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_peek, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t *data = nullptr;
+        if(wireless->get_data(args[ARG_sock].u_int, data, args[ARG_peek].u_int)) {
+            return mp_obj_new_int(*data);
+        }
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_data_buf(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t *data = (uint8_t *)malloc(512);
+        uint16_t data_len = 512;
+        if(wireless->get_data_buf(args[ARG_sock].u_int, data, &data_len)) {
+            mp_obj_t response = mp_obj_new_bytes(data, data_len);
+            free(data);
+            return response;
+        }
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_insert_data_buf(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock, ARG_data};
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_data, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        mp_buff
