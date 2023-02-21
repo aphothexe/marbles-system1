@@ -1008,4 +1008,118 @@ mp_obj_t picowireless_insert_data_buf(size_t n_args, const mp_obj_t *pos_args, m
         mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
         mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-        mp_buff
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(args[ARG_data].u_obj, &bufinfo, MP_BUFFER_READ);
+
+        return mp_obj_new_bool(wireless->insert_data_buf(args[ARG_sock].u_int, (uint8_t *)bufinfo.buf, bufinfo.len));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_send_udp_data(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        uint8_t sock = args[ARG_sock].u_int;
+        return mp_obj_new_bool(wireless->send_udp_data(sock));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_send_data(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock, ARG_data};
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+            { MP_QSTR_data, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(args[ARG_data].u_obj, &bufinfo, MP_BUFFER_READ);
+
+        return mp_obj_new_int(wireless->send_data(args[ARG_sock].u_int, (uint8_t *)bufinfo.buf, bufinfo.len));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_check_data_sent(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_sock };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_sock, MP_ARG_REQUIRED | MP_ARG_INT },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        return mp_obj_new_int(wireless->check_data_sent(args[ARG_sock].u_int));
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_get_socket() {
+    if(wireless != nullptr)
+        return mp_obj_new_int(wireless->get_socket());
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_ent_identity(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_identity };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_identity, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string identity;
+        mp_obj_to_string(args[ARG_identity].u_obj, identity);
+        wireless->wifi_set_ent_identity(identity);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
+    
+    return mp_const_none;
+}
+
+mp_obj_t picowireless_wifi_set_ent_username(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    if(wireless != nullptr) {
+        enum { ARG_username };
+        static const mp_arg_t allowed_args[] = {
+            { MP_QSTR_username, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        };
+
+        mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+        mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+        std::string username;
+        mp_obj_to_string(args[ARG_username].u_obj, username);
+        wireless->wifi_set_ent_username(username);
+    }
+    else
+        mp_raise_msg(&mp_type_RuntimeError, NOT_INITIALISED_MSG);
