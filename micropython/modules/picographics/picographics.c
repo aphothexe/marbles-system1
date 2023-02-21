@@ -1,0 +1,17 @@
+#include "picographics.h"
+
+// Module functions
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(ModPicoGraphics_module_RGB_to_RGB332_obj, ModPicoGraphics_module_RGB_to_RGB332);
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(ModPicoGraphics_module_RGB_to_RGB565_obj, ModPicoGraphics_module_RGB_to_RGB565);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(ModPicoGraphics_module_RGB332_to_RGB_obj, ModPicoGraphics_module_RGB332_to_RGB);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(ModPicoGraphics_module_RGB565_to_RGB_obj, ModPicoGraphics_module_RGB565_to_RGB);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(ModPicoGraphics_get_required_buffer_size_obj, ModPicoGraphics_get_required_buffer_size);
+
+// Class Methods
+MP_DEFINE_CONST_FUN_OBJ_1(ModPicoGraphics_update_obj, ModPicoGraphics_update);
+MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(ModPicoGraphics_partial_update_obj, 5, 5, ModPicoGraphics_partial_update);
+MP_DEFINE_CONST_FUN_OBJ_2(ModPicoGraphics_set_backlight_obj, ModPicoGraphics_set_backlight);
+MP_DEFINE_CONST_FUN_OBJ_2(ModPicoGraphics_set_update_speed_obj, ModPicoGraphics_set_update_speed);
+
+// Palette management
+MP_DEFINE_CONST

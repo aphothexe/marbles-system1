@@ -82,4 +82,6 @@ extern mp_obj_t picowireless_wifi_set_ent_username(size_t n_args, const mp_obj_t
 extern mp_obj_t picowireless_wifi_set_ent_password(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args);
 extern mp_obj_t picowireless_wifi_set_ent_enable();
 
-extern mp_obj_t picowireless_set_led(size_t n_args, const mp_obj_t *pos_
+extern mp_obj_t picowireless_set_led(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args);
+extern mp_obj_t picowireless_is_pressed();
+extern mp_obj_t picowireless_is_sdcard_detected();
