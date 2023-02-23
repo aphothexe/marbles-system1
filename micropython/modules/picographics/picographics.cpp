@@ -60,4 +60,118 @@ bool get_display_settings(PicoGraphicsDisplay display, int &width, int &height, 
             if(pen_type == -1) pen_type = PEN_RGB332;
             break;
         case DISPLAY_PICO_DISPLAY_2:
-            
+            width = 320;
+            height = 240;
+            bus_type = BUS_SPI;
+            // Tufty display is upside-down
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB332;
+            break;
+        case DISPLAY_PICO_EXPLORER:
+        case DISPLAY_LCD_240X240:
+        case DISPLAY_ENVIRO_PLUS:
+            width = 240;
+            height = 240;
+            bus_type = BUS_SPI;
+            if(pen_type == -1) pen_type = PEN_RGB332;
+            break;
+        case DISPLAY_ROUND_LCD_240X240:
+            width = 240;
+            height = 240;
+            bus_type = BUS_SPI;
+            if(pen_type == -1) pen_type = PEN_RGB332;
+            break;
+        case DISPLAY_LCD_160X80:
+            width = 160;
+            height = 80;
+            bus_type = BUS_SPI;
+            if(pen_type == -1) pen_type = PEN_RGB332;
+            break;
+        case DISPLAY_I2C_OLED_128X128:
+            width = 128;
+            height = 128;
+            bus_type = BUS_I2C;
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_1BIT;
+            break;
+        case DISPLAY_INKY_PACK:
+            width = 296;
+            height = 128;
+            bus_type = BUS_SPI;
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_1BIT;
+            break;
+        case DISPLAY_INKY_FRAME:
+            width = 600;
+            height = 448;
+            bus_type = BUS_SPI;
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_P4;
+            break;
+        case DISPLAY_INKY_FRAME_4:
+            width = 640;
+            height = 400;
+            bus_type = BUS_SPI;
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_P4;
+            break;
+        case DISPLAY_GALACTIC_UNICORN:
+            width = 53;
+            height = 11;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_GFX_PACK:
+            width = 128;
+            height = 64;
+            bus_type = BUS_SPI;
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_1BIT;
+            break;
+        case DISPLAY_INTERSTATE75_32X32:
+            width = 32;
+            height = 32;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_64X32:
+            width = 64;
+            height = 32;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_96X32:
+            width = 96;
+            height = 32;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_128X32:
+            width = 128;
+            height = 32;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_64X64:
+            width = 64;
+            height = 64;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_128X64:
+            width = 128;
+            height = 64;
+            bus_type = BUS_PIO;
+            // Portrait to
