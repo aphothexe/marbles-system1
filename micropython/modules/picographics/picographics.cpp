@@ -174,4 +174,102 @@ bool get_display_settings(PicoGraphicsDisplay display, int &width, int &height, 
             width = 128;
             height = 64;
             bus_type = BUS_PIO;
-            // Portrait to
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_192X64:
+            width = 192;
+            height = 64;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INTERSTATE75_256X64:
+            width = 256;
+            height = 64;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        case DISPLAY_INKY_FRAME_7:
+            width = 800;
+            height = 480;
+            bus_type = BUS_SPI;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_INKY7;
+            break;
+        case DISPLAY_COSMIC_UNICORN:
+            width = 32;
+            height = 32;
+            bus_type = BUS_PIO;
+            // Portrait to match labelling
+            if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+            if(pen_type == -1) pen_type = PEN_RGB888;
+            break;
+        default:
+            return false;
+    }
+    return true;
+}
+
+size_t get_required_buffer_size(PicoGraphicsPenType pen_type, uint width, uint height) {
+    switch(pen_type) {
+        case PEN_1BIT:
+            return PicoGraphics_Pen1Bit::buffer_size(width, height);
+        case PEN_3BIT:
+            return PicoGraphics_Pen3Bit::buffer_size(width, height);
+        case PEN_P4:
+            return PicoGraphics_PenP4::buffer_size(width, height);
+        case PEN_P8:
+            return PicoGraphics_PenP8::buffer_size(width, height);
+        case PEN_RGB332:
+            return PicoGraphics_PenRGB332::buffer_size(width, height);
+        case PEN_RGB565:
+            return PicoGraphics_PenRGB565::buffer_size(width, height);
+        case PEN_RGB888:
+            return PicoGraphics_PenRGB888::buffer_size(width, height);
+        case PEN_INKY7:
+            return PicoGraphics_PenInky7::buffer_size(width, height);
+        default:
+            return 0;
+    }
+}
+
+mp_obj_t ModPicoGraphics_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
+    ModPicoGraphics_obj_t *self = nullptr;
+
+    enum { ARG_display, ARG_rotate, ARG_bus, ARG_buffer, ARG_pen_type, ARG_extra_pins, ARG_i2c_address };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_display, MP_ARG_INT | MP_ARG_REQUIRED },
+        { MP_QSTR_rotate, MP_ARG_INT, { .u_int = -1 } },
+        { MP_QSTR_bus, MP_ARG_OBJ, { .u_obj = mp_const_none } },
+        { MP_QSTR_buffer, MP_ARG_OBJ, { .u_obj = mp_const_none } },
+        { MP_QSTR_pen_type, MP_ARG_INT, { .u_int = -1 } },
+        { MP_QSTR_extra_pins, MP_ARG_OBJ, { .u_obj = mp_const_none } },
+        { MP_QSTR_i2c_address, MP_ARG_INT, { .u_int = -1 } },
+    };
+
+    // Parse args.
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    self = m_new_obj_with_finaliser(ModPicoGraphics_obj_t);
+    self->base.type = &ModPicoGraphics_type;
+
+    PicoGraphicsDisplay display = (PicoGraphicsDisplay)args[ARG_display].u_int;
+
+    bool round = display == DISPLAY_ROUND_LCD_240X240;
+    int width = 0;
+    int height = 0;
+    int pen_type = args[ARG_pen_type].u_int;
+    int rotate = args[ARG_rotate].u_int;
+    PicoGraphicsBusType bus_type = BUS_SPI;
+    if(!get_display_settings(display, width, height, rotate, pen_type, bus_type)) mp_raise_ValueError("Unsupported display!");
+    if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
+    
+    pimoroni::SPIPins spi_bus = get_spi_pins(BG_SPI_FRONT);
+    pimoroni::ParallelPins parallel_bus = {10, 11, 12, 13, 14, 2}; // Default for Tufty 2040 parall
