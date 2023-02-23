@@ -72,4 +72,73 @@ STATIC const mp_rom_map_elem_t ModPicoGraphics_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_text), MP_ROM_PTR(&ModPicoGraphics_text_obj) },
     { MP_ROM_QSTR(MP_QSTR_measure_text), MP_ROM_PTR(&ModPicoGraphics_measure_text_obj) },
     { MP_ROM_QSTR(MP_QSTR_polygon), MP_ROM_PTR(&ModPicoGraphics_polygon_obj) },
-    { MP_ROM_QSTR(MP_QSTR_
+    { MP_ROM_QSTR(MP_QSTR_triangle), MP_ROM_PTR(&ModPicoGraphics_triangle_obj) },
+    { MP_ROM_QSTR(MP_QSTR_line), MP_ROM_PTR(&ModPicoGraphics_line_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_set_spritesheet), MP_ROM_PTR(&ModPicoGraphics_set_spritesheet_obj) },
+    { MP_ROM_QSTR(MP_QSTR_load_spritesheet), MP_ROM_PTR(&ModPicoGraphics_load_spritesheet_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sprite), MP_ROM_PTR(&ModPicoGraphics_sprite_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_create_pen), MP_ROM_PTR(&ModPicoGraphics_create_pen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_create_pen_hsv), MP_ROM_PTR(&ModPicoGraphics_create_pen_hsv_obj) },
+    { MP_ROM_QSTR(MP_QSTR_update_pen), MP_ROM_PTR(&ModPicoGraphics_update_pen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_reset_pen), MP_ROM_PTR(&ModPicoGraphics_reset_pen_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_palette), MP_ROM_PTR(&ModPicoGraphics_set_palette_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_set_backlight), MP_ROM_PTR(&ModPicoGraphics_set_backlight_obj) },
+
+    //{ MP_ROM_QSTR(MP_QSTR_set_scanline_callback), MP_ROM_PTR(&ModPicoGraphics_set_scanline_callback_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_bounds), MP_ROM_PTR(&ModPicoGraphics_get_bounds_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_font), MP_ROM_PTR(&ModPicoGraphics_set_font_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_framebuffer), MP_ROM_PTR(&ModPicoGraphics_set_framebuffer_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&ModPicoGraphics__del__obj) },
+};
+STATIC MP_DEFINE_CONST_DICT(ModPicoGraphics_locals_dict, ModPicoGraphics_locals_dict_table);
+
+/***** Class Definition *****/
+#ifdef MP_DEFINE_CONST_OBJ_TYPE
+MP_DEFINE_CONST_OBJ_TYPE(
+    ModPicoGraphics_type,
+    MP_QSTR_picographics,
+    MP_TYPE_FLAG_NONE,
+    make_new, ModPicoGraphics_make_new,
+    buffer, ModPicoGraphics_get_framebuffer,
+    locals_dict, (mp_obj_dict_t*)&ModPicoGraphics_locals_dict
+);
+#else
+const mp_obj_type_t ModPicoGraphics_type = {
+    { &mp_type_type },
+    .name = MP_QSTR_picographics,
+    .make_new = ModPicoGraphics_make_new,
+    .buffer_p = { .get_buffer = ModPicoGraphics_get_framebuffer },
+    .locals_dict = (mp_obj_dict_t*)&ModPicoGraphics_locals_dict,
+};
+#endif
+
+/***** Module Globals *****/
+STATIC const mp_map_elem_t picographics_globals_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_picographics) },
+    { MP_ROM_QSTR(MP_QSTR_PicoGraphics), (mp_obj_t)&ModPicoGraphics_type },
+    { MP_ROM_QSTR(MP_QSTR_get_buffer_size), MP_ROM_PTR(&ModPicoGraphics_get_required_buffer_size_obj) },
+
+    // Colour conversion
+    { MP_ROM_QSTR(MP_QSTR_RGB_to_RGB332), MP_ROM_PTR(&ModPicoGraphics_module_RGB_to_RGB332_obj) },
+    { MP_ROM_QSTR(MP_QSTR_RGB_to_RGB565), MP_ROM_PTR(&ModPicoGraphics_module_RGB_to_RGB565_obj) },
+    { MP_ROM_QSTR(MP_QSTR_RGB332_to_RGB), MP_ROM_PTR(&ModPicoGraphics_module_RGB332_to_RGB_obj) },
+    { MP_ROM_QSTR(MP_QSTR_RGB565_to_RGB), MP_ROM_PTR(&ModPicoGraphics_module_RGB565_to_RGB_obj) },
+
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_LCD_240X240), MP_ROM_INT(DISPLAY_LCD_240X240) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_ROUND_LCD_240X240), MP_ROM_INT(DISPLAY_ROUND_LCD_240X240) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_PICO_DISPLAY), MP_ROM_INT(DISPLAY_PICO_DISPLAY) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_PICO_DISPLAY_2), MP_ROM_INT(DISPLAY_PICO_DISPLAY_2) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_PICO_EXPLORER), MP_ROM_INT(DISPLAY_PICO_EXPLORER) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_TUFTY_2040), MP_ROM_INT(DISPLAY_TUFTY_2040) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_ENVIRO_PLUS), MP_ROM_INT(DISPLAY_ENVIRO_PLUS) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_LCD_160X80), MP_ROM_INT(DISPLAY_LCD_160X80) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_I2C_OLED_128X128), MP_ROM_INT(DISPLAY_I2C_OLED_128X128) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_INKY_PACK), MP_ROM_INT(DISPLAY_INKY_PACK) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_INKY_FRAME), MP_ROM_INT(DISPLAY_INKY_FRAME) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_INKY_FRAME_4), MP_ROM_INT(DISPLAY_INKY_FRAME_4) },
+    { MP_ROM_QSTR(MP_QSTR_DISPLAY_GALACTIC_UNICORN), MP_ROM_INT(DISPLAY_GALACTIC_UNICORN) },
+    { MP_ROM_
