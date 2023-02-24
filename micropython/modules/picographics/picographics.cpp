@@ -450,4 +450,102 @@ mp_obj_t ModPicoGraphics_load_spritesheet(mp_obj_t self_in, mp_obj_t filename) {
         MP_OBJ_NEW_QSTR(MP_QSTR_r),
     };
 
-    // Stat the file to g
+    // Stat the file to get its size
+    // example tuple response: (32768, 0, 0, 0, 0, 0, 5153, 1654709815, 1654709815, 1654709815)
+    mp_obj_t stat = mp_vfs_stat(filename);
+    mp_obj_tuple_t *tuple = MP_OBJ_TO_PTR2(stat, mp_obj_tuple_t);
+    size_t filesize = mp_obj_get_int(tuple->items[6]);
+
+    mp_buffer_info_t bufinfo;
+    bufinfo.buf = (void *)m_new(uint8_t, filesize);
+    mp_obj_t file = mp_vfs_open(MP_ARRAY_SIZE(args), &args[0], (mp_map_t *)&mp_const_empty_map);
+    int errcode;
+    bufinfo.len = mp_stream_rw(file, bufinfo.buf, filesize, &errcode, MP_STREAM_RW_READ | MP_STREAM_RW_ONCE);
+    if (errcode != 0) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Failed to open sprite file!"));
+    }
+
+    self->spritedata = bufinfo.buf;
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_sprite(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_sprite_x, ARG_sprite_y, ARG_x, ARG_y, ARG_scale, ARG_transparent };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    if(self->spritedata == nullptr) return mp_const_false;
+
+    int scale = 1;
+    int transparent = 0;
+
+    if(n_args >= 6) scale = mp_obj_get_int(args[ARG_scale]);
+    if(n_args >= 7) transparent = mp_obj_get_int(args[ARG_transparent]);
+
+    self->graphics->sprite(
+        self->spritedata,
+        {mp_obj_get_int(args[ARG_sprite_x]), mp_obj_get_int(args[ARG_sprite_y])},
+        {mp_obj_get_int(args[ARG_x]), mp_obj_get_int(args[ARG_y])},
+        scale,
+        transparent
+    );
+
+    return mp_const_true;
+}
+
+mp_obj_t ModPicoGraphics_set_font(mp_obj_t self_in, mp_obj_t font) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    self->graphics->set_font(mp_obj_to_string_r(font));
+    return mp_const_none;
+}
+
+mp_int_t ModPicoGraphics_get_framebuffer(mp_obj_t self_in, mp_buffer_info_t *bufinfo, mp_uint_t flags) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    (void)flags;
+    if((PicoGraphicsPenType)self->graphics->pen_type == PEN_INKY7) {
+        // Special case for Inky Frame 7.3" which uses a PSRAM framebuffer not accessible as a raw buffer
+        mp_raise_ValueError("No local framebuffer.");
+    }
+    bufinfo->buf = self->graphics->frame_buffer;
+    bufinfo->len = get_required_buffer_size((PicoGraphicsPenType)self->graphics->pen_type, self->graphics->bounds.w, self->graphics->bounds.h);
+    bufinfo->typecode = 'B';
+    return 0;
+}
+
+mp_obj_t ModPicoGraphics_set_framebuffer(mp_obj_t self_in, mp_obj_t framebuffer) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    if((PicoGraphicsPenType)self->graphics->pen_type == PEN_INKY7) {
+        // Special case for Inky Frame 7.3" which uses a PSRAM framebuffer not accessible as a raw buffer
+        mp_raise_ValueError("No local framebuffer.");
+    }
+
+    if (framebuffer == mp_const_none) {
+        m_del(uint8_t, self->buffer, self->graphics->bounds.w * self->graphics->bounds.h);
+        self->buffer = nullptr;
+        self->graphics->set_framebuffer(nullptr);
+    } else {
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(framebuffer, &bufinfo, MP_BUFFER_RW);
+
+        // This should have no effect if you try to replace the framebuffer with itself
+        // but it will free up a buffer that has no other references
+        if(self->buffer != nullptr) {
+            m_del(uint8_t, self->buffer, self->graphics->bounds.w * self->graphics->bounds.h);
+        }
+
+        self->buffer = bufinfo.buf;
+        self->graphics->set_framebuffer(self->buffer);
+    }
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_get_required_buffer_size(mp_obj_t display_in, mp_obj_t pen_type_in) {
+    PicoGraphicsDisplay display = (PicoGraphicsDisplay)mp_obj_get_int(display_in);
+    int width = 0;
+    int height = 0;
+    int rotation = 0;
+    int pen_type = mp_obj_get_int(pen_type_in);
+    PicoGraphicsBusType bus_type = BUS_SPI;
+    if(!get_display_settings(display, width, height, rotation, pen_type, bus_type)) mp_
