@@ -350,4 +350,104 @@ mp_obj_t ModPicoGraphics_make_new(const mp_obj_type_t *type, size_t n_args, size
 
     // Create or fetch buffer
     size_t required_size = get_required_buffer_size((PicoGraphicsPenType)pen_type, width, height);
-    if(required_size == 0) mp_raise_
+    if(required_size == 0) mp_raise_ValueError("Unsupported pen type!");
+
+    if(pen_type == PEN_INKY7) {
+        self->buffer = m_new_class(PSRamDisplay, width, height);
+    } else {
+        if (args[ARG_buffer].u_obj != mp_const_none) {
+            mp_buffer_info_t bufinfo;
+            mp_get_buffer_raise(args[ARG_buffer].u_obj, &bufinfo, MP_BUFFER_RW);
+            self->buffer = bufinfo.buf;
+            if(bufinfo.len < (size_t)(required_size)) {
+                mp_raise_ValueError("Supplied buffer is too small!");
+            }
+        } else {
+            self->buffer = m_new(uint8_t, required_size);
+        }
+    }
+
+    // Create an instance of the graphics library
+    // use the *driver* width/height because they may have been swapped due to rotation
+    switch((PicoGraphicsPenType)pen_type) {
+        case PEN_1BIT:
+            if (display == DISPLAY_INKY_PACK) {
+                self->graphics = m_new_class(PicoGraphics_Pen1BitY, self->display->width, self->display->height, self->buffer);
+            } else {
+                self->graphics = m_new_class(PicoGraphics_Pen1Bit, self->display->width, self->display->height, self->buffer);
+            }
+            break;
+        case PEN_3BIT:
+            self->graphics = m_new_class(PicoGraphics_Pen3Bit, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_P4:
+            self->graphics = m_new_class(PicoGraphics_PenP4, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_P8:
+            self->graphics = m_new_class(PicoGraphics_PenP8, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_RGB332:
+            self->graphics = m_new_class(PicoGraphics_PenRGB332, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_RGB565:
+            self->graphics = m_new_class(PicoGraphics_PenRGB565, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_RGB888:
+            self->graphics = m_new_class(PicoGraphics_PenRGB888, self->display->width, self->display->height, self->buffer);
+            break;
+        case PEN_INKY7:
+            self->graphics = m_new_class(PicoGraphics_PenInky7, self->display->width, self->display->height, *(IDirectDisplayDriver<uint8_t> *)self->buffer);
+            break;
+        default:
+            break;
+    }
+
+    //self->scanline_callback = mp_const_none;
+
+    self->spritedata = nullptr;
+
+    // Clear the buffer
+    self->graphics->set_pen(0);
+    self->graphics->clear();
+
+    // Update the LCD from the graphics library
+    if (display != DISPLAY_INKY_FRAME && display != DISPLAY_INKY_FRAME_4 && display != DISPLAY_INKY_PACK && display != DISPLAY_INKY_FRAME_7) {
+        self->display->update(self->graphics);
+    }
+
+    return MP_OBJ_FROM_PTR(self);
+}
+
+mp_obj_t ModPicoGraphics__del__(mp_obj_t self_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    self->display->cleanup();
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_set_spritesheet(mp_obj_t self_in, mp_obj_t spritedata) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    if(spritedata == mp_const_none) {
+        self->spritedata = nullptr;
+    } else {
+        mp_buffer_info_t bufinfo;
+        mp_get_buffer_raise(spritedata, &bufinfo, MP_BUFFER_RW);
+
+        int required_size = get_required_buffer_size((PicoGraphicsPenType)self->graphics->pen_type, 128, 128);
+
+        if(bufinfo.len != (size_t)(required_size)) {
+            mp_raise_ValueError("Spritesheet the wrong size!");
+        }
+
+        self->spritedata = bufinfo.buf;
+    }
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_load_spritesheet(mp_obj_t self_in, mp_obj_t filename) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    mp_obj_t args[2] = {
+        filename,
+        MP_OBJ_NEW_QSTR(MP_QSTR_r),
+    };
+
+    // Stat the file to g
