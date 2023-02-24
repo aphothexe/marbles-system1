@@ -272,4 +272,82 @@ mp_obj_t ModPicoGraphics_make_new(const mp_obj_type_t *type, size_t n_args, size
     if(rotate == -1) rotate = (int)Rotation::ROTATE_0;
     
     pimoroni::SPIPins spi_bus = get_spi_pins(BG_SPI_FRONT);
-    pimoroni::ParallelPins parallel_bus = {10, 11, 12, 13, 14, 2}; // Default for Tufty 2040 parall
+    pimoroni::ParallelPins parallel_bus = {10, 11, 12, 13, 14, 2}; // Default for Tufty 2040 parallel
+    pimoroni::I2C *i2c_bus = nullptr;
+
+    if (mp_obj_is_type(args[ARG_bus].u_obj, &SPIPins_type)) {
+        if(bus_type != BUS_SPI) mp_raise_ValueError("unexpected SPI bus!");
+        _PimoroniBus_obj_t *bus = (_PimoroniBus_obj_t *)MP_OBJ_TO_PTR(args[ARG_bus].u_obj);
+        spi_bus = *(SPIPins *)(bus->pins);
+
+    } else if (mp_obj_is_type(args[ARG_bus].u_obj, &ParallelPins_type)) {
+        if(bus_type != BUS_PARALLEL) mp_raise_ValueError("unexpected Parallel bus!");
+        _PimoroniBus_obj_t *bus = (_PimoroniBus_obj_t *)MP_OBJ_TO_PTR(args[ARG_bus].u_obj);
+        parallel_bus = *(ParallelPins *)(bus->pins);
+
+    } else if (mp_obj_is_type(args[ARG_bus].u_obj, &PimoroniI2C_type) || MP_OBJ_IS_TYPE(args[ARG_bus].u_obj, &machine_i2c_type)) {
+        if(bus_type != BUS_I2C) mp_raise_ValueError("unexpected I2C bus!");
+        self->i2c = PimoroniI2C_from_machine_i2c_or_native(args[ARG_bus].u_obj);
+        i2c_bus = (pimoroni::I2C *)(self->i2c->i2c);
+
+    } else {
+        // No bus given, fall back to defaults
+        if(bus_type == BUS_I2C) {
+            self->i2c = (_PimoroniI2C_obj_t *)MP_OBJ_TO_PTR(PimoroniI2C_make_new(&PimoroniI2C_type, 0, 0, nullptr));
+            i2c_bus = (pimoroni::I2C *)(self->i2c->i2c);
+        } else if (bus_type == BUS_SPI) {
+            if(display == DISPLAY_INKY_FRAME || display == DISPLAY_INKY_FRAME_4 || display == DISPLAY_INKY_FRAME_7) {
+                spi_bus = {PIMORONI_SPI_DEFAULT_INSTANCE, SPI_BG_FRONT_CS, SPI_DEFAULT_SCK, SPI_DEFAULT_MOSI, PIN_UNUSED, 28, PIN_UNUSED};
+            } else if (display == DISPLAY_INKY_PACK) {
+                spi_bus = {PIMORONI_SPI_DEFAULT_INSTANCE, SPI_BG_FRONT_CS, SPI_DEFAULT_SCK, SPI_DEFAULT_MOSI, PIN_UNUSED, 20, PIN_UNUSED};
+            } else if (display == DISPLAY_GFX_PACK) {
+                spi_bus = {PIMORONI_SPI_DEFAULT_INSTANCE, 17, SPI_DEFAULT_SCK, SPI_DEFAULT_MOSI, PIN_UNUSED, 20, 9};
+            }
+        }
+    }
+
+    // Try to create an appropriate display driver
+    if (display == DISPLAY_INKY_FRAME || display == DISPLAY_INKY_FRAME_4) {
+        pen_type = PEN_3BIT; // FORCE to 3BIT
+        // TODO grab BUSY and RESET from ARG_extra_pins
+        self->display = m_new_class(UC8159, width, height, (Rotation)rotate, spi_bus);
+
+    } else if (display == DISPLAY_INKY_FRAME_7) {
+        pen_type = PEN_INKY7;
+        // TODO grab BUSY and RESET from ARG_extra_pins
+        self->display = m_new_class(Inky73, width, height, (Rotation)rotate, spi_bus);
+
+    } else if (display == DISPLAY_TUFTY_2040) {
+        self->display = m_new_class(ST7789, width, height, (Rotation)rotate, parallel_bus);
+
+    } else if (display == DISPLAY_LCD_160X80) {
+        self->display = m_new_class(ST7735, width, height, spi_bus);
+
+    } else if (display == DISPLAY_I2C_OLED_128X128) {
+        int i2c_address = args[ARG_i2c_address].u_int;
+        if(i2c_address == -1) i2c_address = SH1107::DEFAULT_I2C_ADDRESS;
+
+        self->display = m_new_class(SH1107, width, height, *i2c_bus, (uint8_t)i2c_address);
+
+    } else if (display == DISPLAY_INKY_PACK) {
+        self->display = m_new_class(UC8151, width, height, (Rotation)rotate, spi_bus);
+
+    } else if (display == DISPLAY_GALACTIC_UNICORN) {
+        self->display = m_new_class(DisplayDriver, width, height, (Rotation)rotate);
+    
+    } else if (display == DISPLAY_GFX_PACK) {
+        self->display = m_new_class(ST7567, width, height, spi_bus);
+
+    } else if (display == DISPLAY_INTERSTATE75_32X32 || display == DISPLAY_INTERSTATE75_64X64 || display == DISPLAY_INTERSTATE75_64X32) {
+        self->display = m_new_class(DisplayDriver, width, height, (Rotation)rotate);
+    
+    } else if (display == DISPLAY_COSMIC_UNICORN) {
+        self->display = m_new_class(DisplayDriver, width, height, (Rotation)rotate);
+
+    } else {
+        self->display = m_new_class(ST7789, width, height, (Rotation)rotate, round, spi_bus);
+    }
+
+    // Create or fetch buffer
+    size_t required_size = get_required_buffer_size((PicoGraphicsPenType)pen_type, width, height);
+    if(required_size == 0) mp_raise_
