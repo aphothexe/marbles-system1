@@ -548,4 +548,144 @@ mp_obj_t ModPicoGraphics_get_required_buffer_size(mp_obj_t display_in, mp_obj_t 
     int rotation = 0;
     int pen_type = mp_obj_get_int(pen_type_in);
     PicoGraphicsBusType bus_type = BUS_SPI;
-    if(!get_display_settings(display, width, height, rotation, pen_type, bus_type)) mp_
+    if(!get_display_settings(display, width, height, rotation, pen_type, bus_type)) mp_raise_ValueError("Unsupported display!");
+    size_t required_size = get_required_buffer_size((PicoGraphicsPenType)pen_type, width, height);
+    if(required_size == 0) mp_raise_ValueError("Unsupported pen type!");
+
+    return mp_obj_new_int(required_size);
+}
+
+mp_obj_t ModPicoGraphics_get_bounds(mp_obj_t self_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    mp_obj_t tuple[2] = {
+        mp_obj_new_int(self->graphics->bounds.w),
+        mp_obj_new_int(self->graphics->bounds.h)
+    };
+    return mp_obj_new_tuple(2, tuple);
+}
+
+/*
+mp_obj_t ModPicoGraphics_set_scanline_callback(mp_obj_t self_in, mp_obj_t cb_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+    self->scanline_callback = cb_in;
+    return mp_const_none;
+}
+*/
+
+mp_obj_t ModPicoGraphics_update(mp_obj_t self_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+/*
+    if(self->scanline_callback != mp_const_none) {
+        self->graphics->scanline_interrupt = [self](int y){
+            mp_obj_t args[] = {
+                mp_obj_new_int(y)
+            };
+            mp_call_function_n_kw(self->scanline_callback, MP_ARRAY_SIZE(args), 0, args);
+        };
+    } else {
+        self->graphics->scanline_interrupt = nullptr;
+    }
+*/
+
+    while(self->display->is_busy()) {
+    #ifdef MICROPY_EVENT_POLL_HOOK
+    MICROPY_EVENT_POLL_HOOK
+    #endif
+    }
+
+    self->display->update(self->graphics);
+
+    while(self->display->is_busy()) {
+    #ifdef MICROPY_EVENT_POLL_HOOK
+    MICROPY_EVENT_POLL_HOOK
+    #endif
+    }
+
+    self->display->power_off();
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_partial_update(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x, ARG_y, ARG_w, ARG_h };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    while(self->display->is_busy()) {
+    #ifdef MICROPY_EVENT_POLL_HOOK
+    MICROPY_EVENT_POLL_HOOK
+    #endif
+    }
+
+    self->display->partial_update(self->graphics, {
+        mp_obj_get_int(args[ARG_x]),
+        mp_obj_get_int(args[ARG_y]),
+        mp_obj_get_int(args[ARG_w]),
+        mp_obj_get_int(args[ARG_h])
+    });
+
+    while(self->display->is_busy()) {
+    #ifdef MICROPY_EVENT_POLL_HOOK
+    MICROPY_EVENT_POLL_HOOK
+    #endif
+    }
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_set_update_speed(mp_obj_t self_in, mp_obj_t update_speed) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    int speed = mp_obj_get_int(update_speed);
+
+    if(!self->display->set_update_speed(speed)) {
+        mp_raise_ValueError("update speed not supported");
+    }
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_set_backlight(mp_obj_t self_in, mp_obj_t brightness) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    float b = mp_obj_get_float(brightness);
+
+    if(b < 0 || b > 1.0f) mp_raise_ValueError("brightness out of range. Expected 0.0 to 1.0");
+
+    self->display->set_backlight((uint8_t)(b * 255.0f));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_module_RGB332_to_RGB(mp_obj_t rgb332) {
+    RGB c((RGB332)mp_obj_get_int(rgb332));
+    mp_obj_t t[] = {
+        mp_obj_new_int(c.r),
+        mp_obj_new_int(c.g),
+        mp_obj_new_int(c.b),
+    };
+    return mp_obj_new_tuple(3, t);
+}
+
+mp_obj_t ModPicoGraphics_module_RGB565_to_RGB(mp_obj_t rgb565) {
+    RGB c((RGB565)mp_obj_get_int(rgb565));
+    mp_obj_t t[] = {
+        mp_obj_new_int(c.r),
+        mp_obj_new_int(c.g),
+        mp_obj_new_int(c.b),
+    };
+    return mp_obj_new_tuple(3, t);
+}
+
+mp_obj_t ModPicoGraphics_module_RGB_to_RGB332(mp_obj_t r, mp_obj_t g, mp_obj_t b) {
+    return mp_obj_new_int(RGB(
+        mp_obj_get_int(r),
+        mp_obj_get_int(g),
+        mp_obj_get_int(b)
+    ).to_rgb332());
+}
+
+mp_obj_t ModPicoGraphics_module_RGB_to_RGB565(mp_obj_t r, mp_obj_t g, mp_obj_t b) {
+    return mp_obj_new_int(RGB(
+        mp_obj_get_int(r),
+  
