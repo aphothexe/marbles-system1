@@ -688,4 +688,127 @@ mp_obj_t ModPicoGraphics_module_RGB_to_RGB332(mp_obj_t r, mp_obj_t g, mp_obj_t b
 mp_obj_t ModPicoGraphics_module_RGB_to_RGB565(mp_obj_t r, mp_obj_t g, mp_obj_t b) {
     return mp_obj_new_int(RGB(
         mp_obj_get_int(r),
-  
+        mp_obj_get_int(g),
+        mp_obj_get_int(b)
+    ).to_rgb565());
+}
+
+mp_obj_t ModPicoGraphics_set_pen(mp_obj_t self_in, mp_obj_t pen) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->set_pen(mp_obj_get_int(pen));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_reset_pen(mp_obj_t self_in, mp_obj_t pen) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->reset_pen(mp_obj_get_int(pen));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_update_pen(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_i, ARG_r, ARG_g, ARG_b };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->update_pen(
+        mp_obj_get_int(args[ARG_i]) & 0xff,
+        mp_obj_get_int(args[ARG_r]) & 0xff,
+        mp_obj_get_int(args[ARG_g]) & 0xff,
+        mp_obj_get_int(args[ARG_b]) & 0xff
+    );
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_create_pen(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_r, ARG_g, ARG_b };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    int result = self->graphics->create_pen(
+        mp_obj_get_int(args[ARG_r]) & 0xff,
+        mp_obj_get_int(args[ARG_g]) & 0xff,
+        mp_obj_get_int(args[ARG_b]) & 0xff
+    );
+
+    if (result == -1) mp_raise_ValueError("create_pen failed. No matching colour or space in palette!");
+
+    return mp_obj_new_int(result);
+}
+
+mp_obj_t ModPicoGraphics_create_pen_hsv(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_h, ARG_s, ARG_v };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+    int result = self->graphics->create_pen_hsv(
+        mp_obj_get_float(args[ARG_h]),
+        mp_obj_get_float(args[ARG_s]),
+        mp_obj_get_float(args[ARG_v])
+    );
+
+    if (result == -1) mp_raise_ValueError("create_pen failed. No matching colour or space in palette!");
+
+    return mp_obj_new_int(result);
+}
+
+mp_obj_t ModPicoGraphics_set_thickness(mp_obj_t self_in, mp_obj_t pen) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->set_thickness(mp_obj_get_int(pen));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_set_palette(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    size_t num_tuples = n_args - 1;
+    const mp_obj_t *tuples = pos_args + 1;
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(pos_args[0], ModPicoGraphics_obj_t);
+
+    // Check if there is only one argument, which might be a list
+    if(n_args == 2) {
+        if(mp_obj_is_type(pos_args[1], &mp_type_list)) {
+            mp_obj_list_t *points = MP_OBJ_TO_PTR2(pos_args[1], mp_obj_list_t);
+
+            if(points->len <= 0) mp_raise_ValueError("set_palette(): cannot provide an empty list");
+
+            num_tuples = points->len;
+            tuples = points->items;
+        }
+        else {
+            mp_raise_TypeError("set_palette(): can't convert object to list");
+        }
+    }
+
+    for(size_t i = 0; i < num_tuples; i++) {
+        mp_obj_t obj = tuples[i];
+        if(!mp_obj_is_type(obj, &mp_type_tuple)) mp_raise_ValueError("set_palette(): can't convert object to tuple");
+
+        mp_obj_tuple_t *tuple = MP_OBJ_TO_PTR2(obj, mp_obj_tuple_t);
+
+        if(tuple->len != 3) mp_raise_ValueError("set_palette(): tuple must contain R, G, B values");
+
+        self->graphics->update_pen(
+            i,
+            mp_obj_get_int(tuple->items[0]),
+            mp_obj_get_int(tuple->items[1]),
+            mp_obj_get_int(tuple->items[2])
+        );
+    }
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_set_clip(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x, ARG_y, ARG_w, ARG_h };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->set_clip({
+        mp_obj_get_int(args[ARG_x]),
+        mp_obj_get_int(args[ARG_y]),
+   
