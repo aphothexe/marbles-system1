@@ -811,4 +811,122 @@ mp_obj_t ModPicoGraphics_set_clip(size_t n_args, const mp_obj_t *args) {
     self->graphics->set_clip({
         mp_obj_get_int(args[ARG_x]),
         mp_obj_get_int(args[ARG_y]),
-   
+        mp_obj_get_int(args[ARG_w]),
+        mp_obj_get_int(args[ARG_h])
+    });
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_remove_clip(mp_obj_t self_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->remove_clip();
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_clear(mp_obj_t self_in) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->clear();
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_pixel(mp_obj_t self_in, mp_obj_t x, mp_obj_t y) {
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(self_in, ModPicoGraphics_obj_t);
+
+    self->graphics->pixel({
+        mp_obj_get_int(x),
+        mp_obj_get_int(y)
+    });
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_pixel_span(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x, ARG_y, ARG_l };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->pixel_span({
+        mp_obj_get_int(args[ARG_x]),
+        mp_obj_get_int(args[ARG_y])
+    },  mp_obj_get_int(args[ARG_l]));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_rectangle(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x, ARG_y, ARG_w, ARG_h };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->rectangle({
+        mp_obj_get_int(args[ARG_x]),
+        mp_obj_get_int(args[ARG_y]),
+        mp_obj_get_int(args[ARG_w]),
+        mp_obj_get_int(args[ARG_h])
+    });
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_circle(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x, ARG_y, ARG_r };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->circle({
+        mp_obj_get_int(args[ARG_x]),
+        mp_obj_get_int(args[ARG_y])
+    },  mp_obj_get_int(args[ARG_r]));
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_character(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_char, ARG_x, ARG_y, ARG_scale };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_char, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_x, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_y, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_scale, MP_ARG_INT, {.u_int = 2} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, ModPicoGraphics_obj_t);
+
+    int c = mp_obj_get_int(args[ARG_char].u_obj);
+    int x = args[ARG_x].u_int;
+    int y = args[ARG_y].u_int;
+    int scale = args[ARG_scale].u_int;
+
+    self->graphics->character((char)c, Point(x, y), scale);
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_text(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_text, ARG_x, ARG_y, ARG_wrap, ARG_scale, ARG_angle, ARG_spacing };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_x1, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_y1, MP_ARG_REQUIRED | MP_ARG_INT },
+        { MP_QSTR_wordwrap, MP_ARG_INT, {.u_int = __INT32_MAX__} },  // Sort-of a fudge, but wide-enough to avoid wrapping on any display size
+        { MP_QSTR_scale, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+        { MP_QSTR_angle, MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_spacing, MP_ARG_INT, {.u_int = 1} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, ModPicoGraphics_obj_t);
+
+    mp_obj_t text_obj = args
