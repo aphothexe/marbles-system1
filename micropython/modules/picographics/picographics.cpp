@@ -929,4 +929,121 @@ mp_obj_t ModPicoGraphics_text(size_t n_args, const mp_obj_t *pos_args, mp_map_t 
 
     ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, ModPicoGraphics_obj_t);
 
-    mp_obj_t text_obj = args
+    mp_obj_t text_obj = args[ARG_text].u_obj;
+
+    if(!mp_obj_is_str_or_bytes(text_obj)) mp_raise_TypeError("text: string required");
+
+    GET_STR_DATA_LEN(text_obj, str, str_len);
+
+    std::string t((const char*)str);
+
+    int x = args[ARG_x].u_int;
+    int y = args[ARG_y].u_int;
+    int wrap = args[ARG_wrap].u_int;
+    float scale = args[ARG_scale].u_obj == mp_const_none ? 2.0f : mp_obj_get_float(args[ARG_scale].u_obj);
+    int angle = args[ARG_angle].u_int;
+    int letter_spacing = args[ARG_spacing].u_int;
+
+    self->graphics->text(t, Point(x, y), wrap, scale, angle, letter_spacing);
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_measure_text(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_self, ARG_text, ARG_scale, ARG_spacing };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_text, MP_ARG_REQUIRED | MP_ARG_OBJ },
+        { MP_QSTR_scale, MP_ARG_OBJ, {.u_obj = mp_const_none} },
+        { MP_QSTR_spacing, MP_ARG_INT, {.u_int = 1} },
+    };
+
+    mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self].u_obj, ModPicoGraphics_obj_t);
+
+    mp_obj_t text_obj = args[ARG_text].u_obj;
+
+    if(!mp_obj_is_str_or_bytes(text_obj)) mp_raise_TypeError("text: string required");
+
+    GET_STR_DATA_LEN(text_obj, str, str_len);
+
+    std::string t((const char*)str);
+
+    float scale = args[ARG_scale].u_obj == mp_const_none ? 2.0f : mp_obj_get_float(args[ARG_scale].u_obj);
+    int letter_spacing = args[ARG_spacing].u_int;
+
+    int width = self->graphics->measure_text(t, scale, letter_spacing);
+
+    return mp_obj_new_int(width);
+}
+
+mp_obj_t ModPicoGraphics_polygon(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    size_t num_tuples = n_args - 1;
+    const mp_obj_t *tuples = pos_args + 1;
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(pos_args[0], ModPicoGraphics_obj_t);
+
+    // Check if there is only one argument, which might be a list
+    if(n_args == 2) {
+        if(mp_obj_is_type(pos_args[1], &mp_type_list)) {
+            mp_obj_list_t *points = MP_OBJ_TO_PTR2(pos_args[1], mp_obj_list_t);
+
+            if(points->len <= 0) mp_raise_ValueError("poly(): cannot provide an empty list");
+
+            num_tuples = points->len;
+            tuples = points->items;
+        }
+        else {
+            mp_raise_TypeError("poly(): can't convert object to list");
+        }
+    }
+
+    if(num_tuples > 0) {
+        std::vector<Point> points;
+        for(size_t i = 0; i < num_tuples; i++) {
+            mp_obj_t obj = tuples[i];
+            if(!mp_obj_is_type(obj, &mp_type_tuple)) mp_raise_ValueError("poly(): can't convert object to tuple");
+
+            mp_obj_tuple_t *tuple = MP_OBJ_TO_PTR2(obj, mp_obj_tuple_t);
+
+            if(tuple->len != 2) mp_raise_ValueError("poly(): tuple must only contain two numbers");
+
+            points.push_back({
+                mp_obj_get_int(tuple->items[0]),
+                mp_obj_get_int(tuple->items[1])
+            });
+        }
+        self->graphics->polygon(points);
+    }
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_triangle(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x1, ARG_y1, ARG_x2, ARG_y2, ARG_x3, ARG_y3 };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    self->graphics->triangle(
+        {mp_obj_get_int(args[ARG_x1]),
+         mp_obj_get_int(args[ARG_y1])},
+        {mp_obj_get_int(args[ARG_x2]),
+         mp_obj_get_int(args[ARG_y2])},
+        {mp_obj_get_int(args[ARG_x3]),
+         mp_obj_get_int(args[ARG_y3])}
+    );
+
+    return mp_const_none;
+}
+
+mp_obj_t ModPicoGraphics_line(size_t n_args, const mp_obj_t *args) {
+    enum { ARG_self, ARG_x1, ARG_y1, ARG_x2, ARG_y2, ARG_thickness };
+
+    ModPicoGraphics_obj_t *self = MP_OBJ_TO_PTR2(args[ARG_self], ModPicoGraphics_obj_t);
+
+    if(n_args == 5) {
+        self->graphics->line(
+            {mp_obj_get_int(args[ARG_x1]),
+            
