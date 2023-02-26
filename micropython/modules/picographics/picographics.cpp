@@ -1046,4 +1046,21 @@ mp_obj_t ModPicoGraphics_line(size_t n_args, const mp_obj_t *args) {
     if(n_args == 5) {
         self->graphics->line(
             {mp_obj_get_int(args[ARG_x1]),
-            
+            mp_obj_get_int(args[ARG_y1])},
+            {mp_obj_get_int(args[ARG_x2]),
+            mp_obj_get_int(args[ARG_y2])}
+        );
+    }
+    else if(n_args == 6) {
+        self->graphics->thick_line(
+            {mp_obj_get_int(args[ARG_x1]),
+            mp_obj_get_int(args[ARG_y1])},
+            {mp_obj_get_int(args[ARG_x2]),
+            mp_obj_get_int(args[ARG_y2])},
+            mp_obj_get_int(args[ARG_thickness])
+        );
+    }
+
+    return mp_const_none;
+}
+}
