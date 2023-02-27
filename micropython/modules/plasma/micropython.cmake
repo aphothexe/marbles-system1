@@ -20,4 +20,4 @@ target_compile_definitions(usermod_${MOD_NAME} INTERFACE
     MODULE_PLASMA_ENABLED=1
 )
 
-target_link_libraries(use
+target_link_libraries(usermod INTERFACE usermod_${MOD_NAME})
