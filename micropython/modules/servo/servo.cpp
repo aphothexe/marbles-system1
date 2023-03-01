@@ -2679,3 +2679,21 @@ extern mp_obj_t ServoCluster_calibration(size_t n_args, const mp_obj_t *pos_args
 
         int servo = args[ARG_servo].u_int;
         const mp_obj_t object = args[ARG_calibration].u_obj;
+        if(mp_obj_is_type(object, &Calibration_type)) {
+            _Calibration_obj_t *calib = MP_OBJ_TO_PTR2(object, _Calibration_obj_t);
+            self->cluster->calibration((uint)servo) = *(calib->calibration);
+        }
+        else {
+            mp_raise_TypeError("cannot convert object to a Calibration class instance");
+        }
+    }
+
+    return mp_const_none;
+}
+
+extern mp_obj_t ServoCluster_load(mp_obj_t self_in) {
+    _ServoCluster_obj_t *self = MP_OBJ_TO_PTR2(self_in, _ServoCluster_obj_t);
+    self->cluster->load();
+    return mp_const_none;
+}
+}
