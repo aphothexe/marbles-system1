@@ -100,4 +100,65 @@ When running on battery power, Inky Frame's buttons cause it to wake from a powe
 
 The Inky Frame library includes a number of convenience functions to set the clock and sleep your device. If you want accurate time you must check if the clock is set - usually a simple check against the year works - connect to a network, and set via NTP (Network Time Protocol).
 
-Inky Frame technically has *two* real-time clocks, the external RTC we've added - which remains continuously powered by battery - and the internal RTC of the P
+Inky Frame technically has *two* real-time clocks, the external RTC we've added - which remains continuously powered by battery - and the internal RTC of the Pico W. For convenience and compatibility with other code examples we recommend using the external RTC only to set the time on the internal one which makes functions like `time.localtime()` work as you'd expect.
+
+```python
+import time
+import machine
+import inky_frame
+
+inky_frame.pcf_to_pico_rtc()  # Sync Inky RTC time to Pico's RTC
+
+year, month, day, dow, hour, minute, second, _ = machine.RTC().datetime()
+
+if year < 2023:
+    # Connect to network
+    inky_frame.set_time()  # Sets both the Inky and Pico RTC
+
+print(time.localtime())
+```
+
+### Function Reference
+
+#### Wakeup States
+
+For your convenience these wakeup state functions also check the *current* state of their associated event, this allows you to run code from Thonny with a button held down - for example - to test how your deployed code will behave on battery-
+
+* `inky_frame.woken_by_rtc()` - Returns `True` if the RTC caused a wakeup, or if the RTC ALARM is currently raised.
+* `inky_frame.woken_by_button()` - Returns `True` if a button caused a wakeup, or if a button is currently pressed.
+* `inky_frame.woken_by_ext_trigger()` Returns `True` if the external trigger caused a wakeup, or if the trigger is currently asserted.
+
+#### RTC
+
+* `inky_frame.set_time()` - Attempt to run `ntptime.settime()` and set the time on both RTCs
+* `inky_frame.pcf_to_pico_rtc()` - Sync from Inky's RTC to the Pico W's RTC
+* `inky_frame.pico_rtc_to_pcf()` - Sync from Pico W's RTC to Inky's RTC (sometime useful since Thonny sets the Pico W RTC automatically)
+* `inky_frame.sleep_for(minutes)` - Set the RTC alarm for a number of minutes and cut the power. This will completely power off the Pico W, but leave the Inky RTC running to wake it back up.
+
+:info: You can access all Inky RTC (PCF85063A) functions via `inky_frame.rtc`
+
+#### Other
+
+* `inky_frame.turn_off()` - Cut the power to the Pico W (on battery only), only an alarm event or a button press can wake it back up.
+
+## RAM Usage
+
+Both Inky 4.0" and 5.7" use only the Pico's onboard RAM. It's quite cozy. The frame buffers are 3-bits-per-pixel, making Inky 4.0" 
+
+On 7.3" we had to add a PSRAM chip to act as the display's framebuffer. Right now it acts exclusively as a framebuffer, but that frees up some Pico RAM to work with so you can do more with that 7.3" panel.
+
+The Inky frame buffer sizes are as follows:
+
+* 4.0" - 640x400 - 96,000 bytes.
+* 5.7" - 600x448 - 100,800 bytes.
+* 7.3" - 800x480 - 144,000 bytes.
+
+Since MicroPython on a Pico W has only 166k that would have left *just* 22k on 7.3", instead you get (almost) all 166k to play with since the PicoGraphics instance itself uses only 8544 bytes!
+
+### Accessing The Framebuffer
+
+PicoGraphics has undocumented support for accessing its raw framebuffer using `memoryview(graphics)`.
+
+This is useful for copying raw binary images (effectively valid Inky frame buffers saved to a file) avoiding JPEG compression and so forth. For some dicussion about why and how you might do this, see: https://github.com/pimoroni/pimoroni-pico/issues/681
+
+:warning: This *does not work* for Inky 7.3, since there is no framebuffer in memory. PicoGraphics will raise a `ValueError: No local framebuffer.` if you try. We aim to fix this with some hardfault handling sorcery.
